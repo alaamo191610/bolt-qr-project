@@ -86,12 +86,12 @@ export const adminService = {
 
       // Popular items
       const itemCounts: { [key: string]: number } = {}
-      orders?.forEach(order => {
-        order.order_items?.forEach(item => {
-          const itemName = item.menus?.name_en || 'Unknown Item'
-          itemCounts[itemName] = (itemCounts[itemName] || 0) + item.quantity
-        })
-      })
+      orders?.forEach((order: any) => {
+        (order.order_items || []).forEach((item: any) => {
+          const itemName = item.menus?.name_en || 'Unknown Item';
+          itemCounts[itemName] = (itemCounts[itemName] || 0) + item.quantity;
+        });
+      });      
 
       const popularItems = Object.entries(itemCounts)
         .sort(([, a], [, b]) => b - a)
