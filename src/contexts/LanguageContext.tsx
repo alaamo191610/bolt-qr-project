@@ -1,5 +1,3 @@
-import { AlignVerticalSpaceBetween } from 'lucide-react';
-import { AlignVerticalSpaceBetween } from 'lucide-react';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export type Language = 'en' | 'ar';

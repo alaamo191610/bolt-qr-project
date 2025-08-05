@@ -945,26 +945,6 @@ const DigitalMenu: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        )}
-      </div>
-
-      {/* Items Grid */}
-      {filteredItems.length > 0 ? (
-        <div className="space-y-4">
-          {/* Select All */}
-          <div className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
-              onChange={toggleSelectAll}
-              className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
-            />
-            <span className="text-sm text-slate-600 dark:text-slate-400">
-              {t('common.selectAll')} ({filteredItems.length})
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredItems.map(item => (
               <div key={item.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:shadow-md transition-shadow p-4">
                 <div className="flex items-start space-x-3 mb-3">
@@ -1028,7 +1008,6 @@ const DigitalMenu: React.FC = () => {
                         <Trash2 className="w-4 h-4" />
                         <span>{t('common.delete')}</span>
                       </button>
-                    </div>
                     </div>
                   </div>
                 </div>
