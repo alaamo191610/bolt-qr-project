@@ -10,7 +10,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    storageKey: 'sb-restaurant-qr-auth-token',
     storage: window.localStorage,
     autoRefreshToken: true,
     detectSessionInUrl: false
