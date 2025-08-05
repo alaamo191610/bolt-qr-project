@@ -551,11 +551,11 @@ const DigitalMenu: React.FC = () => {
 
     try {
       setDeleteLoading(true)
-      const { error } = await supabase
+      const { data,error } = await supabase
         .from('menus')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', itemToDelete)
-
+        console.log('Delete result:', { data, error });
       if (error) throw error
       
       setItems(prev => prev.filter(item => item.id !== itemToDelete))
