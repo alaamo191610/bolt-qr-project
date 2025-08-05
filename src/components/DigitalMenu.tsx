@@ -78,7 +78,7 @@ const CategoryForm = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('admin.addCategory')}</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('common.addCategory')}</h3>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-5 h-5" />
           </button>
@@ -163,7 +163,7 @@ const IngredientForm = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('admin.addIngredient')}</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('common.addIngredient')}</h3>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-5 h-5" />
           </button>
@@ -607,7 +607,7 @@ const DigitalMenu: React.FC = () => {
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('admin.addCategory')}</span>
+              <span>{t('common.addCategory')}</span>
             </button>
             
             <button
@@ -615,7 +615,7 @@ const DigitalMenu: React.FC = () => {
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('admin.addIngredient')}</span>
+              <span>{t('common.addIngredient')}</span>
             </button>
             
             <button
@@ -623,7 +623,7 @@ const DigitalMenu: React.FC = () => {
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('admin.addItem')}</span>
+              <span>{t('common.addItem')}</span>
             </button>
           </div>
         </div>
@@ -659,14 +659,14 @@ const DigitalMenu: React.FC = () => {
           <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700">
             <div className="flex items-center justify-between">
               <span className="text-emerald-800 dark:text-emerald-300 font-medium">
-                {selectedItems.length} {t('admin.itemsSelected')}
+                {selectedItems.length} {t('common.itemsSelected')}
               </span>
               <button
                 onClick={() => setDeleteAllModalOpen(true)}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>{t('admin.deleteSelected')}</span>
+                <span>{t('common.deleteSelected')}</span>
               </button>
             </div>
           </div>
@@ -685,7 +685,7 @@ const DigitalMenu: React.FC = () => {
               className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
             />
             <span className="text-sm text-slate-600 dark:text-slate-400">
-              {t('admin.selectAll')} ({filteredItems.length})
+              {t('common.selectAll')} ({filteredItems.length})
             </span>
           </div>
 
@@ -719,7 +719,7 @@ const DigitalMenu: React.FC = () => {
                     </div>
                     
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                      {item.categories ? getLocalizedName(item.categories) : t('admin.noCategory')}
+                      {item.category ? getLocalizedName(item.category) : t('common.noCategory')}
                     </p>
                     
                     <div className="flex items-center space-x-2 mb-3">
@@ -728,13 +728,13 @@ const DigitalMenu: React.FC = () => {
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                           : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
                       }`}>
-                        {item.available ? t('admin.available') : t('admin.unavailable')}
+                        {item.available ? t('common.available') : t('common.unavailable')}
                       </span>
                     </div>
                     
                     {item.ingredients_details && item.ingredients_details.length > 0 && (
                       <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-                        {t('admin.ingredients')}: {item.ingredients_details.map(i => i.ingredient ? getLocalizedName(i.ingredient) : '').filter(Boolean).join(', ')}
+                        {t('common.ingredients')}: {item.ingredients_details.map(i => i.ingredient ? getLocalizedName(i.ingredient) : '').filter(Boolean).join(', ')}
                       </p>
                     )}
                     
@@ -763,15 +763,15 @@ const DigitalMenu: React.FC = () => {
         </div>
       ) : (
         <EmptyState
-          title={t('admin.noItems')}
-          description={t('admin.noItemsDescription')}
+          title={t('common.noItems')}
+          description={t('common.noItemsDescription')}
           action={
             <button
               onClick={() => openForm()}
               className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center space-x-2 mx-auto transition-colors"
             >
               <Plus className="w-5 h-5" />
-              <span>{t('admin.addFirstItem')}</span>
+              <span>{t('common.addFirstItem')}</span>
             </button>
           }
         />
@@ -783,7 +783,7 @@ const DigitalMenu: React.FC = () => {
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                {form.id ? t('admin.editItem') : t('admin.addItem')}
+                {form.id ? t('common.editItem') : t('common.addItem')}
               </h3>
               <button onClick={() => setFormOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                 <X className="w-5 h-5" />
@@ -799,7 +799,7 @@ const DigitalMenu: React.FC = () => {
                   <input
                     value={form.name_en}
                     onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))}
-                    placeholder="Item name in English"
+                    placeholder={t('common.nameEn')}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
@@ -812,7 +812,7 @@ const DigitalMenu: React.FC = () => {
                   <input
                     value={form.name_ar}
                     onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))}
-                    placeholder="اسم الصنف بالعربية"
+                    placeholder={t('common.nameAr')}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
@@ -873,14 +873,14 @@ const DigitalMenu: React.FC = () => {
                     className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
                   />
                   <label htmlFor="available" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {t('admin.available')}
+                    {t('common.available')}
                   </label>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  {t('admin.ingredients')}
+                  {t('common.ingredients')}
                 </label>
                 <div className="max-h-64 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-lg p-3 space-y-2">
                   {ingredients.map(ing => (
@@ -919,7 +919,7 @@ const DigitalMenu: React.FC = () => {
                 disabled={formLoading}
                 className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
               >
-                {formLoading ? t('common.saving') : (form.id ? t('admin.updateItem') : t('admin.addItem'))}
+                {formLoading ? t('common.saving') : (form.id ? t('common.updateItem') : t('common.addItem'))}
               </button>
             </div>
           </div>
@@ -950,8 +950,8 @@ const DigitalMenu: React.FC = () => {
           setItemToDelete(null)
         }}
         onConfirm={confirmDelete}
-        title={t('admin.deleteItem')}
-        message={t('admin.deleteItemConfirm')}
+        title={t('common.deleteItem')}
+        message={t('common.deleteItemConfirm')}
         loading={deleteLoading}
       />
 
@@ -960,8 +960,8 @@ const DigitalMenu: React.FC = () => {
         isOpen={deleteAllModalOpen}
         onClose={() => setDeleteAllModalOpen(false)}
         onConfirm={handleDeleteSelected}
-        title={t('admin.deleteSelected')}
-        message={t('admin.deleteSelectedConfirm', { count: selectedItems.length.toString() })}
+        title={t('common.deleteSelected')}
+        message={t('common.deleteSelectedConfirm', { count: selectedItems.length.toString() })}
         loading={deleteLoading}
       />
     </div>
