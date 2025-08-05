@@ -354,14 +354,19 @@ const DigitalMenu: React.FC = () => {
     try {
       setLoading(true)
       
-      // Check if we have cached data
-      const cachedItems = sessionStorage.getItem(`menuItems_${user.id}`);
-      if (cachedItems && !document.hidden) {
-        const parsed = JSON.parse(cachedItems);
-        if (Date.now() - parsed.timestamp < 300000) { // 5 minutes cache
-          setItems(parsed.data);
-          setLoading(false);
-          return;
+      // Always fetch fresh data when explicitly called
+      // Only use cache on initial component mount
+      const shouldUseCache = !items.length && !document.hidden
+      
+      if (shouldUseCache) {
+        const cachedItems = sessionStorage.getItem(`menuItems_${user.id}`);
+        if (cachedItems) {
+          const parsed = JSON.parse(cachedItems);
+          if (Date.now() - parsed.timestamp < 300000) { // 5 minutes cache
+            setItems(parsed.data);
+            setLoading(false);
+            return;
+          }
         }
       }
       
@@ -390,7 +395,7 @@ const DigitalMenu: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching items:', error)
-      setItems([]) // Set empty array on error
+      return []
     } finally {
       setLoading(false)
     }
@@ -404,11 +409,10 @@ const DigitalMenu: React.FC = () => {
         .order('name_en')
 
       if (error) throw error
-      console.log('Fetched categories:', data) // Debug log
       setCategories(data || [])
     } catch (error) {
       console.error('Error fetching categories:', error)
-      setCategories([]) // Set empty array on error
+      return []
     }
   }
 
@@ -420,11 +424,10 @@ const DigitalMenu: React.FC = () => {
         .order('name_en')
 
       if (error) throw error
-      console.log('Fetched ingredients:', data) // Debug log
       setIngredients(data || [])
     } catch (error) {
       console.error('Error fetching ingredients:', error)
-      setIngredients([]) // Set empty array on error
+      return []
     }
   }
 
@@ -533,7 +536,12 @@ const DigitalMenu: React.FC = () => {
       }
 
       setFormOpen(false)
-      fetchItems()
+      
+      // Clear cache and refresh data
+      if (user) {
+        sessionStorage.removeItem(`menuItems_${user.id}`)
+      }
+      await fetchItems()
     } catch (error) {
       console.error('Error saving item:', error)
     } finally {
@@ -551,18 +559,26 @@ const DigitalMenu: React.FC = () => {
 
     try {
       setDeleteLoading(true)
-      const { data,error } = await supabase
+      const { error } = await supabase
         .from('menus')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', itemToDelete)
-        console.log('Delete result:', { data, error });
       if (error) throw error
       
+      // Remove from UI immediately
       setItems(prev => prev.filter(item => item.id !== itemToDelete))
+      
+      // Clear cache to ensure fresh data on next load
+      if (user) {
+        sessionStorage.removeItem(`menuItems_${user.id}`)
+      }
+      
       setDeleteModalOpen(false)
       setItemToDelete(null)
     } catch (error) {
       console.error('Error deleting item:', error)
+      // Refresh data on error to ensure UI is in sync
+      fetchItems()
     } finally {
       setDeleteLoading(false)
     }
@@ -580,11 +596,20 @@ const DigitalMenu: React.FC = () => {
 
       if (error) throw error
       
+      // Remove from UI immediately
       setItems(prev => prev.filter(item => !selectedItems.includes(item.id)))
+      
+      // Clear cache to ensure fresh data on next load
+      if (user) {
+        sessionStorage.removeItem(`menuItems_${user.id}`)
+      }
+      
       setSelectedItems([])
       setDeleteAllModalOpen(false)
     } catch (error) {
       console.error('Error deleting selected items:', error)
+      // Refresh data on error to ensure UI is in sync
+      fetchItems()
     } finally {
       setDeleteLoading(false)
     }
