@@ -22,34 +22,10 @@ import CustomerMenu from './pages/CustomerMenu';
 
 // Prevent page reload on visibility change
 const preventReload = () => {
-  // Prevent beforeunload when tab becomes hidden
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      // Tab is hidden - prevent any reload triggers
-      window.onbeforeunload = null;
-    } else {
-      // Tab is visible again - restore normal behavior
-      window.onbeforeunload = null;
-    }
-  });
-
-  // Prevent page refresh on focus/blur
-  window.addEventListener('focus', (e) => {
-    e.preventDefault();
-  });
-
-  window.addEventListener('blur', (e) => {
-    e.preventDefault();
-  });
-
-  // Prevent accidental refresh
+  // Simple prevention of accidental refresh
   window.addEventListener('beforeunload', (e) => {
-    // Only prevent if user is authenticated and has unsaved changes
-    const hasUnsavedChanges = sessionStorage.getItem('hasUnsavedChanges');
-    if (hasUnsavedChanges) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    e.preventDefault();
+    e.returnValue = '';
   });
 };
 
