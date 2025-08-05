@@ -93,55 +93,41 @@ const AdminDashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const { t, isLoaded } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState('qr-generator');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Get initial tab from URL or localStorage, default to 'qr-generator'
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTab = urlParams.get('tab');
+    const savedTab = sessionStorage.getItem('activeTab');
+    return urlTab || savedTab || 'qr-generator';
+  });
+  
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Prevent component remount on tab switch
+  // Save active tab to sessionStorage and URL
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        // Tab became visible - check if we need to refresh data
-        const lastRefresh = sessionStorage.getItem('lastDataRefresh');
-        const now = Date.now();
-        
-        // Only refresh if more than 5 minutes have passed
-        if (!lastRefresh || now - parseInt(lastRefresh) > 300000) {
-          loadAdminData();
-          sessionStorage.setItem('lastDataRefresh', now.toString());
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    sessionStorage.setItem('activeTab', activeTab);
     
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user]);
+    // Update URL without causing a reload
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', activeTab);
+    window.history.replaceState(null, '', url.toString());
+  }, [activeTab]);
 
+  // Load data only once when component mounts
   useEffect(() => {
-    if (user) {
+    if (user && !dataLoaded) {
       loadAdminData();
     }
-  }, [user]);
-
-  const reloadData = async () => {
-    await loadAdminData();
-  };
+  }, [user, dataLoaded]);
 
   const loadAdminData = async () => {
     if (!user) return;
     
     try {
-      setLoading(true);
-      
-      // Mark that we're refreshing data
-      sessionStorage.setItem('lastDataRefresh', Date.now().toString());
-      
       const profile = await adminService.getAdminProfile(user.id);
       setAdminProfile(profile);
 
@@ -176,11 +162,16 @@ const AdminDashboard: React.FC = () => {
         status: order.status || 'pending',
         timestamp: new Date(order.created_at)
       })));
+      
+      setDataLoaded(true);
     } catch (error) {
       console.error('Error loading admin data:', error);
-    } finally {
-      setLoading(false);
     }
+  };
+
+  // Simple tab change handler
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
   };
 
   const navigation = useMemo(() => [
@@ -192,7 +183,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'admin', name: t('nav.admin'), icon: Settings },
   ], [t]);
 
-  if (!isLoaded || loading) {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
@@ -214,7 +205,7 @@ const AdminDashboard: React.FC = () => {
       case 'orders':
         return <OrderManagement orders={orders} setOrders={setOrders} />;
       case 'tables':
-        return <TableManagement tables={tables} setTables={setTables} onDataChange={reloadData} />;
+        return <TableManagement tables={tables} setTables={setTables} onDataChange={loadAdminData} />;
       case 'analytics':
         return <Analytics orders={orders} />;
       case 'admin':
@@ -229,7 +220,7 @@ const AdminDashboard: React.FC = () => {
       <ResponsiveLayout
         navigation={navigation}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         userInfo={{
           name: adminProfile?.name || user?.email?.split('@')[0] || 'Restaurant',
           email: user?.email || ''
