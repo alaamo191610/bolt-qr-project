@@ -321,7 +321,7 @@ const DigitalMenu: React.FC = () => {
     fetchItems()
     fetchCategories()
     fetchIngredients()
-  }, [])
+  }, [user])
 
   const fetchItems = async () => {
     if (!user) return
@@ -332,7 +332,7 @@ const DigitalMenu: React.FC = () => {
         .from('menus')
         .select(`
           *, 
-          category:categories(name_en, name_ar), 
+          categories(id, name_en, name_ar), 
           ingredients_details:menu_ingredients(ingredient:ingredients(id, name_en, name_ar))
         `)
         .eq('user_id', user.id)
@@ -340,9 +340,12 @@ const DigitalMenu: React.FC = () => {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setItems(data as MenuItem[])
+      
+      console.log('Fetched items:', data) // Debug log
+      setItems(data || [])
     } catch (error) {
       console.error('Error fetching items:', error)
+      setItems([]) // Set empty array on error
     } finally {
       setLoading(false)
     }
@@ -356,9 +359,11 @@ const DigitalMenu: React.FC = () => {
         .order('name_en')
 
       if (error) throw error
+      console.log('Fetched categories:', data) // Debug log
       setCategories(data || [])
     } catch (error) {
       console.error('Error fetching categories:', error)
+      setCategories([]) // Set empty array on error
     }
   }
 
@@ -370,9 +375,11 @@ const DigitalMenu: React.FC = () => {
         .order('name_en')
 
       if (error) throw error
+      console.log('Fetched ingredients:', data) // Debug log
       setIngredients(data || [])
     } catch (error) {
       console.error('Error fetching ingredients:', error)
+      setIngredients([]) // Set empty array on error
     }
   }
 
@@ -559,11 +566,23 @@ const DigitalMenu: React.FC = () => {
     const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory
     const matchesSearch = 
       item.name_en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.name_ar.toLowerCase().includes(searchTerm.toLowerCase())
+      (item.name_ar || '').toLowerCase().includes(searchTerm.toLowerCase())
     return matchesCategory && matchesSearch
   })
 
-  if (loading) {
+  // Add timeout for loading state
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('Loading timeout - forcing loading to false')
+        setLoading(false)
+      }
+    }, 10000) // 10 second timeout
+
+    return () => clearTimeout(timeout)
+  }, [loading])
+
+  if (loading && user) {
     return <LoadingSpinner />
   }
 
@@ -700,7 +719,7 @@ const DigitalMenu: React.FC = () => {
                     </div>
                     
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                      {item.category ? getLocalizedName(item.category) : t('admin.noCategory')}
+                      {item.categories ? getLocalizedName(item.categories) : t('admin.noCategory')}
                     </p>
                     
                     <div className="flex items-center space-x-2 mb-3">
@@ -715,7 +734,7 @@ const DigitalMenu: React.FC = () => {
                     
                     {item.ingredients_details && item.ingredients_details.length > 0 && (
                       <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-                        {t('admin.ingredients')}: {item.ingredients_details.map(i => getLocalizedName(i.ingredient)).join(', ')}
+                        {t('admin.ingredients')}: {item.ingredients_details.map(i => i.ingredient ? getLocalizedName(i.ingredient) : '').filter(Boolean).join(', ')}
                       </p>
                     )}
                     
