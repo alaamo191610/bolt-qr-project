@@ -318,9 +318,34 @@ const DigitalMenu: React.FC = () => {
 
   // Data fetching
   useEffect(() => {
+    if (!user) return;
+    
     fetchItems()
     fetchCategories()
     fetchIngredients()
+    
+    // Prevent component reload on tab switch
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        // Tab became visible - refresh data if needed
+        const lastFetch = sessionStorage.getItem('lastDataFetch');
+        const now = Date.now();
+        
+        // Only refetch if more than 5 minutes have passed
+        if (!lastFetch || now - parseInt(lastFetch) > 300000) {
+          fetchItems();
+          fetchCategories();
+          fetchIngredients();
+          sessionStorage.setItem('lastDataFetch', now.toString());
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user])
 
   const fetchItems = async () => {
@@ -328,6 +353,18 @@ const DigitalMenu: React.FC = () => {
     
     try {
       setLoading(true)
+      
+      // Check if we have cached data
+      const cachedItems = sessionStorage.getItem(`menuItems_${user.id}`);
+      if (cachedItems && !document.hidden) {
+        const parsed = JSON.parse(cachedItems);
+        if (Date.now() - parsed.timestamp < 300000) { // 5 minutes cache
+          setItems(parsed.data);
+          setLoading(false);
+          return;
+        }
+      }
+      
       const { data, error } = await supabase
         .from('menus')
         .select(`
@@ -343,6 +380,14 @@ const DigitalMenu: React.FC = () => {
       
       console.log('Fetched items:', data) // Debug log
       setItems(data || [])
+      
+      // Cache the data
+      if (data) {
+        sessionStorage.setItem(`menuItems_${user.id}`, JSON.stringify({
+          data: data,
+          timestamp: Date.now()
+        }));
+      }
     } catch (error) {
       console.error('Error fetching items:', error)
       setItems([]) // Set empty array on error

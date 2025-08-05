@@ -7,6 +7,42 @@ export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Prevent auth state loss on tab switch
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Store auth state when tab becomes hidden
+        if (user) {
+          sessionStorage.setItem('authUser', JSON.stringify({
+            id: user.id,
+            email: user.email
+          }));
+        }
+      } else {
+        // Restore auth state when tab becomes visible
+        const storedUser = sessionStorage.getItem('authUser');
+        if (storedUser && !user) {
+          // Only restore if current user is null
+          const parsedUser = JSON.parse(storedUser);
+          // Verify session is still valid
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user && session.user.id === parsedUser.id) {
+              setUser(session.user);
+            } else {
+              sessionStorage.removeItem('authUser');
+            }
+          });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
