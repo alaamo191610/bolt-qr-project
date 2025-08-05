@@ -26,7 +26,7 @@ interface MenuItem {
   available: boolean
   category_id: string
   created_at: string
-  category?: Category | null
+  categories?: Category | null
   ingredients_details?: {
     ingredient: Ingredient
   }[]
@@ -719,7 +719,7 @@ const DigitalMenu: React.FC = () => {
                     </div>
                     
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                      {item.category ? getLocalizedName(item.category) : t('common.noCategory')}
+                      {item.categories ? getLocalizedName(item.categories) : t('common.noCategory')}
                     </p>
                     
                     <div className="flex items-center space-x-2 mb-3">
