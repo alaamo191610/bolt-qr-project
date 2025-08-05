@@ -20,15 +20,6 @@ import Analytics from './components/Analytics';
 import AdminPanel from './components/AdminPanel';
 import CustomerMenu from './pages/CustomerMenu';
 
-// Prevent page reload on visibility change
-const preventReload = () => {
-  // Simple prevention of accidental refresh
-  window.addEventListener('beforeunload', (e) => {
-    e.preventDefault();
-    e.returnValue = '';
-  });
-};
-
 // Define interfaces for the component state
 interface Table {
   id: number;
@@ -68,11 +59,6 @@ interface AdminProfile {
 
 function App() {
   const { user, loading } = useAuth();
-
-  // Initialize page reload prevention
-  useEffect(() => {
-    preventReload();
-  }, []);
 
   if (loading) {
     return (
@@ -114,6 +100,29 @@ const AdminDashboard: React.FC = () => {
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Prevent component remount on tab switch
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        // Tab became visible - check if we need to refresh data
+        const lastRefresh = sessionStorage.getItem('lastDataRefresh');
+        const now = Date.now();
+        
+        // Only refresh if more than 5 minutes have passed
+        if (!lastRefresh || now - parseInt(lastRefresh) > 300000) {
+          loadAdminData();
+          sessionStorage.setItem('lastDataRefresh', now.toString());
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       loadAdminData();
@@ -126,8 +135,13 @@ const AdminDashboard: React.FC = () => {
 
   const loadAdminData = async () => {
     if (!user) return;
+    
     try {
       setLoading(true);
+      
+      // Mark that we're refreshing data
+      sessionStorage.setItem('lastDataRefresh', Date.now().toString());
+      
       const profile = await adminService.getAdminProfile(user.id);
       setAdminProfile(profile);
 

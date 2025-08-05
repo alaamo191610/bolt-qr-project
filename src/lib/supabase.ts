@@ -7,7 +7,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    storageKey: 'sb-restaurant-qr-auth-token',
+    storage: window.localStorage,
+    autoRefreshToken: true,
+    detectSessionInUrl: false
+  }
+})
 
 // Database types based on your schema
 export interface MenuItem {
