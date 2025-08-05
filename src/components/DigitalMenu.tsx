@@ -1226,8 +1226,5 @@ const DigitalMenu: React.FC = () => {
     </div>
   )
 }
-  )
-}
 
-export default DigitalMenu
 export default DigitalMenu
