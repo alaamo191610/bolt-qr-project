@@ -97,6 +97,7 @@ const translations: Record<Language, any> = {
       analytics: "Analytics",
       admin: "Admin",
       settings: "Settings"
+    }
     nav: {
       qrCodes: "QR Codes",
       digitalMenu: "Digital Menu",
@@ -124,6 +125,8 @@ const translations: Record<Language, any> = {
         3: "They'll be directed to your digital menu for that specific table",
         4: "Orders are automatically associated with the correct table",
         5: "Download high-resolution QR codes for professional printing"
+      }
+    }
     qr: {
       title: "QR Code Generator",
       description: "Generate QR codes for table access to digital menu",
@@ -161,6 +164,7 @@ const translations: Record<Language, any> = {
       noItemsDescription: "Try adjusting your search or filter criteria.",
       each: "each",
       orders: "orders"
+    }
     menu: {
       title: "Digital Menu",
       subtitle: "Scan, Browse, Order",
@@ -195,6 +199,7 @@ const translations: Record<Language, any> = {
       noOrdersDescription: "Orders will appear here when customers place them through the QR menu.",
       ago: "ago",
       justNow: "Just now"
+    }
     orders: {
       title: "Order Management",
       description: "Track and manage all incoming orders",
@@ -227,6 +232,7 @@ const translations: Record<Language, any> = {
       tableCodePlaceholder: "e.g., T05, A1, VIP1",
       seats: "Seats",
       qrCodeAccess: "QR Code for Menu Access"
+    }
     tables: {
       title: "Table Management",
       description: "Manage restaurant tables and their status",
@@ -256,6 +262,7 @@ const translations: Record<Language, any> = {
       orders: "orders",
       revenueByStatus: "Revenue by Order Status",
       weekTrend: "7-Day Order Trend"
+    }
     analytics: {
       title: "Analytics Dashboard",
       subtitle: "Track performance and insights",
@@ -276,6 +283,8 @@ const translations: Record<Language, any> = {
       tabs: {
         menu: "Menu Management",
         settings: "Restaurant Settings"
+      }
+    }
     admin: {
       title: "Admin Panel",
       subtitle: "Manage menu items and restaurant settings",
@@ -330,6 +339,7 @@ const translations: Record<Language, any> = {
       accentButton: "Accent Button",
       resetToDefault: "Reset to Default",
       applyChanges: "Apply Changes"
+    }
     theme: {
       title: "Theme Customizer",
       description: "Personalize your restaurant's appearance",
@@ -355,6 +365,7 @@ const translations: Record<Language, any> = {
       name: "Bella Vista",
       phone: "(555) 123-4567",
       defaultDescription: "Fine dining experience with fresh, locally sourced ingredients and exceptional service."
+    }
     restaurant: {
       name: "Bella Vista",
       phone: "(555) 123-4567",
@@ -368,6 +379,7 @@ const translations: Record<Language, any> = {
       tryAgain: "Try Again",
       failedToPlaceOrder: "Failed to place order",
       placingOrder: "Placing Order..."
+    }
     status: {
       errorLoadingMenu: "Error Loading Menu",
       tableNotFound: "Table \"{table}\" not found. Please check the QR code or contact staff.",
@@ -381,6 +393,7 @@ const translations: Record<Language, any> = {
       english: "English",
       arabic: "العربية",
       switchTo: "Switch to"
+    }
     language: {
       english: "English",
       arabic: "العربية",
@@ -469,6 +482,7 @@ const translations: Record<Language, any> = {
       analytics: "التحليلات",
       admin: "الإدارة",
       settings: "الإعدادات"
+    }
     nav: {
       qrCodes: "رموز QR",
       digitalMenu: "القائمة",
@@ -496,6 +510,8 @@ const translations: Record<Language, any> = {
         3: "يتم توجيهه مباشرة إلى القائمة الرقمية",
         4: "يُربط كل طلب تلقائيًا بالطاولة الصحيحة",
         5: "حمّل رموز عالية الدقة للطباعة الاحترافية"
+      }
+    }
     qr: {
       title: "إنشاء رمز QR",
       description: "أنشئ رموز QR لربط الطاولات بالقائمة الرقمية",
@@ -533,6 +549,7 @@ const translations: Record<Language, any> = {
       noItemsDescription: "جرّب تعديل البحث أو التصفية",
       each: "لكل قطعة",
       orders: "الطلبات"
+    }
     menu: {
       title: "القائمة الرقمية",
       subtitle: "امسح. تصفح. اطلب.",
@@ -567,6 +584,7 @@ const translations: Record<Language, any> = {
       noOrdersDescription: "ستظهر هنا الطلبات عند استقبالها عبر القائمة الرقمية.",
       ago: "منذ",
       justNow: "الآن"
+    }
     orders: {
       title: "إدارة الطلبات",
       description: "تابع الطلبات لحظة بلحظة",
@@ -599,6 +617,7 @@ const translations: Record<Language, any> = {
       tableCodePlaceholder: "مثال: T01، A5، VIP1",
       seats: "مقاعد",
       qrCodeAccess: "رمز QR للدخول إلى القائمة"
+    }
     tables: {
       title: "إدارة الطاولات",
       description: "تحكم بحالة كل طاولة في المطعم",
@@ -621,6 +640,8 @@ const translations: Record<Language, any> = {
       tabs: {
         menu: "إدارة القائمة",
         settings: "إعدادات المطعم"
+      }
+    }
     admin: {
       title: "لوحة الإدارة",
       subtitle: "إدارة عناصر القائمة وإعدادات المطعم",
@@ -675,6 +696,7 @@ const translations: Record<Language, any> = {
       accentButton: "زر مميز",
       resetToDefault: "استعادة الإعدادات",
       applyChanges: "تطبيق التغييرات"
+    }
     theme: {
       title: "تخصيص المظهر",
       description: "غيّر مظهر مطعمك كما تحب",
@@ -709,6 +731,7 @@ const translations: Record<Language, any> = {
       orders: "طلب",
       revenueByStatus: "الإيرادات حسب الحالة",
       weekTrend: "نمط الطلبات الأسبوعي"
+    }
     analytics: {
       title: "لوحة التحليلات",
       subtitle: "تتبع الأداء والرؤى",
@@ -727,6 +750,7 @@ const translations: Record<Language, any> = {
       name: "بيلا فيستا",
       phone: "(555) 123-4567",
       defaultDescription: "مطعم راقٍ يقدم تجربة طعام استثنائية بمكونات طازجة وخدمة أنيقة."
+    }
     restaurant: {
       name: "بيلا فيستا",
       phone: "(555) 123-4567",
@@ -740,6 +764,7 @@ const translations: Record<Language, any> = {
       tryAgain: "أعد المحاولة",
       failedToPlaceOrder: "فشل إرسال الطلب",
       placingOrder: "يتم إرسال الطلب..."
+    }
     status: {
       errorLoadingMenu: "تعذر تحميل القائمة",
       tableNotFound: "الطاولة \"{table}\" غير موجودة. تحقق من الرمز أو اطلب المساعدة.",
@@ -753,6 +778,7 @@ const translations: Record<Language, any> = {
       english: "الإنجليزية",
       arabic: "العربية",
       switchTo: "التبديل إلى"
+    }
     language: {
       english: "الإنجليزية",
       arabic: "العربية",
