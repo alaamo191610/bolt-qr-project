@@ -140,31 +140,13 @@ const AdminDashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const { t, isLoaded } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState(() => {
-    // Get initial tab from URL or localStorage, default to 'qr-generator'
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlTab = urlParams.get('tab');
-    const savedTab = sessionStorage.getItem('activeTab');
-    return urlTab || savedTab || 'qr-generator';
-  });
-
+  const [activeTab, setActiveTab] = useState('qr-generator');
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Save active tab to sessionStorage and URL
-  useEffect(() => {
-    sessionStorage.setItem('activeTab', activeTab);
-
-    // Update URL without causing a reload
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', activeTab);
-    window.history.replaceState(null, '', url.toString());
-  }, [activeTab]);
-
-  // Load data only once when component mounts
   useEffect(() => {
     if (user && !dataLoaded) {
       loadAdminData();
@@ -173,7 +155,6 @@ const AdminDashboard: React.FC = () => {
 
   const loadAdminData = async () => {
     if (!user) return;
-
     try {
       const profile = await adminService.getAdminProfile(user.id);
       setAdminProfile(profile);
@@ -209,8 +190,6 @@ const AdminDashboard: React.FC = () => {
         status: order.status || 'pending',
         timestamp: new Date(order.created_at)
       })));
-
-      setDataLoaded(true);
     } catch (error) {
       console.error('Error loading admin data:', error);
     }
