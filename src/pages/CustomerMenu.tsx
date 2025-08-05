@@ -40,29 +40,33 @@ const CustomerMenu: React.FC = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const table = urlParams.get('table') || 'T01';
     setTableNumber(table);
-    
+
     // Load menu items
     loadMenuItems(table);
   }, []);
 
   const loadMenuItems = async (tableCode: string) => {
+    if (!tableCode) {
+      setError(t('status.tableNotFound'));
+      return;
+    }
     try {
       setLoading(true);
-      
+
       // Get table info to determine which admin's menu to load
       const table = await tableService.getTableByCode(tableCode);
       if (!table) {
         setError(t('status.tableNotFound', { table: tableCode }));
         return;
       }
-      
+
       const items = await menuService.getMenuItems(table.admin_id);
-      
+
       if (!items || items.length === 0) {
         setError(t('status.noMenuItems'));
         return;
       }
-      
+
       // Transform data to match component interface
       const transformedItems = items.map(item => ({
         id: item.id,
@@ -73,9 +77,9 @@ const CustomerMenu: React.FC = () => {
         category: item.categories?.name_en || 'Other',
         image_url: item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400'
       }));
-      
+
       setMenuItems(transformedItems);
-      
+
       // Extract unique categories
       const uniqueCategories = ['All', ...Array.from(new Set(transformedItems.map(item => item.category)))];
       setCategories(uniqueCategories);
@@ -90,7 +94,7 @@ const CustomerMenu: React.FC = () => {
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     const matchesSearch = item.name_en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.description.toLowerCase().includes(searchTerm.toLowerCase());
+      item.description.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -109,7 +113,7 @@ const CustomerMenu: React.FC = () => {
     });
   };
 
-  const removeFromCart = (itemId: number) => {
+  const removeFromCart = (itemId: string) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(cartItem => cartItem.id === itemId);
       if (existingItem && existingItem.quantity > 1) {
@@ -132,14 +136,14 @@ const CustomerMenu: React.FC = () => {
     return cart.reduce((total, item) => total + item.quantity, 0);
   };
 
-  const getItemQuantity = (itemId: number) => {
+  const getItemQuantity = (itemId: string) => {
     const cartItem = cart.find(item => item.id === itemId);
     return cartItem ? cartItem.quantity : 0;
   };
 
   const placeOrder = async () => {
     setIsOrdering(true);
-    
+
     try {
       const orderItems = cart.map(item => ({
         menu_item_id: item.id,
@@ -151,11 +155,11 @@ const CustomerMenu: React.FC = () => {
         table_code: tableNumber,
         items: orderItems
       });
-      
+
       setOrderPlaced(true);
       setShowCart(false);
       setCart([]);
-      
+
       // Reset after 5 seconds
       setTimeout(() => {
         setOrderPlaced(false);
@@ -193,8 +197,7 @@ const CustomerMenu: React.FC = () => {
           <h2 className="text-2xl font-bold text-slate-900 mb-2">{t('status.errorLoadingMenu')}</h2>
           <p className="text-slate-600 mb-4">{error}</p>
           <button
-            onClick={loadMenuItems}
-            onClick={() => loadMenuItems(tableNumber)}
+            onClick={() => window.location.reload()}
             className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors duration-200"
           >
             {t('status.tryAgain')}
@@ -232,7 +235,7 @@ const CustomerMenu: React.FC = () => {
       <div className={`fixed top-4 ${isRTL ? 'left-4' : 'right-4'} z-50`}>
         <LanguageToggle variant="button" />
       </div>
-      
+
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
@@ -250,7 +253,7 @@ const CustomerMenu: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Cart Button */}
             <button
               onClick={() => setShowCart(!showCart)}
@@ -283,18 +286,17 @@ const CustomerMenu: React.FC = () => {
                 className={`w-full ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
               />
             </div>
-            
+
             {/* Category Filter */}
             <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
               {categories.map(category => (
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(category)}
-                  className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all duration-200 ${
-                    selectedCategory === category
-                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg'
-                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                  }`}
+                  className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all duration-200 ${selectedCategory === category
+                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}
                 >
                   {category === 'All' ? t('menu.all') : category}
                 </button>
@@ -325,7 +327,7 @@ const CustomerMenu: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    
+
                     {/* Add to Cart Controls */}
                     <div className="flex-shrink-0">
                       {getItemQuantity(item.id) > 0 ? (
@@ -391,7 +393,7 @@ const CustomerMenu: React.FC = () => {
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-400">{t('orders.table')} {tableNumber}</p>
             </div>
-            
+
             <div className="overflow-y-auto max-h-96">
               {cart.length === 0 ? (
                 <div className="p-8 text-center">
@@ -428,7 +430,7 @@ const CustomerMenu: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             {cart.length > 0 && (
               <div className="p-6 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex justify-between items-center text-xl font-bold text-slate-900 dark:text-white mb-4">

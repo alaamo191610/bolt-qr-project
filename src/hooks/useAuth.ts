@@ -30,7 +30,9 @@ export const useAuth = () => {
           loadAdminLanguagePreference(session.user.id)
         }
         
-        setLoading(false)
+        if (event !== 'TOKEN_REFRESHED') {
+          setLoading(false)
+        }
       }
     )
 
@@ -93,6 +95,9 @@ export const useAuth = () => {
   }
 
   const signOut = async () => {
+    // Clear session storage on sign out
+    sessionStorage.clear()
+    
     const { error } = await supabase.auth.signOut()
     
     // If session doesn't exist, user is already logged out - treat as success
