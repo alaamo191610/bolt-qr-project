@@ -196,7 +196,7 @@ const AdminDashboard: React.FC = () => {
       case 'qr-generator':
         return <QRGenerator tables={tables} />;
       case 'menu':
-        return <DigitalMenu menuItems={menuItems} />;
+        return <DigitalMenu />;
       case 'orders':
         return <OrderManagement orders={orders} setOrders={setOrders} />;
       case 'tables':
