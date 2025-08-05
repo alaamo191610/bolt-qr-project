@@ -5,9 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        'bitcount': ['var(--font-bitcount)'],
         'playpen-arabic': ['var(--font-playpen-arabic)'],
-        'sans': ['var(--font-bitcount)', 'system-ui', 'sans-serif'],
         'arabic': ['var(--font-playpen-arabic)', 'system-ui', 'sans-serif'],
       },
       colors: {

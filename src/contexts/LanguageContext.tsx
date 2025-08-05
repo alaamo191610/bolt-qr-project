@@ -456,7 +456,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (isRTL) {
       document.documentElement.style.fontFamily = 'var(--font-playpen-arabic)';
     } else {
-      document.documentElement.style.fontFamily = 'var(--font-bitcount)';
+      document.documentElement.style.fontFamily = 'var(--font-playpen-arabic)';
     }
 
     // Update body class for RTL styling

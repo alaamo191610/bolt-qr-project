@@ -1,17 +1,11 @@
 /* Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Playpen+Sans+Arabic:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@400;500;600;700&display=swap');
 
 /* Font variables */
 :root {
-    --font-bitcount: 'Bitcount Grid Double', system-ui;
   --font-playpen-arabic: 'Playpen Sans Arabic', cursive;
 }
 
-/* Font classes */
-.font-bitcount {
-    font-family: var(--font-bitcount);
-}
 
 .font-playpen-arabic {
   font-family: var(--font-playpen-arabic);
@@ -19,7 +13,7 @@
 
 /* Language-specific fonts */
 html[lang="en"] {
-    font-family: var(--font-bitcount);
+  font-family: var(--font-playpen-arabic);
 }
 
 html[lang="ar"] {
@@ -27,7 +21,7 @@ html[lang="ar"] {
 }
 
 [dir="ltr"] {
-    font-family: var(--font-bitcount);
+  font-family: var(--font-playpen-arabic);
 }
 
 [dir="rtl"] {
