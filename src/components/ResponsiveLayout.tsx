@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Bell, Search, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
@@ -32,9 +34,53 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   const { colors } = useTheme();
   const { t, isRTL } = useLanguage();
 
+  // Prevent component unmounting on tab switch
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab is hidden - preserve state
+        sessionStorage.setItem('activeTab', activeTab);
+        sessionStorage.setItem('sidebarOpen', sidebarOpen.toString());
+      } else {
+        // Tab is visible - restore state if needed
+        const savedTab = sessionStorage.getItem('activeTab');
+        const savedSidebar = sessionStorage.getItem('sidebarOpen');
+        
+        if (savedTab && savedTab !== activeTab) {
+          setActiveTab(savedTab);
+        }
+        if (savedSidebar) {
+          setSidebarOpen(savedSidebar === 'true');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeTab, sidebarOpen, setActiveTab]);
+
+  // Prevent page refresh on navigation
   const handleTabChange = (tabId: string) => {
+    // Mark that we have unsaved state
+    sessionStorage.setItem('hasUnsavedChanges', 'true');
+    
+    const lang = localStorage.getItem('restaurant-language') || 'en';
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    
+    // Use replaceState instead of pushState to prevent back button issues
+    window.history.replaceState({ tab: tabId }, '', url.toString());
+    
     setActiveTab(tabId);
     setSidebarOpen(false);
+    
+    // Clear unsaved changes flag after successful navigation
+    setTimeout(() => {
+      sessionStorage.removeItem('hasUnsavedChanges');
+    }, 100);
   };
 
   return (
@@ -93,7 +139,10 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             return (
               <button
                 key={item.id}
-                onClick={() => handleTabChange(item.id)}
+                onClick={() => {
+                  handleTabChange(item.id);
+                }}
+
                 className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${isRTL ? 'text-right' : 'text-left'
                   } px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
                     ? 'text-white shadow-lg transform scale-[1.02]'
@@ -183,7 +232,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                   return (
                     <button
                       key={item.id}
-                      onClick={() => handleTabChange(item.id)}
+                      onClick={() => {
+                        handleTabChange(item.id);
+                      }}
                       className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${isActive
                           ? 'text-white shadow-sm'
                           : 'text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white'
