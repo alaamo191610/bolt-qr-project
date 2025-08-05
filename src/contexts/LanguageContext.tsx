@@ -156,6 +156,24 @@ const translations: Record<Language, any> = {
     "admin": {
       "title": "Admin Panel",
       "subtitle": "Manage menu items and restaurant settings",
+      "addCategory": "Add Category",
+      "addIngredient": "Add Ingredient",
+      "addItem": "Add Item",
+      "editItem": "Edit Item",
+      "updateItem": "Update Item",
+      "deleteItem": "Delete Item",
+      "deleteSelected": "Delete Selected",
+      "deleteItemConfirm": "Are you sure you want to delete this item? This action cannot be undone.",
+      "deleteSelectedConfirm": "Are you sure you want to delete {count} selected items? This action cannot be undone.",
+      "selectAll": "Select All",
+      "itemsSelected": "items selected",
+      "noItems": "No Menu Items",
+      "noItemsDescription": "Start building your menu by adding your first item.",
+      "addFirstItem": "Add Your First Item",
+      "noCategory": "No Category",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "ingredients": "Ingredients",
       "tabs": {
         "menu": "Menu Management",
         "settings": "Restaurant Settings"
@@ -174,6 +192,15 @@ const translations: Record<Language, any> = {
       "saveChanges": "Save Changes",
       "adding": "Adding...",
       "saving": "Saving..."
+    },
+    "common": {
+      "adding": "Adding...",
+      "saving": "Saving...",
+      "deleting": "Deleting...",
+      "nameEn": "Name (English)",
+      "nameAr": "Name (Arabic)",
+      "selectCategory": "Select Category",
+      "allCategories": "All Categories"
     },
     "theme": {
       "title": "Theme Customizer",
@@ -343,6 +370,24 @@ const translations: Record<Language, any> = {
     "admin": {
       "title": "لوحة الإدارة",
       "subtitle": "إدارة عناصر القائمة وإعدادات المطعم",
+      "addCategory": "إضافة فئة",
+      "addIngredient": "إضافة مكون",
+      "addItem": "إضافة عنصر",
+      "editItem": "تعديل العنصر",
+      "updateItem": "تحديث العنصر",
+      "deleteItem": "حذف العنصر",
+      "deleteSelected": "حذف المحدد",
+      "deleteItemConfirm": "هل أنت متأكد من حذف هذا العنصر؟ لا يمكن التراجع عن هذا الإجراء.",
+      "deleteSelectedConfirm": "هل أنت متأكد من حذف {count} عنصر محدد؟ لا يمكن التراجع عن هذا الإجراء.",
+      "selectAll": "تحديد الكل",
+      "itemsSelected": "عنصر محدد",
+      "noItems": "لا توجد عناصر",
+      "noItemsDescription": "ابدأ ببناء قائمتك بإضافة العنصر الأول.",
+      "addFirstItem": "أضف عنصرك الأول",
+      "noCategory": "بدون فئة",
+      "available": "متاح",
+      "unavailable": "غير متاح",
+      "ingredients": "المكونات",
       "tabs": {
         "menu": "إدارة القائمة",
         "settings": "إعدادات المطعم"
@@ -361,6 +406,15 @@ const translations: Record<Language, any> = {
       "saveChanges": "حفظ التغييرات",
       "adding": "جارٍ الإضافة...",
       "saving": "جارٍ الحفظ..."
+    },
+    "common": {
+      "adding": "جارٍ الإضافة...",
+      "saving": "جارٍ الحفظ...",
+      "deleting": "جارٍ الحذف...",
+      "nameEn": "الاسم (إنجليزي)",
+      "nameAr": "الاسم (عربي)",
+      "selectCategory": "اختر الفئة",
+      "allCategories": "جميع الفئات"
     },
     "theme": {
       "title": "تخصيص المظهر",
