@@ -487,7 +487,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const savedLang = localStorage.getItem('restaurant-language') as Language;
 
     const initialLang = savedLang || urlLang || 'en'; setLanguageState(initialLang);
-    const initialLang = savedLang || urlLang || 'en'; setLanguageState(initialLang);
     updateDocumentDirection(initialLang);
     setIsLoaded(true); // ✅ mark as loaded
 
