@@ -8,6 +8,7 @@ interface LanguageContextType {
   t: (key: string, params?: Record<string, string>) => string;
   isRTL: boolean;
   isLoaded: boolean;
+  getLocalizedDayName: (date: Date, format?: 'short' | 'long') => string;
 }
 
 
@@ -72,7 +73,13 @@ const translations: Record<Language, any> = {
       errorOccurred: 'Something went wrong',
       deleted: 'Item deleted successfully',
       deletedSelected: '{count} items deleted successfully',
-
+      uploading: 'Uploading...',
+      remove: 'Remove Image',
+      uploaded: 'Uploaded',
+      placeholder: 'Click or drag image to upload',
+      required: 'This field is required.',
+      timestamp: 'Timestamp',
+      dateRange: 'Date Range',
     },
     auth: {
       welcome: "Welcome Back",
@@ -151,7 +158,7 @@ const translations: Record<Language, any> = {
       noOrders: "No Orders Yet",
       noOrdersDescription: "Orders will appear here when customers place them through the QR menu.",
       ago: "ago",
-      justNow: "Just now"
+      justNow: "Just now",
     },
     tables: {
       title: "Table Management",
@@ -181,7 +188,24 @@ const translations: Record<Language, any> = {
       mostActiveTables: "Most Active Tables",
       orders: "orders",
       revenueByStatus: "Revenue by Order Status",
-      weekTrend: "7-Day Order Trend"
+      weekTrend: "7-Day Order Trend",
+      topRevenueTables: 'Top Tables by Revenue',
+      topRevenueItems: 'Top Items by Revenue',
+      statusDistribution: 'Order Status Distribution',
+      status: {
+        pending: 'Pending',
+        preparing: 'Preparing',
+        served: 'Served',
+        cancelled: 'Cancelled',
+      },
+      weeklyTrendChart: 'Weekly Revenue & Orders',
+      revenue: 'Revenue',
+      exportPDF: 'Export as PDF',
+      pdfTitle: 'Analytics Summary',
+      pdfTotalRevenue: 'Total Revenue',
+      orderTitle: 'Order Summary',
+      tableSubtotal: 'Table Subtotal',
+      groupedByTable: 'Orders by Table',
     },
     admin: {
       title: "Admin Panel",
@@ -303,6 +327,13 @@ const translations: Record<Language, any> = {
       errorOccurred: 'حدث خطأ ما',
       deleted: 'تم حذف العنصر بنجاح',
       deletedSelected: 'تم حذف {count} عنصرًا بنجاح',
+      uploading: 'جاري الرفع...',
+      remove: 'إزالة الصورة',
+      uploaded: 'تم الرفع',
+      placeholder: 'انقر أو اسحب صورة للرفع',
+      required: 'هذه الخانة مطلوبة.',
+      timestamp: 'الوقت',
+      dateRange: 'الفترة الزمنية',
     },
     auth: {
       welcome: "مرحبًا بك من جديد",
@@ -453,7 +484,24 @@ const translations: Record<Language, any> = {
       mostActiveTables: "الطاولات النشطة",
       orders: "طلب",
       revenueByStatus: "الإيرادات حسب الحالة",
-      weekTrend: "نمط الطلبات الأسبوعي"
+      weekTrend: "نمط الطلبات الأسبوعي",
+      topRevenueTables: 'الطاولات الأعلى إيرادًا',
+      topRevenueItems: 'الأصناف الأعلى إيرادًا',
+      statusDistribution: 'توزيع حالات الطلب',
+      status: {
+        pending: 'قيد الانتظار',
+        preparing: 'يتم التحضير',
+        served: 'تم التقديم',
+        cancelled: 'تم الإلغاء',
+      },
+      weeklyTrendChart: 'الإيرادات والطلبات الأسبوعية',
+      revenue: 'الإيرادات',
+      exportPDF: 'تصدير كـ PDF',
+      pdfTitle: 'ملخص التحليلات',
+      pdfTotalRevenue: 'إجمالي الإيرادات',
+      orderTitle: 'ملخص الطلبات',
+      tableSubtotal: 'إجمالي طاولة',
+      groupedByTable: 'الطلبات حسب الطاولة',
     },
     restaurant: {
       name: "بيلا فيستا",
@@ -480,6 +528,10 @@ const translations: Record<Language, any> = {
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
   const [isLoaded, setIsLoaded] = useState(false);
+  const getLocalizedDayName = (date: Date, format: 'short' | 'long' = 'short'): string => {
+    const locale = language === 'ar' ? 'ar-EG' : 'en-US';
+    return new Intl.DateTimeFormat(locale, { weekday: format }).format(date);
+  };
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -569,7 +621,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLanguage,
       t,
       isRTL,
-      isLoaded
+      isLoaded,
+      getLocalizedDayName
     }}>
       {children}
     </LanguageContext.Provider>

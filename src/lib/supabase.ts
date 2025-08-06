@@ -52,6 +52,10 @@ export interface Order {
   order_number?: number
 }
 
+export interface OrderWithItems extends Order {
+  items: { name: string; quantity: number }[];
+}
+
 export interface OrderItem {
   id: string
   order_id: string

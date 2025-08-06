@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Plus, Pencil, Trash2, X, Search, Check, Settings, Edit, AlertTriangle } from 'lucide-react'
 import { menuService } from '../services/menuService'
 import { useAuth } from '../hooks/useAuth'
@@ -33,6 +33,12 @@ interface MenuItem {
   ingredients_details?: {
     ingredient: Ingredient
   }[]
+}
+
+interface ImageUploadFieldProps {
+  value: string
+  onChange: (url: string) => void
+  disableManualInput?: boolean
 }
 
 // Subcomponents
@@ -286,6 +292,7 @@ const DigitalMenu: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [loading, setLoading] = useState(true)
   const [selectedItems, setSelectedItems] = useState<string[]>([])
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Modal states
   const [formOpen, setFormOpen] = useState(false)
@@ -310,6 +317,13 @@ const DigitalMenu: React.FC = () => {
     image_url: '',
     available: true,
     ingredients: [] as string[],
+  })
+
+  const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({
+    name_en: null,
+    name_ar: null,
+    price: null,
+    category_id: null,
   })
 
   const [itemToDelete, setItemToDelete] = useState<string | null>(null)
@@ -403,9 +417,17 @@ const DigitalMenu: React.FC = () => {
       setLoading(false)
     }
   }
-  const ImageUploadField = ({ value, onChange }: { value: string; onChange: (url: string) => void }) => {
+
+  const ImageUploadField = ({
+    value,
+    onChange,
+    disableManualInput = false,
+  }: ImageUploadFieldProps) => {
     const [uploading, setUploading] = useState(false)
     const [uploadError, setUploadError] = useState<string | null>(null)
+    const [isDragging, setIsDragging] = useState(false)
+
+    const extractFileNameFromUrl = (url: string) => url.split('/').pop() || ''
 
     const handleFileUpload = async (file: File) => {
       setUploading(true)
@@ -415,14 +437,14 @@ const DigitalMenu: React.FC = () => {
         const fileExt = file.name.split('.').pop()
         const fileName = `${Date.now()}.${fileExt}`
 
-        const { data, error } = await supabase.storage
-          .from('menu-images') // Make sure this bucket exists
+        const { error: uploadError } = await supabase.storage
+          .from('menu-images')
           .upload(fileName, file, {
             cacheControl: '3600',
             upsert: false,
           })
 
-        if (error) throw error
+        if (uploadError) throw uploadError
 
         const { data: publicUrlData } = supabase.storage
           .from('menu-images')
@@ -440,55 +462,106 @@ const DigitalMenu: React.FC = () => {
 
     const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
       e.preventDefault()
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setIsDragging(false)
+      if (e.dataTransfer.files?.[0]) {
         handleFileUpload(e.dataTransfer.files[0])
       }
     }
 
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(true)
+    }
+
+    const handleDragLeave = () => setIsDragging(false)
+
     const handleSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
+      if (e.target.files?.[0]) {
         handleFileUpload(e.target.files[0])
       }
+    }
+
+    const handleRemoveImage = async () => {
+      if (!value) return
+      const confirmDelete = window.confirm('Are you sure you want to delete this image?')
+      if (!confirmDelete) return
+
+      try {
+        const fileName = extractFileNameFromUrl(value)
+        await supabase.storage.from('menu-images').remove([fileName])
+      } catch (err) {
+        console.warn('Failed to delete image from Supabase:', err)
+      }
+
+      onChange('')
     }
 
     return (
       <div className="space-y-2">
         <label
+          htmlFor="file-upload"
           onDrop={handleDrop}
-          onDragOver={e => e.preventDefault()}
-          className="flex items-center justify-center px-4 py-10 border-2 border-dashed rounded-lg cursor-pointer bg-white dark:bg-slate-700 hover:border-emerald-500 transition"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          className={`relative flex items-center justify-center px-4 py-10 border-2 border-dashed rounded-lg cursor-pointer transition group
+            ${isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}
+          `}
         >
-          <div className="text-center">
-            {uploading ? (
-              <div className="flex items-center justify-center gap-2 text-emerald-600">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Uploading...</span>
-              </div>
-            ) : value ? (
-              <div className="space-y-2">
-                <img src={value} alt="Uploaded" className="h-24 mx-auto rounded-md object-contain" />
-                <div className="flex items-center justify-center gap-2 text-green-600">
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Uploaded</span>
+          {uploading ? (
+            <div className="flex items-center gap-2 text-emerald-600">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>{t('common.uploading')}</span>
+            </div>
+          ) : value ? (
+            <div className="w-full flex flex-col items-center gap-2 group relative">
+              <div className="relative w-full">
+                <img src={value} alt={t('common.uploaded')} className="h-40 w-full object-contain rounded-md" />
+                <div className="absolute inset-0 bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  >
+                    {t('common.remove')}
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="text-slate-500 dark:text-slate-300">
-                <UploadCloud className="w-6 h-6 mx-auto mb-2" />
-                <p>Click or drag image to upload</p>
+              <div className="bg-emerald-600 text-white px-3 py-1 rounded text-xs shadow">
+                {t('common.uploaded')}
               </div>
-            )}
-          </div>
-          <input type="file" accept="image/*" className="hidden" onChange={handleSelectFile} />
-        </label>
+            </div>
+          ) : (
+            <div className="text-center text-slate-500 dark:text-slate-300">
+              <UploadCloud className="w-6 h-6 mx-auto mb-2" />
+              <p>{t('common.placeholder')}</p>
+            </div>
+          )}
+
+          <input
+            id="file-upload"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleSelectFile}
+            disabled={disableManualInput || !!value}
+          />
+        </label >
 
         {uploadError && (
-          <div className="flex items-center gap-2 text-red-600 text-sm">
-            <XCircle className="w-4 h-4" />
-            <span>{uploadError}</span>
+          <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-700 dark:text-red-300 text-sm">
+            <div className="flex items-center gap-2">
+              <XCircle className="w-4 h-4" />
+              <span>{uploadError}</span>
+            </div>
+            <button
+              onClick={() => document.getElementById('file-upload')?.click()}
+              className="text-sm text-red-600 dark:text-red-300 underline hover:text-red-800 dark:hover:text-white"
+            >
+              Retry
+            </button>
           </div>
         )}
-      </div>
+      </div >
     )
   }
   const fetchCategories = async () => {
@@ -593,11 +666,20 @@ const DigitalMenu: React.FC = () => {
 
 
   const handleSubmit = async () => {
-    const { name_en, name_ar, price, category_id } = form
+    const newErrors: Record<string, string> = {}
 
-    // Validate required fields
-    if (!name_en || !name_ar || !price || !category_id) {
-      toast.error(t('common.fillAllFields') || 'Please fill all required fields')
+    if (!form.name_en.trim()) newErrors.name_en = t('common.required')
+    if (!form.name_ar.trim()) newErrors.name_ar = t('common.required')
+    if (!form.price.trim()) newErrors.price = t('common.required')
+    if (!form.category_id) newErrors.category_id = t('common.required')
+
+    setErrors(newErrors)
+
+    if (Object.keys(newErrors).length > 0) {
+      // Scroll to first invalid field
+      const firstKey = Object.keys(newErrors)[0]
+      const firstEl = fieldRefs.current[firstKey]
+      if (firstEl) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
@@ -605,6 +687,8 @@ const DigitalMenu: React.FC = () => {
       toast.error(t('common.authError') || 'User not authenticated')
       return
     }
+
+    const { name_en, name_ar, price, category_id } = form
 
     const payload = {
       name_en: name_en.trim(),
@@ -624,21 +708,28 @@ const DigitalMenu: React.FC = () => {
       await toast.promise(
         (async () => {
           if (form.id) {
-            // Update existing menu item
-            res = await supabase.from('menus').update(payload).eq('id', form.id).select('id')
+            // Update
+            res = await supabase
+              .from('menus')
+              .update(payload)
+              .eq('id', form.id)
+              .select('id')
             if (res.error) throw res.error
             menuId = form.id
 
-            // Remove previous ingredient links
+            // Cleanup old ingredients
             await supabase.from('menu_ingredients').delete().eq('menu_id', form.id)
           } else {
-            // Insert new item
-            res = await supabase.from('menus').insert(payload).select('id')
+            // Insert
+            res = await supabase
+              .from('menus')
+              .insert(payload)
+              .select('id')
             if (res.error) throw res.error
             menuId = res.data?.[0]?.id
           }
 
-          // Re-insert selected ingredients
+          // Add new ingredients
           if (menuId && form.ingredients.length > 0) {
             const inserts = form.ingredients.map(i => ({
               menu_id: menuId,
@@ -656,8 +747,6 @@ const DigitalMenu: React.FC = () => {
       )
 
       setFormOpen(false)
-
-      // Clear cache and refresh data
       sessionStorage.removeItem(`menuItems_${user.id}`)
       await fetchItems()
     } catch (error) {
@@ -744,21 +833,24 @@ const DigitalMenu: React.FC = () => {
 
       if (fetchError) throw fetchError
 
-      // 2. Extract file paths from public image URLs
-      const imagePaths = (menusToDelete || [])
-        .map(menu => {
-          const url = menu.image_url || ''
-          if (url.includes('/storage/v1/object/public/menu-images/')) {
-            return url.split('/storage/v1/object/public/menu-images/')[1]
-          }
-          return null
-        })
-        .filter(Boolean) as string[] // remove nulls
+      // 2. Helper functions
+      const isSupabaseStorageImage = (url: string) =>
+        url.includes('/storage/v1/object/public/menu-images/')
 
-      // 3. Delete images from Supabase Storage
+      const extractImagePath = (url: string) => {
+        if (!isSupabaseStorageImage(url)) return null
+        const match = url.match(/menu-images\/+(.+)$/)
+        return match?.[1] || null
+      }
+
+      // 3. Extract Supabase image paths only
+      const imagePaths = (menusToDelete || [])
+        .map(menu => extractImagePath(menu.image_url || ''))
+        .filter(Boolean) as string[]
+
+      // 4. Delete images from Supabase Storage
       if (imagePaths.length > 0) {
-        const { error: removeError } = await supabase
-          .storage
+        const { error: removeError } = await supabase.storage
           .from('menu-images')
           .remove(imagePaths)
 
@@ -767,18 +859,18 @@ const DigitalMenu: React.FC = () => {
         }
       }
 
-      // 4. Delete menu items from DB
-      const { error } = await supabase
+      // 5. Delete menu items from the database
+      const { error: deleteError } = await supabase
         .from('menus')
         .delete()
         .in('id', selectedItems)
 
-      if (error) {
+      if (deleteError) {
         toast.error(t('common.errorOccurred') || 'Something went wrong')
-        throw error
+        throw deleteError
       }
 
-      // 5. Optimistic UI update
+      // 6. Update UI
       setItems(prev => prev.filter(item => !selectedItems.includes(item.id)))
       sessionStorage.removeItem(`menuItems_${user?.id}`)
 
@@ -796,9 +888,6 @@ const DigitalMenu: React.FC = () => {
       setDeleteLoading(false)
     }
   }
-
-
-
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItems(prev =>
@@ -1033,75 +1122,85 @@ const DigitalMenu: React.FC = () => {
 
       {/* Menu Item Form Modal */}
       {formOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/30 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 shadow-xl w-full h-full sm:h-auto sm:max-w-2xl sm:rounded-xl overflow-y-auto p-4 sm:p-6">
+            {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                 {form.id ? t('common.editItem') : t('common.addItem')}
               </h3>
-              <button onClick={() => setFormOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+              <button
+                onClick={() => setFormOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Form Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
+                {/* Name EN */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                     {t('common.nameEn')} *
                   </label>
                   <input
+                    ref={el => (fieldRefs.current.name_en = el)}
                     value={form.name_en}
                     onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))}
                     placeholder={t('common.nameEn')}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    required
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.name_en ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
+                  {errors.name_en && <p className="text-sm text-red-500 mt-1">{errors.name_en}</p>}
                 </div>
 
+                {/* Name AR */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                     {t('common.nameAr')} *
                   </label>
                   <input
+                    ref={el => (fieldRefs.current.name_ar = el)}
                     value={form.name_ar}
                     onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))}
                     placeholder={t('common.nameAr')}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    required
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.name_ar ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
+                  {errors.name_ar && <p className="text-sm text-red-500 mt-1">{errors.name_ar}</p>}
                 </div>
 
+                {/* Price */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                     {t('common.price')} *
                   </label>
                   <input
+                    ref={el => (fieldRefs.current.price = el)}
                     type="number"
                     step="0.01"
                     value={form.price}
                     onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    required
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.price ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
+                  {errors.price && <p className="text-sm text-red-500 mt-1">{errors.price}</p>}
                 </div>
 
+                {/* Category */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                     {t('common.category')} *
                   </label>
-
                   <select
-                    value={form.category_id ?? ''} // fallback to empty string if null/undefined
-                    onChange={e =>
-                      setForm(f => ({
-                        ...f,
-                        category_id: e.target.value, // keep as string here
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    required
+                    ref={el => (fieldRefs.current.category_id = el)}
+                    value={form.category_id ?? ''}
+                    onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.category_id ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   >
                     <option value="">{t('common.selectCategory')}</option>
                     {categories.map(cat => (
@@ -1110,35 +1209,40 @@ const DigitalMenu: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  {errors.category_id && <p className="text-sm text-red-500 mt-1">{errors.category_id}</p>}
                 </div>
 
-
+                {/* Image Upload */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                     {t('common.image')}
                   </label>
                   <ImageUploadField
                     value={form.image_url}
-                    onChange={(url) => setForm(f => ({ ...f, image_url: url }))}
+                    onChange={url => setForm(f => ({ ...f, image_url: url }))}
+                    disableManualInput={Boolean(form.image_url)}
                   />
                 </div>
 
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id="available"
-                    checked={form.available}
-                    onChange={e => setForm(f => ({ ...f, available: e.target.checked }))}
-                    className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
-                  />
-                  <label htmlFor="available" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                {/* Available Checkbox */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {t('common.available')}
-                  </label>
+                  </span>
+                  <button
+                    onClick={() => setForm(f => ({ ...f, available: !f.available }))}
+                    className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors ${form.available ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transform duration-300 ${form.available ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
                 </div>
+
               </div>
 
+              {/* Ingredients List */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                   {t('common.ingredients')}
                 </label>
                 <div className="max-h-64 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-lg p-3 space-y-2">
@@ -1147,14 +1251,14 @@ const DigitalMenu: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={form.ingredients.includes(ing.id)}
-                        onChange={() => {
+                        onChange={() =>
                           setForm(f => ({
                             ...f,
                             ingredients: f.ingredients.includes(ing.id)
                               ? f.ingredients.filter(i => i !== ing.id)
                               : [...f.ingredients, ing.id]
                           }))
-                        }}
+                        }
                         className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
                       />
                       <span className="text-slate-700 dark:text-slate-300">
@@ -1166,7 +1270,8 @@ const DigitalMenu: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex space-x-3 mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+            {/* Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setFormOpen(false)}
                 className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
@@ -1178,12 +1283,14 @@ const DigitalMenu: React.FC = () => {
                 disabled={formLoading}
                 className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
               >
-                {formLoading ? t('common.saving') : (form.id ? t('common.updateItem') : t('common.addItem'))}
+                {formLoading ? t('common.saving') : form.id ? t('common.updateItem') : t('common.addItem')}
               </button>
             </div>
           </div>
         </div>
       )}
+
+
 
       {/* Category Form Modal */}
       <CategoryForm
