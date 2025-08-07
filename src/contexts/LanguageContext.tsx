@@ -534,43 +534,63 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
-    const isValidLang = (lang: string | null): lang is Language =>
-      lang === 'en' || lang === 'ar';
+    const initializeLanguage = () => {
+      const isValidLang = (lang: string | null): lang is Language =>
+        lang === 'en' || lang === 'ar';
 
-    // Check URL first, then localStorage, then default to 'en'
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlLang = urlParams.get('lang');
-    const savedLang = localStorage.getItem('restaurant-language');
+      // Get language from multiple sources
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlLang = urlParams.get('lang');
+      const pathLang = window.location.pathname.startsWith('/ar/') ? 'ar' : 
+                      window.location.pathname.startsWith('/en/') ? 'en' : null;
+      const savedLang = localStorage.getItem('restaurant-language');
 
-    let initialLang: Language = 'en';
-    
-    // Priority: URL parameter > localStorage > default
-    if (isValidLang(urlLang)) {
-      initialLang = urlLang;
-    } else if (isValidLang(savedLang)) {
-      initialLang = savedLang;
-    }
+      let detectedLang: Language = 'en';
+      
+      // Priority: URL parameter > Path prefix > localStorage > default
+      if (isValidLang(urlLang)) {
+        detectedLang = urlLang;
+      } else if (isValidLang(pathLang)) {
+        detectedLang = pathLang;
+      } else if (isValidLang(savedLang)) {
+        detectedLang = savedLang;
+      }
 
-    setLanguageState(initialLang);
-    updateDocumentDirection(initialLang);
-    
-    // Always sync localStorage with the determined language
-    localStorage.setItem('restaurant-language', initialLang);
-    
-    // Update URL to match the language (without causing navigation)
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set('lang', initialLang);
-    window.history.replaceState({}, '', currentUrl.toString());
-    
-    setIsLoaded(true);
+      // Set the language state
+      setLanguageState(detectedLang);
+      updateDocumentDirection(detectedLang);
+      
+      // Always ensure URL has the language parameter
+      const currentUrl = new URL(window.location.href);
+      const currentUrlLang = currentUrl.searchParams.get('lang');
+      
+      if (currentUrlLang !== detectedLang) {
+        currentUrl.searchParams.set('lang', detectedLang);
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('restaurant-language', detectedLang);
+      
+      setIsLoaded(true);
+    };
 
+    initializeLanguage();
+
+    // Listen for popstate events (back/forward navigation)
+    const handlePopState = () => {
+      initializeLanguage();
+    };
+
+    window.addEventListener('popstate', handlePopState);
     // Listen for admin panel language broadcast
     const handleAdminLanguageLoaded = (event: CustomEvent) => {
       const { language: adminLang } = event.detail;
-      if (adminLang && adminLang !== initialLang && isValidLang(adminLang)) {
-        setLanguageState(adminLang);
-        updateDocumentDirection(adminLang);
-        localStorage.setItem('restaurant-language', adminLang);
+      const isValidLang = (lang: string | null): lang is Language =>
+        lang === 'en' || lang === 'ar';
+        
+      if (adminLang && isValidLang(adminLang)) {
+        setLanguage(adminLang);
       }
     };
 
@@ -580,26 +600,13 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
       window.removeEventListener(
         'admin-language-loaded',
         handleAdminLanguageLoaded as EventListener
       );
     };
   }, []);
-  
-  useEffect(() => {
-    if (!isLoaded) return;
-  
-    // Persist to localStorage
-    localStorage.setItem('restaurant-language', language);
-  
-    // Update URL param without causing navigation
-    const url = new URL(window.location.href);
-    url.searchParams.set('lang', language);
-    window.history.replaceState({}, '', url.toString());
-  
-    updateDocumentDirection(language);
-  }, [language, isLoaded]);
   
 
   const updateDocumentDirection = (lang: Language) => {
@@ -625,13 +632,13 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem('restaurant-language', lang);
     updateDocumentDirection(lang);
 
-    // Update URL parameter
+    // Update URL parameter and localStorage
     const url = new URL(window.location.href);
     url.searchParams.set('lang', lang);
     window.history.replaceState({}, '', url.toString());
+    localStorage.setItem('restaurant-language', lang);
   };
 
   const t = (key: string, params?: Record<string, string>): string => {
