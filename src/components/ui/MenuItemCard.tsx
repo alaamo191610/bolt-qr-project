@@ -2,14 +2,29 @@ import React from 'react';
 import { Plus, Minus } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
+interface Ingredient {
+  id: string
+  name_en: string
+  name_ar: string
+}
+
 export interface MenuItem {
   id: string;
   name_en: string;
   name_ar?: string;
-  description: string;
   price: number;
-  category: string;
   image_url?: string;
+  available?: boolean;
+  created_at?: string;
+  category_id?: string;
+  ingredients_details?: {
+    ingredient: Ingredient;
+  }[];
+  categories?: {
+    id: string;
+    name_en: string;
+    name_ar: string;
+  };
 }
 
 interface Props {
@@ -21,6 +36,10 @@ interface Props {
 
 const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
   const { t, isRTL } = useLanguage();
+  console.log('Ingredients:', item.ingredients_details);
+  console.log('Full item:', item);
+  const ingredients = item.ingredients_details ?? [];
+  const hasIngredients = ingredients.length > 0;
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-lg hover:scale-[1.01] transition-all duration-200 card-hover">
@@ -39,16 +58,27 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
                 {isRTL ? item.name_ar || item.name_en : item.name_en}
               </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                {item.description}
-              </p>
+              {hasIngredients && (
+                <div className="flex flex-wrap gap-1 mb-2 max-h-20 overflow-visible">
+                  {ingredients.map(({ ingredient }) => (
+                    <span
+                      key={ingredient.id}
+                      className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full"
+                    >
+                      {isRTL ? ingredient.name_ar : ingredient.name_en}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
                   ${item.price}
                 </span>
-                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-xs font-medium">
-                  {item.category}
-                </span>
+                {item.categories && (
+                  <span className="...">
+                    {isRTL ? item.categories.name_ar : item.categories.name_en}
+                  </span>
+                )}
               </div>
             </div>
 

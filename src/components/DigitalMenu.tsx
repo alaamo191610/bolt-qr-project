@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plus, Pencil, Trash2, X, Search, Check, Settings, Edit, AlertTriangle } from 'lucide-react'
-import { menuService } from '../services/menuService'
+import { Plus, Trash2, X, Search, Settings, Edit, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast';
-import { UploadCloud, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { UploadCloud, Loader2, XCircle } from 'lucide-react'
 
 
 interface Category {

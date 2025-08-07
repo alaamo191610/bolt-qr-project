@@ -534,28 +534,60 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
+    const isValidLang = (lang: string | null): lang is Language =>
+      lang === 'en' || lang === 'ar';
+  
     const urlParams = new URLSearchParams(window.location.search);
-    const urlLang = urlParams.get('lang') as Language;
-    const savedLang = localStorage.getItem('restaurant-language') as Language;
-
-    const initialLang = savedLang || urlLang || 'en'; setLanguageState(initialLang);
+    const urlLang = urlParams.get('lang');
+    const savedLang = localStorage.getItem('restaurant-language');
+  
+    let initialLang: Language = 'en';
+    if (isValidLang(savedLang)) {
+      initialLang = savedLang;
+    } else if (isValidLang(urlLang)) {
+      initialLang = urlLang;
+    }
+  
+    setLanguageState(initialLang);
     updateDocumentDirection(initialLang);
     setIsLoaded(true); // ✅ mark as loaded
-
+  
+    // Optional: listen for admin panel language broadcast
     const handleAdminLanguageLoaded = (event: CustomEvent) => {
       const { language: adminLang } = event.detail;
-      if (adminLang && adminLang !== initialLang) {
+      if (adminLang && adminLang !== initialLang && isValidLang(adminLang)) {
         setLanguageState(adminLang);
         updateDocumentDirection(adminLang);
       }
     };
-
-    window.addEventListener('admin-language-loaded', handleAdminLanguageLoaded as EventListener);
+  
+    window.addEventListener(
+      'admin-language-loaded',
+      handleAdminLanguageLoaded as EventListener
+    );
+  
     return () => {
-      window.removeEventListener('admin-language-loaded', handleAdminLanguageLoaded as EventListener);
+      window.removeEventListener(
+        'admin-language-loaded',
+        handleAdminLanguageLoaded as EventListener
+      );
     };
   }, []);
-
+  
+  useEffect(() => {
+    if (!isLoaded) return;
+  
+    // Persist to localStorage
+    localStorage.setItem('restaurant-language', language);
+  
+    // Update URL param
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', language);
+    window.history.replaceState({}, '', url.toString());
+  
+    updateDocumentDirection(language);
+  }, [language, isLoaded]);
+  
 
   const updateDocumentDirection = (lang: Language) => {
     const isRTL = lang === 'ar';

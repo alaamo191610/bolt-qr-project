@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Minus, Search, Filter, Clock, MapPin, Phone } from 'lucide-react';
+import { ShoppingCart, Search, MapPin, Phone } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { menuService } from '../services/menuService';
 import { orderService } from '../services/orderService';
@@ -11,14 +11,34 @@ import MenuGrid from '../components/ui/MenuGrid';
 import FloatingCartButton from '../components/ui/FloatingCartButton';
 import OrderConfirmation from '../components/ui/OrderConfirmation';
 
-interface MenuItem {
+interface Ingredient {
+  id: string
+  name_en: string
+  name_ar: string
+}
+interface Category {
+  id: string;
+  name_en: string;
+  name_ar: string;
+}
+
+export interface MenuItem {
   id: string;
   name_en: string;
   name_ar?: string;
-  description: string;
   price: number;
-  category: string;
   image_url?: string;
+  available?: boolean;
+  created_at?: string;
+  category_id?: string;
+  ingredients_details?: {
+    ingredient: Ingredient;
+  }[];
+  categories?: {
+    id: string;
+    name_en: string;
+    name_ar: string;
+  };
 }
 
 interface CartItem extends MenuItem {
@@ -35,7 +55,7 @@ const CustomerMenu: React.FC = () => {
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -55,16 +75,18 @@ const CustomerMenu: React.FC = () => {
       setError(t('status.tableNotFound'));
       return;
     }
+
     try {
       setLoading(true);
 
-      // Get table info to determine which admin's menu to load
+      // Step 1: Get table info → fetch menu for that admin
       const table = await tableService.getTableByCode(tableCode);
       if (!table) {
         setError(t('status.tableNotFound', { table: tableCode }));
         return;
       }
 
+      // Step 2: Fetch menu items from Supabase
       const items = await menuService.getMenuItems(table.admin_id);
 
       if (!items || items.length === 0) {
@@ -72,22 +94,34 @@ const CustomerMenu: React.FC = () => {
         return;
       }
 
-      // Transform data to match component interface
+      // Step 3: Transform items to expected structure
       const transformedItems = items.map(item => ({
         id: item.id,
         name_en: item.name_en,
         name_ar: item.name_ar,
-        description: item.name_ar || item.name_en, // Use Arabic as description if available
         price: item.price,
-        category: item.categories?.name_en || 'Other',
-        image_url: item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400'
+        image_url: item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400',
+        available: item.available,
+        created_at: item.created_at,
+        category_id: item.category_id,
+        ingredients_details: item.ingredients_details || [],
+        categories: item.categories || undefined
       }));
 
       setMenuItems(transformedItems);
 
-      // Extract unique categories
-      const uniqueCategories = ['All', ...Array.from(new Set(transformedItems.map(item => item.category)))];
-      setCategories(uniqueCategories);
+      // Step 4: Extract unique categories based on current language
+      const categoryMap = new Map<string, Category>();
+
+      items.forEach(item => {
+        if (item.categories && !categoryMap.has(item.categories.id)) {
+          categoryMap.set(item.categories.id, item.categories);
+        }
+      });
+
+      setCategories(Array.from(categoryMap.values()));
+
+
     } catch (err) {
       setError(t('status.failedToLoadMenu'));
       console.error('Error loading menu:', err);
@@ -97,13 +131,19 @@ const CustomerMenu: React.FC = () => {
   };
 
   const filteredItems = menuItems.filter(item => {
-    const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
-    const matchesSearch = item.name_en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      selectedCategory === 'All' || item.category_id === selectedCategory;
+  
+    const nameMatch = item.name_en?.toLowerCase().includes(searchTerm.toLowerCase());
+    const ingredientMatch = item.ingredients_details?.some(({ ingredient }) =>
+      (isRTL ? ingredient.name_ar : ingredient.name_en).toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  
+    const matchesSearch = nameMatch || ingredientMatch;
+  
     return matchesCategory && matchesSearch;
   });
-
-  const addToCart = (item: MenuItem) => {
+    const addToCart = (item: MenuItem) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(cartItem => cartItem.id === item.id);
       if (existingItem) {
@@ -141,10 +181,6 @@ const CustomerMenu: React.FC = () => {
     return cart.reduce((total, item) => total + item.quantity, 0);
   };
 
-  const getItemQuantity = (itemId: string) => {
-    const cartItem = cart.find(item => item.id === itemId);
-    return cartItem ? cartItem.quantity : 0;
-  };
 
   const placeOrder = async () => {
     setIsOrdering(true);
@@ -215,7 +251,7 @@ const CustomerMenu: React.FC = () => {
   if (orderPlaced) {
     return <OrderConfirmation tableNumber={tableNumber} />;
   }
-  
+
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${isRTL ? 'rtl' : 'ltr'}`}>
@@ -279,8 +315,9 @@ const CustomerMenu: React.FC = () => {
             <CategoryFilter
               categories={categories}
               selectedCategory={selectedCategory}
-              onSelectCategory={(cat) => setSelectedCategory(cat)}
+              onSelectCategory={setSelectedCategory}
             />
+
           </div>
         </div>
 

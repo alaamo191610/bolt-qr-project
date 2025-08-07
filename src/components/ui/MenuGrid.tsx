@@ -11,7 +11,7 @@ interface Props {
 }
 
 const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
-  const { t, isRTL } = useLanguage();
+  const { t } = useLanguage();
 
   return (
     <div className="space-y-4">
