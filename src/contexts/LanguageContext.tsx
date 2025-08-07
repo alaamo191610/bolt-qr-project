@@ -545,7 +545,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                       window.location.pathname.startsWith('/en/') ? 'en' : null;
       const savedLang = localStorage.getItem('restaurant-language');
 
-      let detectedLang: Language = 'en';
+      let detectedLang: Language;
       
       // Priority: URL parameter > Path prefix > localStorage > default
       if (isValidLang(urlLang)) {
@@ -554,17 +554,17 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         detectedLang = pathLang;
       } else if (isValidLang(savedLang)) {
         detectedLang = savedLang;
+      } else {
+        detectedLang = 'en';
       }
 
       // Set the language state
       setLanguageState(detectedLang);
       updateDocumentDirection(detectedLang);
       
-      // Always ensure URL has the language parameter
-      const currentUrl = new URL(window.location.href);
-      const currentUrlLang = currentUrl.searchParams.get('lang');
-      
-      if (currentUrlLang !== detectedLang) {
+      // Only update URL if there's no lang parameter or it's different
+      if (!urlLang || urlLang !== detectedLang) {
+        const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set('lang', detectedLang);
         window.history.replaceState({}, '', currentUrl.toString());
       }
@@ -634,10 +634,16 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLanguageState(lang);
     updateDocumentDirection(lang);
 
-    // Update URL parameter and localStorage
-    const url = new URL(window.location.href);
-    url.searchParams.set('lang', lang);
-    window.history.replaceState({}, '', url.toString());
+    // Update URL parameter only if it's different
+    const currentUrl = new URL(window.location.href);
+    const currentLang = currentUrl.searchParams.get('lang');
+    
+    if (currentLang !== lang) {
+      currentUrl.searchParams.set('lang', lang);
+      window.history.replaceState({}, '', currentUrl.toString());
+    }
+    
+    // Always update localStorage
     localStorage.setItem('restaurant-language', lang);
   };
 
