@@ -536,36 +536,49 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const isValidLang = (lang: string | null): lang is Language =>
       lang === 'en' || lang === 'ar';
-  
+
+    // Check URL first, then localStorage, then default to 'en'
     const urlParams = new URLSearchParams(window.location.search);
     const urlLang = urlParams.get('lang');
     const savedLang = localStorage.getItem('restaurant-language');
-  
+
     let initialLang: Language = 'en';
-    if (isValidLang(savedLang)) {
-      initialLang = savedLang;
-    } else if (isValidLang(urlLang)) {
+    
+    // Priority: URL parameter > localStorage > default
+    if (isValidLang(urlLang)) {
       initialLang = urlLang;
+    } else if (isValidLang(savedLang)) {
+      initialLang = savedLang;
     }
-  
+
     setLanguageState(initialLang);
     updateDocumentDirection(initialLang);
-    setIsLoaded(true); // ✅ mark as loaded
-  
-    // Optional: listen for admin panel language broadcast
+    
+    // Always sync localStorage with the determined language
+    localStorage.setItem('restaurant-language', initialLang);
+    
+    // Update URL to match the language (without causing navigation)
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('lang', initialLang);
+    window.history.replaceState({}, '', currentUrl.toString());
+    
+    setIsLoaded(true);
+
+    // Listen for admin panel language broadcast
     const handleAdminLanguageLoaded = (event: CustomEvent) => {
       const { language: adminLang } = event.detail;
       if (adminLang && adminLang !== initialLang && isValidLang(adminLang)) {
         setLanguageState(adminLang);
         updateDocumentDirection(adminLang);
+        localStorage.setItem('restaurant-language', adminLang);
       }
     };
-  
+
     window.addEventListener(
       'admin-language-loaded',
       handleAdminLanguageLoaded as EventListener
     );
-  
+
     return () => {
       window.removeEventListener(
         'admin-language-loaded',
@@ -580,7 +593,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Persist to localStorage
     localStorage.setItem('restaurant-language', language);
   
-    // Update URL param
+    // Update URL param without causing navigation
     const url = new URL(window.location.href);
     url.searchParams.set('lang', language);
     window.history.replaceState({}, '', url.toString());
