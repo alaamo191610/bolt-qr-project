@@ -102,16 +102,23 @@ export const orderService = {
   async getOrders(adminId: string, status?: string) {
     try {
       let query = supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            menus ( id, name_en, name_ar, price )
-          )
-        `)
-        .eq('admin_id', adminId)
-        .order('created_at', { ascending: false })
+      .from('orders')
+      .select(`
+        id,
+        order_number,
+        total,
+        status,
+        created_at,
+        table:tables ( id, code ),
+        order_items (
+          quantity,
+          price_at_order,
+          menus ( name_en, price )
+        )
+      `)
+      .eq('admin_id', adminId)
+      .order('created_at', { ascending: false });
+
 
       if (status) query = query.eq('status', status)
 

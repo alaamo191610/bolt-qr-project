@@ -147,6 +147,12 @@ const AdminDashboard: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const idMapRef = React.useRef(new Map<string, number>());
+  const nextIdRef = React.useRef(1);
+  const numId = (uuid: string) => {
+    if (!idMapRef.current.has(uuid)) idMapRef.current.set(uuid, nextIdRef.current++);
+    return idMapRef.current.get(uuid)!;
+  };
 
   useEffect(() => {
     if (user && !dataLoaded) {
@@ -170,7 +176,7 @@ const AdminDashboard: React.FC = () => {
 
       const adminMenuItems = await menuService.getMenuItems(user.id);
       setMenuItems(adminMenuItems.map((item: any) => ({
-        id: parseInt(item.id) || Math.random(),
+        id: parseInt(item.id),
         name: item.name_en,
         description: item.name_ar || item.name_en,
         price: item.price,
@@ -180,7 +186,8 @@ const AdminDashboard: React.FC = () => {
 
       const adminOrders = await orderService.getOrders(user.id);
       setOrders(adminOrders.map((order: any) => ({
-        id: parseInt(order.id) || Math.random(),
+        id: numId(order.id) ,
+        order_number: order.order_number,
         tableNumber: order.table_id,
         items: order.order_items?.map((item: any) => ({
           name: item.menus?.name_en || 'Unknown Item',
