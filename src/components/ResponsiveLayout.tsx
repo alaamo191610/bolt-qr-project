@@ -47,7 +47,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
         // Tab is visible - restore state if needed
         const savedTab = sessionStorage.getItem('activeTab');
         const savedSidebar = sessionStorage.getItem('sidebarOpen');
-        
+
         if (savedTab && savedTab !== activeTab) {
           setActiveTab(savedTab);
         }
@@ -58,7 +58,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
@@ -68,17 +68,17 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   const handleTabChange = (tabId: string) => {
     // Mark that we have unsaved state
     sessionStorage.setItem('hasUnsavedChanges', 'true');
-    
+
     const lang = localStorage.getItem('restaurant-language') || 'en';
     const url = new URL(window.location.href);
     url.searchParams.set('lang', lang);
-    
+
     // Use replaceState instead of pushState to prevent back button issues
     window.history.replaceState({ tab: tabId }, '', url.toString());
-    
+
     setActiveTab(tabId);
     setSidebarOpen(false);
-    
+
     // Clear unsaved changes flag after successful navigation
     setTimeout(() => {
       sessionStorage.removeItem('hasUnsavedChanges');
@@ -238,8 +238,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                         handleTabChange(item.id);
                       }}
                       className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${isActive
-                          ? 'text-white shadow-sm'
-                          : 'text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white'
+                        ? 'text-white shadow-sm'
+                        : 'text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white'
                         }`}
                       style={
                         isActive
@@ -270,62 +270,61 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
             {/* Right side: language, bell, user info */}
             <div className="flex items-center space-x-4 rtl:space-x-reverse">
-              <LanguageToggle />
-              <button className="relative p-2">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 rtl:right-auto rtl:left-1 w-2 h-2 bg-red-500 rounded-full" />
-              </button>
 
               {/* User info (visible on desktop) */}
               {userInfo && (
-                    <DropdownMenu as="div" className="relative">
-                      <div>
-                        <DropdownMenu.Button className="flex rounded-full bg-slate-100 dark:bg-slate-700 p-1 hover:ring-2 hover:ring-offset-2 hover:ring-emerald-500 focus:outline-none">
-                          <span className="sr-only">Open user menu</span>
-                          <div className="w-9 h-9 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center">
-                            <User className="w-4 h-4 text-white" />
-                          </div>
-                        </DropdownMenu.Button>
+                <DropdownMenu as="div" className="relative">
+                  <div>
+                    <DropdownMenu.Button className="flex rounded-full bg-slate-100 dark:bg-slate-700 p-1 hover:ring-2 hover:ring-offset-2 hover:ring-emerald-500 focus:outline-none">
+                      <span className="sr-only">Open user menu</span>
+                      <div className="w-9 h-9 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-white" />
                       </div>
+                    </DropdownMenu.Button>
+                  </div>
 
-                      <Transition
-                        as={Fragment}
-                        enter="transition ease-out duration-100"
-                        enterFrom="transform opacity-0 scale-95"
-                        enterTo="transform opacity-100 scale-100"
-                        leave="transition ease-in duration-75"
-                        leaveFrom="transform opacity-100 scale-100"
-                        leaveTo="transform opacity-0 scale-95"
-                      >
-                        <DropdownMenu.Items className="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                            <p className="text-sm font-medium text-slate-900 dark:text-white">
-                              {userInfo.name}
-                            </p>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                              {userInfo.email}
-                            </p>
-                          </div>
-                          {onSignOut && (
-                            <DropdownMenu.Item>
-                              {({ active }) => (
-                                <button
-                                  onClick={onSignOut}
-                                  className={`${
-                                    active
-                                      ? 'bg-slate-100 dark:bg-slate-700'
-                                      : ''
-                                  } w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400`}
-                                >
-                                  {t('auth.signOut')}
-                                </button>
-                              )}
-                            </DropdownMenu.Item>
+                  <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
+                  >
+                    <DropdownMenu.Items className="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white">
+                          {userInfo.name}
+                        </p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                          {userInfo.email}
+                        </p>
+                      </div>
+                      <LanguageToggle />
+                      {/* <button className="relative p-2">
+                        <Bell className="w-5 h-5" />
+                        <span className="absolute top-1 right-1 rtl:right-auto rtl:left-1 w-2 h-2 bg-red-500 rounded-full" />
+                      </button> */}
+                      {onSignOut && (
+                        <DropdownMenu.Item>
+                          {({ active }) => (
+                            <button
+                              onClick={onSignOut}
+                              className={`${active
+                                  ? 'bg-slate-100 dark:bg-slate-700'
+                                  : ''
+                                } w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400`}
+                            >
+                              {t('auth.signOut')}
+                            </button>
                           )}
-                        </DropdownMenu.Items>
-                      </Transition>
-                    </DropdownMenu>
-                  )}
+                        </DropdownMenu.Item>
+                      )}
+                    </DropdownMenu.Items>
+                  </Transition>
+                </DropdownMenu>
+              )}
             </div>
           </div>
         </header>

@@ -630,13 +630,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         detectedLang = 'en';
       }
 
-      console.log('🔍 Language Detection:', {
-        urlLang,
-        pathLang,
-        savedLang,
-        detectedLang,
-        currentURL: window.location.href
-      });
       // Set the language state
       setLanguageState(detectedLang);
       updateDocumentDirection(detectedLang);
@@ -693,13 +686,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
 
-    console.log('🎨 Document Direction Updated:', {
-      language: lang,
-      isRTL,
-      documentDir: document.documentElement.dir,
-      documentLang: document.documentElement.lang
-    });
-
     // Update font family based on language
     if (isRTL) {
       document.documentElement.style.fontFamily = 'var(--font-playpen-arabic)';
@@ -716,11 +702,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const setLanguage = (lang: Language) => {
-    console.log('🔄 Manual Language Change:', {
-      from: language,
-      to: lang,
-      currentURL: window.location.href
-    });
 
     setLanguageState(lang);
     updateDocumentDirection(lang);
