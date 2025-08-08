@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Minus, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { Plus, Minus, ChevronDown, ChevronUp, Info, Scale } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Ingredient { id: string; name_en: string; name_ar: string; }
@@ -22,6 +22,15 @@ interface Props {
   quantity: number;
   onAdd: (item: MenuItem) => void;
   onRemove: (id: string) => void;
+
+  /** Optional: pass a currency formatter (e.g., from CustomerMenu) */
+  currency?: Intl.NumberFormat;
+
+  /** Optional: compare support (use if you prefer the chip on the card instead of MenuGrid) */
+  onToggleCompare?: (id: string) => void;
+  compareSelected?: boolean;
+  compareDisabled?: boolean;
+  showCompareChip?: boolean; // default false — avoid duplicate if MenuGrid already renders it
 }
 
 /* ----------------- helpers (fly-to-header) ----------------- */
@@ -115,9 +124,6 @@ async function flyToHeaderFromRect(
 }
 
 /* ----------------- UI helpers ----------------- */
-const money = (v: number) =>
-  new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v || 0);
-
 type HasFn = (re: RegExp) => boolean;
 type BadgeKey = 'spicy' | 'garlicky' | 'cheesy' | 'fresh' | 'vegFriendly';
 
@@ -147,7 +153,6 @@ function tasteBadgesFrom(
     .map(rule => ({ label: t(`badges.${rule.key}`), emoji: rule.emoji }))
     .slice(0, 3);
 }
-
 
 type TFn = (key: string) => string;
 type PairingKey =
@@ -213,12 +218,27 @@ export function pairingFor(name: string, t: TFn): string[] {
   return items.map(it => `${it.emoji} ${t(`pairings.${it.key}`)}`);
 }
 
-
 /* ----------------- component ----------------- */
 
-const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
+const MenuItemCard: React.FC<Props> = ({
+  item,
+  quantity,
+  onAdd,
+  onRemove,
+  currency,
+  onToggleCompare,
+  compareSelected = false,
+  compareDisabled = false,
+  showCompareChip = false,
+}) => {
   const { t, isRTL } = useLanguage();
   const [open, setOpen] = useState(false);
+
+  // Localized currency if none provided
+  const priceFmt = useMemo(
+    () => currency ?? new Intl.NumberFormat(isRTL ? 'ar-QA' : 'en-QA', { style: 'currency', currency: 'QAR' }),
+    [currency, isRTL]
+  );
 
   const ingredients = item.ingredients_details ?? [];
   const ingLabels = useMemo(
@@ -230,25 +250,52 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
   const pairings = useMemo(
     () => pairingFor((isRTL ? item.name_ar : item.name_en) || item.name_en, t),
     [item.name_ar, item.name_en, isRTL, t]
-  );  
+  );
 
-  const handleAdd = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = e.currentTarget as HTMLElement;
-    const startRect = btn.getBoundingClientRect();
-    onAdd(item);
-    requestAnimationFrame(() => {
-      flyToHeaderFromRect(startRect, isRTL).catch(() => {});
-    });
-  };
+  const displayName = isRTL ? item.name_ar || item.name_en : item.name_en;
 
   return (
     <div className="group relative h-full bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-md transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className="flex md:flex-col h-full">
         {/* Image */}
         <div className="relative">
+          {/* Optional Compare chip (only if explicitly enabled to avoid duplication with MenuGrid) */}
+          {showCompareChip && onToggleCompare && (
+            <button
+              type="button"
+              onClick={() => onToggleCompare(item.id)}
+              disabled={compareDisabled && !compareSelected}
+              aria-pressed={compareSelected}
+              aria-label={compareSelected ? (t('menu.comparing') || 'Comparing') : (t('menu.compare') || 'Compare')}
+              title={
+                compareDisabled && !compareSelected
+                  ? (t('menu.compareLimit') || 'You can compare up to 2 items')
+                  : compareSelected
+                  ? (t('menu.comparing') || 'Comparing')
+                  : (t('menu.compare') || 'Compare')
+              }
+              className={[
+                'absolute top-3 z-10 rounded-full border px-2 py-1 text-xs font-medium shadow-sm',
+                isRTL ? 'left-3' : 'right-3',
+                compareSelected
+                  ? 'bg-primary text-white border-primary'
+                  : compareDisabled
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 cursor-not-allowed'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700',
+              ].join(' ')}
+            >
+              <span className="inline-flex items-center gap-1">
+                <Scale className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">
+                  {compareSelected ? (t('menu.comparing') || 'Comparing') : (t('menu.compare') || 'Compare')}
+                </span>
+              </span>
+            </button>
+          )}
+
           <img
             src={item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400'}
-            alt={item.name_en}
+            alt={displayName}
             className="w-24 h-24 sm:w-44 sm:h-44 md:w-full md:h-48 object-cover flex-shrink-0"
           />
           <div className="pointer-events-none absolute inset-0">
@@ -260,7 +307,7 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
           </div>
           <div className="absolute top-3 left-3 -rotate-6">
             <span className="inline-flex items-center rounded-md bg-amber-400 px-2 py-1 text-xs font-extrabold text-slate-900 shadow-md ring-1 ring-amber-500/30 price-pop">
-              {money(item.price)}
+              {priceFmt.format(item.price || 0)}
             </span>
           </div>
         </div>
@@ -269,7 +316,7 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
         <div className="flex-1 p-4 flex flex-col">
           {/* Title */}
           <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white mb-1 line-clamp-2">
-            {isRTL ? item.name_ar || item.name_en : item.name_en}
+            {displayName}
           </h3>
 
           {/* Ingredients toggle + taste badges */}

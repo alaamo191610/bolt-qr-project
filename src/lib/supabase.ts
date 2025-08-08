@@ -63,6 +63,11 @@ export interface OrderItem {
   created_at: string
 }
 
+export interface OrderWithItems extends Order {
+  items: { name: string; quantity: number; price?: number }[];
+}
+
+
 export interface Table {
   id: string
   name?: string

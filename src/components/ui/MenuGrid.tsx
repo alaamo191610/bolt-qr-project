@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, SortAsc, SortDesc } from 'lucide-react';
+import { Search, SortAsc, SortDesc, Scale } from 'lucide-react';
 import MenuItemCard, { MenuItem } from './MenuItemCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -8,6 +8,10 @@ interface Props {
   quantityMap: Record<string, number>;
   onAdd: (item: MenuItem) => void;
   onRemove: (itemId: string) => void;
+
+  /** Compare feature (optional for backward-compat) */
+  compareIds?: string[];                 // selected for compare
+  onToggleCompare?: (id: string) => void; // toggle handler
 }
 
 const emojiFor = (label: string) => {
@@ -23,15 +27,29 @@ const emojiFor = (label: string) => {
 
 type SortKey = 'name' | 'price_asc' | 'price_desc';
 
-const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
+const MenuGrid: React.FC<Props> = ({
+  items,
+  quantityMap,
+  onAdd,
+  onRemove,
+  compareIds,
+  onToggleCompare,
+}) => {
   const { t, isRTL } = useLanguage();
   const [sort, setSort] = useState<SortKey>('name');
+
+  const canCompare = !!onToggleCompare;
+  const selectedSet = useMemo(() => new Set(compareIds ?? []), [compareIds]);
+  const reachedMax = (id: string) =>
+    (compareIds?.length ?? 0) >= 2 && !selectedSet.has(id);
 
   const sorted = useMemo(() => {
     const copy = [...items];
     switch (sort) {
-      case 'price_asc':  return copy.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-      case 'price_desc': return copy.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+      case 'price_asc':
+        return copy.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+      case 'price_desc':
+        return copy.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
       default:
         return copy.sort((a, b) =>
           (a.name_en || '').toLowerCase().localeCompare((b.name_en || '').toLowerCase())
@@ -43,7 +61,9 @@ const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
     const map = new Map<string, { label: string; items: MenuItem[] }>();
     sorted.forEach((it) => {
       const id = it.categories?.id || 'other';
-      const label = isRTL ? it.categories?.name_ar || t('menu.other') : it.categories?.name_en || t('menu.other');
+      const label = isRTL
+        ? it.categories?.name_ar || t('menu.other')
+        : it.categories?.name_en || t('menu.other');
       if (!map.has(id)) map.set(id, { label, items: [] });
       map.get(id)!.items.push(it);
     });
@@ -55,14 +75,17 @@ const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
     const root = containerRef.current;
     if (!root) return;
     const els = Array.from(root.querySelectorAll<HTMLElement>('.reveal-on-scroll'));
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) {
-          e.target.classList.add('in');
-          io.unobserve(e.target);
-        }
-      });
-    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.08 });
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add('in');
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { rootMargin: '0px 0px -10% 0px', threshold: 0.08 }
+    );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [grouped]);
@@ -73,7 +96,9 @@ const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
         <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
           <Search className="w-8 h-8 text-slate-400 dark:text-slate-500" />
         </div>
-        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">{t('menu.noItemsFound')}</h3>
+        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+          {t('menu.noItemsFound')}
+        </h3>
         <p className="text-slate-600 dark:text-slate-400">{t('menu.noItemsDescription')}</p>
       </div>
     );
@@ -87,7 +112,9 @@ const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
           {t('common.total')}: <span className="font-semibold text-slate-900 dark:text-white">{items.length}</span>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-slate-500 dark:text-slate-400">{t('common.sort') || 'Sort'}:</label>
+          <label className="text-slate-500 dark:text-slate-400">
+            {t('common.sort') || 'Sort'}:
+          </label>
           <div className="relative">
             <select
               value={sort}
@@ -96,8 +123,8 @@ const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
               aria-label={t('common.sort') || 'Sort'}
             >
               <option value="name">{t('common.name') || 'Name'}</option>
-              <option value="price_asc">{t('menu.priceLowHigh') || 'Price: Low → High'}</option>
-              <option value="price_desc">{t('menu.priceHighLow') || 'Price: High → Low'}</option>
+              <option value="price_asc">{t('common.priceLowHigh') || 'Price: Low → High'}</option>
+              <option value="price_desc">{t('common.priceHighLow') || 'Price: High → Low'}</option>
             </select>
             <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
               {sort === 'price_desc' ? <SortDesc className="w-4 h-4" /> : <SortAsc className="w-4 h-4" />}
@@ -119,22 +146,66 @@ const MenuGrid: React.FC<Props> = ({ items, quantityMap, onAdd, onRemove }) => {
 
           {/* Responsive, full-width grid with min card width */}
           <div className="grid [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] gap-6 items-stretch">
-            {group.items.map((item, i) => (
-              <div
-                key={item.id}
-                className="reveal-on-scroll h-full"
-                style={{ transitionDelay: `${Math.min(i * 35 + sectionIdx * 50, 300)}ms` }}
-              >
-                <div className="h-full">
-                  <MenuItemCard
-                    item={item}
-                    quantity={quantityMap[item.id] || 0}
-                    onAdd={onAdd}
-                    onRemove={onRemove}
-                  />
+            {group.items.map((item, i) => {
+              const selected = selectedSet.has(item.id);
+              const disabled = reachedMax(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className="reveal-on-scroll h-full relative"
+                  style={{ transitionDelay: `${Math.min(i * 35 + sectionIdx * 50, 300)}ms` }}
+                >
+                  {/* Compare chip (optional) */}
+                  {canCompare && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleCompare?.(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onToggleCompare?.(item.id);
+                        }
+                      }}
+                      disabled={disabled}
+                      aria-pressed={selected}
+                      aria-label={selected ? (t('menu.comparing') || 'Comparing') : (t('menu.compare') || 'Compare')}
+                      title={
+                        disabled
+                          ? (t('menu.compareLimit') || 'You can compare up to 2 items')
+                          : selected
+                          ? (t('menu.comparing') || 'Comparing')
+                          : (t('menu.compare') || 'Compare')
+                      }
+                      className={[
+                        'absolute top-3 z-10 rounded-full border px-2 py-1 text-xs font-medium shadow-sm',
+                        isRTL ? 'left-3' : 'right-3',
+                        selected
+                          ? 'bg-primary text-white border-primary'
+                          : disabled
+                          ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 cursor-not-allowed'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700',
+                      ].join(' ')}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <Scale className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">
+                          {selected ? (t('menu.comparing') || 'Comparing') : (t('menu.compare') || 'Compare')}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+
+                  <div className="h-full">
+                    <MenuItemCard
+                      item={item}
+                      quantity={quantityMap[item.id] || 0}
+                      onAdd={onAdd}
+                      onRemove={onRemove}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}
