@@ -80,6 +80,37 @@ const translations: Record<Language, any> = {
       required: 'This field is required.',
       timestamp: 'Timestamp',
       dateRange: 'Date Range',
+      ingredientsShow: "Show ingredients",
+      ingredientsHide: "Hide ingredients",
+      goesWellWith: "Goes well with",
+      decrease: "Decrease",
+      increase: "Increase",
+      sort: "Sort",
+    },
+    cart: {
+      viewOrder: "View order",
+      items: "items",
+      miniCartAria: "Mini cart",
+      estimated: "Estimated",
+      min: "min"
+    },
+    badges: {
+      spicy: "Spicy",
+      garlicky: "Garlicky",
+      cheesy: "Cheesy",
+      fresh: "Fresh",
+      vegFriendly: "Veg-friendly"
+    },
+    pairings: {
+      garlicSauce: "Garlic sauce",
+      salad: "Salad",
+      drink: "Drink",
+      cola: "Cola",
+      fries: "Fries",
+      extraCheese: "Extra cheese",
+      sideSalad: "Side salad",
+      bread: "Bread",
+      juice: "Juice"
     },
     auth: {
       welcome: "Welcome Back",
@@ -140,8 +171,13 @@ const translations: Record<Language, any> = {
       estimatedTime: "Estimated time: 15-20 minutes",
       noItemsFound: "No items found",
       noItemsDescription: "Try adjusting your search or filter criteria.",
+      orders: "orders",
       each: "each",
-      orders: "orders"
+      estimated: "Estimated",
+      min: "min",
+      priceLowHigh: "Price: Low → High",
+      priceHighLow: "Price: High → Low",
+      other: "Other"
     },
     orders: {
       title: "Order Management",
@@ -334,6 +370,30 @@ const translations: Record<Language, any> = {
       required: 'هذه الخانة مطلوبة.',
       timestamp: 'الوقت',
       dateRange: 'الفترة الزمنية',
+      ingredientsShow: "عرض المكونات",
+      ingredientsHide: "إخفاء المكونات",
+      goesWellWith: "يناسب مع",
+      decrease: "إنقاص",
+      increase: "زيادة",
+      sort: "الفرز",
+    },
+    badges: {
+      spicy: "حار",
+      garlicky: "طعمه ثوم",
+      cheesy: "جبني",
+      fresh: "منعش",
+      vegFriendly: "مناسب للنباتيين"
+    },
+    pairings: {
+      garlicSauce: "صلصة الثوم",
+      salad: "سلطة",
+      drink: "مشروب",
+      cola: "كولا",
+      fries: "بطاطس مقلية",
+      extraCheese: "جبنة إضافية",
+      sideSalad: "سلطة جانبية",
+      bread: "خبز",
+      juice: "عصير"
     },
     auth: {
       welcome: "مرحبًا بك من جديد",
@@ -349,6 +409,13 @@ const translations: Record<Language, any> = {
       signUpDescription: "ابدأ رحلتك المهنية مع أول إعداد",
       alreadyHaveAccount: "لديك حساب؟ سجّل الدخول",
       dontHaveAccount: "ليس لديك حساب؟ أنشئ واحدًا"
+    },
+    cart: {
+      viewOrder: "عرض الطلب",
+      items: "أصناف",
+      miniCartAria: "سلة مصغّرة",
+      estimated: "الوقت المتوقع",
+      min: "دقيقة"
     },
     nav: {
       qrCodes: "رموز QR",
@@ -394,8 +461,13 @@ const translations: Record<Language, any> = {
       estimatedTime: "الوقت المتوقع: ١٥-٢٠ دقيقة",
       noItemsFound: "لا توجد نتائج",
       noItemsDescription: "جرّب تعديل البحث أو التصفية",
-      each: "لكل قطعة",
-      orders: "الطلبات"
+      orders: "الطلبات",
+      each: "للواحد",
+      estimated: "الوقت المتوقع",
+      min: "دقيقة",
+      priceLowHigh: "السعر: من الأقل إلى الأعلى",
+      priceHighLow: "السعر: من الأعلى إلى الأقل",
+      other: "أخرى",
     },
     orders: {
       title: "إدارة الطلبات",
@@ -541,12 +613,12 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Get language from multiple sources
       const urlParams = new URLSearchParams(window.location.search);
       const urlLang = urlParams.get('lang');
-      const pathLang = window.location.pathname.startsWith('/ar/') ? 'ar' : 
-                      window.location.pathname.startsWith('/en/') ? 'en' : null;
+      const pathLang = window.location.pathname.startsWith('/ar/') ? 'ar' :
+        window.location.pathname.startsWith('/en/') ? 'en' : null;
       const savedLang = localStorage.getItem('restaurant-language');
 
       let detectedLang: Language;
-      
+
       // Priority: URL parameter > Path prefix > localStorage > default
       if (isValidLang(urlLang)) {
         detectedLang = urlLang;
@@ -568,17 +640,17 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Set the language state
       setLanguageState(detectedLang);
       updateDocumentDirection(detectedLang);
-      
+
       // Only update URL if there's no lang parameter or it's different
       if (!urlLang || urlLang !== detectedLang) {
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set('lang', detectedLang);
         window.history.replaceState({}, '', currentUrl.toString());
       }
-      
+
       // Save to localStorage
       localStorage.setItem('restaurant-language', detectedLang);
-      
+
       setIsLoaded(true);
     };
 
@@ -595,7 +667,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { language: adminLang } = event.detail;
       const isValidLang = (lang: string | null): lang is Language =>
         lang === 'en' || lang === 'ar';
-        
+
       if (adminLang && isValidLang(adminLang)) {
         setLanguage(adminLang);
       }
@@ -614,7 +686,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
     };
   }, []);
-  
+
 
   const updateDocumentDirection = (lang: Language) => {
     const isRTL = lang === 'ar';
@@ -649,19 +721,19 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       to: lang,
       currentURL: window.location.href
     });
-    
+
     setLanguageState(lang);
     updateDocumentDirection(lang);
 
     // Update URL parameter only if it's different
     const currentUrl = new URL(window.location.href);
     const currentLang = currentUrl.searchParams.get('lang');
-    
+
     if (currentLang !== lang) {
       currentUrl.searchParams.set('lang', lang);
       window.history.replaceState({}, '', currentUrl.toString());
     }
-    
+
     // Always update localStorage
     localStorage.setItem('restaurant-language', lang);
   };

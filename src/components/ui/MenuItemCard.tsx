@@ -118,26 +118,101 @@ async function flyToHeaderFromRect(
 const money = (v: number) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v || 0);
 
-const tasteBadgesFrom = (labels: string[]) => {
-  const L = labels.map(l => l.toLowerCase());
-  const has = (re: RegExp) => L.some(x => re.test(x));
-  const out: { label: string; emoji: string }[] = [];
-  if (has(/spicy|chili|harissa|حار|شطة/)) out.push({ label: 'Spicy', emoji: '🌶' });
-  if (has(/garlic|ثوم/)) out.push({ label: 'Garlicky', emoji: '🧄' });
-  if (has(/cheese|جبن|كريم/)) out.push({ label: 'Cheesy', emoji: '🧀' });
-  if (has(/lemon|حمض|ليمون|mint|نعناع/)) out.push({ label: 'Fresh', emoji: '🍋' });
-  if (!has(/chicken|beef|lamb|fish|shrimp|دجاج|لحم|سمك|روبيان/)) out.push({ label: 'Veg-friendly', emoji: '🥦' });
-  return out.slice(0, 3);
-};
+type HasFn = (re: RegExp) => boolean;
+type BadgeKey = 'spicy' | 'garlicky' | 'cheesy' | 'fresh' | 'vegFriendly';
 
-const pairingFor = (name: string) => {
-  const n = name.toLowerCase();
-  if (/shawarma|kebab|grill|مشوي|كباب/.test(n)) return ['🧄 Garlic sauce', '🥗 Salad', '🥤 Cola'];
-  if (/burger|ساندويتش|sandwich/.test(n)) return ['🍟 Fries', '🥤 Drink'];
-  if (/pasta|spaghetti|bolognese|باستا/.test(n)) return ['🧀 Extra cheese', '🥗 Side salad'];
-  if (/salad|سلطة/.test(n)) return ['🥖 Bread', '🥤 Juice'];
-  return ['🥗 Salad', '🥤 Drink'];
-};
+interface BadgeRule {
+  key: BadgeKey;
+  emoji: string;
+  test: (has: HasFn) => boolean;
+}
+
+const BADGE_RULES: BadgeRule[] = [
+  { key: 'spicy',       emoji: '🌶', test: (has: HasFn) => has(/spicy|chili|harissa|حار|شطة/i) },
+  { key: 'garlicky',    emoji: '🧄', test: (has: HasFn) => has(/garlic|ثوم/i) },
+  { key: 'cheesy',      emoji: '🧀', test: (has: HasFn) => has(/cheese|جبن|كريم/i) },
+  { key: 'fresh',       emoji: '🍋', test: (has: HasFn) => has(/lemon|حمض|ليمون|mint|نعناع/i) },
+  { key: 'vegFriendly', emoji: '🥦', test: (has: HasFn) => !has(/chicken|beef|lamb|fish|shrimp|دجاج|لحم|سمك|روبيان/i) },
+];
+
+function tasteBadgesFrom(
+  labels: string[],
+  t: (key: string) => string
+): { label: string; emoji: string }[] {
+  const L = labels.map(s => (s || '').toLowerCase());
+  const has: HasFn = (re) => L.some(x => re.test(x));
+
+  return BADGE_RULES
+    .filter(rule => rule.test(has))
+    .map(rule => ({ label: t(`badges.${rule.key}`), emoji: rule.emoji }))
+    .slice(0, 3);
+}
+
+
+type TFn = (key: string) => string;
+type PairingKey =
+  | 'garlicSauce'
+  | 'salad'
+  | 'cola'
+  | 'fries'
+  | 'drink'
+  | 'extraCheese'
+  | 'sideSalad'
+  | 'bread'
+  | 'juice';
+
+interface PairItem { key: PairingKey; emoji: string }
+interface PairRule { test: RegExp; items: PairItem[] }
+
+const PAIR_RULES: PairRule[] = [
+  {
+    // Shawarma / grill
+    test: /shawarma|kebab|grill|مشوي|كباب/i,
+    items: [
+      { key: 'garlicSauce', emoji: '🧄' },
+      { key: 'salad',       emoji: '🥗' },
+      { key: 'cola',        emoji: '🥤' },
+    ],
+  },
+  {
+    // Burger / sandwich
+    test: /burger|ساندويتش|sandwich/i,
+    items: [
+      { key: 'fries', emoji: '🍟' },
+      { key: 'drink', emoji: '🥤' },
+    ],
+  },
+  {
+    // Pasta
+    test: /pasta|spaghetti|bolognese|باستا/i,
+    items: [
+      { key: 'extraCheese', emoji: '🧀' },
+      { key: 'sideSalad',   emoji: '🥗' },
+    ],
+  },
+  {
+    // Salads
+    test: /salad|سلطة/i,
+    items: [
+      { key: 'bread', emoji: '🥖' },
+      { key: 'juice', emoji: '🥤' },
+    ],
+  },
+];
+
+const DEFAULT_PAIR: PairItem[] = [
+  { key: 'salad', emoji: '🥗' },
+  { key: 'drink', emoji: '🥤' },
+];
+
+// Returns an array of strings like "🧄 Garlic sauce" using translations
+export function pairingFor(name: string, t: TFn): string[] {
+  const n = (name || '').toLowerCase();
+  const rule = PAIR_RULES.find(r => r.test.test(n));
+  const items = (rule?.items || DEFAULT_PAIR);
+  return items.map(it => `${it.emoji} ${t(`pairings.${it.key}`)}`);
+}
+
 
 /* ----------------- component ----------------- */
 
@@ -151,11 +226,11 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
     [ingredients, isRTL]
   );
   const hasIngredients = ingLabels.length > 0;
-  const taste = useMemo(() => tasteBadgesFrom(ingLabels), [ingLabels]);
+  const taste = useMemo(() => tasteBadgesFrom(ingLabels, t), [ingLabels, t]);
   const pairings = useMemo(
-    () => pairingFor((isRTL ? item.name_ar : item.name_en) || item.name_en),
-    [item.name_ar, item.name_en, isRTL]
-  );
+    () => pairingFor((isRTL ? item.name_ar : item.name_en) || item.name_en, t),
+    [item.name_ar, item.name_en, isRTL, t]
+  );  
 
   const handleAdd = (e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget as HTMLElement;
@@ -206,7 +281,7 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
                 aria-expanded={open}
               >
                 <Info className="w-3.5 h-3.5" />
-                {open ? (isRTL ? 'إخفاء المكونات' : 'Hide ingredients') : (isRTL ? 'عرض المكونات' : 'Ingredients')}
+                {open ? t('common.ingredientsHide') : t('common.ingredients')}
                 {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
               {!open && (
@@ -243,7 +318,7 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
 
           {/* Pairings */}
           <div className="mt-3">
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">{isRTL ? 'يناسب مع' : 'Goes well with'}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">{t('common.goesWellWith')}</div>
             <div className="flex flex-wrap gap-1.5">
               {pairings.map(p => (
                 <span key={p} className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
@@ -261,7 +336,7 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
                   <button
                     onClick={() => onRemove(item.id)}
                     className="w-10 h-10 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-300 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95"
-                    aria-label={isRTL ? 'إنقاص' : 'Decrease'}
+                    aria-label={t('common.decrease')}
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -276,7 +351,7 @@ const MenuItemCard: React.FC<Props> = ({ item, quantity, onAdd, onRemove }) => {
                       requestAnimationFrame(() => flyToHeaderFromRect(rect, isRTL));
                     }}
                     className="w-10 h-10 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-full flex items-center justify-center transition-transform duration-150 shadow-lg active:scale-95"
-                    aria-label={isRTL ? 'زيادة' : 'Increase'}
+                    aria-label={t('common.increase')}
                   >
                     <Plus className="w-4 h-4" />
                   </button>

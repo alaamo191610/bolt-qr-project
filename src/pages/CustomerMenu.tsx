@@ -26,26 +26,35 @@ export interface MenuItem {
   ingredients_details?: { ingredient: Ingredient }[];
   categories?: { id: string; name_en: string; name_ar: string };
 }
-
 interface CartItem extends MenuItem { quantity: number; }
 
 const CART_KEY = 'qr-cart-v1';
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL } = useLanguage();
+
+  // data
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [tableNumber, setTableNumber] = useState('');
+
+  // ui
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCart, setShowCart] = useState(false);
-  const [tableNumber, setTableNumber] = useState('');
+  const [showCartOverlay, setShowCartOverlay] = useState(false);
+  const [overlayPos, setOverlayPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0, right: 16 });
+
+  // state
+  const [loading, setLoading] = useState(true);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [flash, setFlash] = useState<string | null>(null);
 
+  const isDesktop = () => window.innerWidth >= 640; // tailwind sm
+
+  // bootstrap
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const table = urlParams.get('table') || 'T01';
@@ -53,24 +62,27 @@ const CustomerMenu: React.FC = () => {
     loadMenuItems(table);
   }, []);
 
+  // cart persistence
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CART_KEY);
       if (saved) setCart(JSON.parse(saved));
-    } catch { }
+    } catch { /* ignore */ }
   }, []);
   useEffect(() => {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify(cart));
-    } catch { }
+    } catch { /* ignore */ }
   }, [cart]);
 
+  // fetch menu
   const loadMenuItems = async (tableCode: string) => {
     if (!tableCode) { setError(t('status.tableNotFound')); return; }
     try {
       setLoading(true);
       const table = await tableService.getTableByCode(tableCode);
       if (!table) { setError(t('status.tableNotFound', { table: tableCode })); return; }
+
       const items = await menuService.getMenuItems(table.admin_id);
       if (!items || items.length === 0) { setError(t('status.noMenuItems')); return; }
 
@@ -85,7 +97,7 @@ const CustomerMenu: React.FC = () => {
         category_id: item.category_id,
         ingredients_details: item.ingredients_details || [],
         categories: item.categories || undefined,
-      }));
+      })) as MenuItem[];
 
       setMenuItems(transformed);
 
@@ -104,30 +116,30 @@ const CustomerMenu: React.FC = () => {
     }
   };
 
+  // filter
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory;
-    const nameMatch = (isRTL ? item.name_ar || item.name_en : item.name_en)?.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const name = (isRTL ? item.name_ar || item.name_en : item.name_en)?.toLowerCase() || '';
+    const nameMatch = name.includes(term);
     const ingredientMatch = item.ingredients_details?.some(({ ingredient }) =>
-      (isRTL ? ingredient.name_ar : ingredient.name_en).toLowerCase().includes(searchTerm.toLowerCase())
+      (isRTL ? ingredient.name_ar : ingredient.name_en).toLowerCase().includes(term)
     );
     return matchesCategory && (nameMatch || !!ingredientMatch);
   });
 
-  const flashToast = (msg: string) => {
-    setFlash(msg);
-    window.clearTimeout((flashToast as any)._t);
-    (flashToast as any)._t = window.setTimeout(() => setFlash(null), 1100);
-  };
+  // helpers
+  const getTotalPrice = () => cart.reduce((total, item) => total + item.price * item.quantity, 0);
+  const getTotalItems = () => cart.reduce((total, item) => total + item.quantity, 0);
 
+  // cart ops
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
       const found = prev.find(c => c.id === item.id);
       if (found) return prev.map(c => (c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
       return [...prev, { ...item, quantity: 1 }];
     });
-    flashToast(isRTL ? 'تمت الإضافة إلى السلة' : 'Added to cart');
   };
-
   const removeFromCart = (itemId: string) => {
     setCart(prev => {
       const found = prev.find(c => c.id === itemId);
@@ -135,9 +147,6 @@ const CustomerMenu: React.FC = () => {
       return prev.filter(c => c.id !== itemId);
     });
   };
-
-  const getTotalPrice = () => cart.reduce((total, item) => total + item.price * item.quantity, 0);
-  const getTotalItems = () => cart.reduce((total, item) => total + item.quantity, 0);
 
   const placeOrder = async () => {
     setIsOrdering(true);
@@ -160,6 +169,49 @@ const CustomerMenu: React.FC = () => {
     }
   };
 
+  // overlay positioning
+  function getAnchorPosition(offsetY = 8) {
+    const anchor = document.getElementById('header-cart-anchor');
+    if (!anchor) return null;
+    const r = anchor.getBoundingClientRect();
+    const top = r.bottom + offsetY + window.scrollY;
+    if (isRTL) return { top, left: r.left + window.scrollX };
+    return { top, right: window.innerWidth - r.right + window.scrollX };
+  }
+
+  useEffect(() => {
+    if (!showCartOverlay) return;
+    const update = () => {
+      setOverlayPos(getAnchorPosition(10) || { top: 80, ...(isRTL ? { left: 16 } : { right: 16 }) });
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [showCartOverlay, isRTL]);
+
+  useEffect(() => {
+    if (!showCartOverlay) return;
+    const onDown = (e: MouseEvent) => {
+      const anchor = document.getElementById('header-cart-anchor');
+      const pop = document.getElementById('header-cart-popover');
+      if (anchor?.contains(e.target as Node) || pop?.contains(e.target as Node)) return;
+      setShowCartOverlay(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [showCartOverlay]);
+
+  const onHeaderCartClick = () => {
+    if (!getTotalItems()) return;
+    if (isDesktop()) setShowCartOverlay((v) => !v);
+    else setShowCart(true);
+  };
+
+  // views
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
@@ -196,15 +248,11 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${isRTL ? 'rtl' : 'ltr'}`}>
-      {/* Language Toggle */}
-      <div className={`fixed top-4 ${isRTL ? 'left-4' : 'right-4'} z-50`}>
-        <LanguageToggle variant="button" />
-      </div>
-
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
+            {/* left: title & meta */}
             <div className="animate-fade-in">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('restaurant.name')}</h1>
               <div className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -218,22 +266,24 @@ const CustomerMenu: React.FC = () => {
                 </div>
               </div>
             </div>
-
-            {/* Top Cart Button (desktop) — ANCHOR */}
-            <button
-              id="header-cart-anchor"
-              data-cart-anchor="header"
-              onClick={() => setShowCart(!showCart)}
-              className="relative px-3 py-2 rounded-lg bg-primary text-white flex items-center gap-2 hover:opacity-90 transition"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              <span className="font-medium hidden sm:inline">${getTotalPrice().toFixed(2)}</span>
-              {getTotalItems() > 0 && (
-                <span className={`absolute -top-2 ${isRTL ? '-left-2' : '-right-2'} bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}>
-                  {getTotalItems()}
-                </span>
-              )}
-            </button>
+            {/* right: language toggle + cart — cart last, even in Arabic */}
+            <div className="flex items-center gap-3" dir="ltr">
+              <LanguageToggle variant="button" />
+              <button
+                id="header-cart-anchor"
+                data-cart-anchor="header"
+                onClick={onHeaderCartClick}
+                className="relative px-3 py-2 rounded-lg bg-primary text-white flex items-center gap-2 hover:opacity-90 transition"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                <span className="font-medium hidden sm:inline">${getTotalPrice().toFixed(2)}</span>
+                {getTotalItems() > 0 && (
+                  <span className={`absolute -top-2 ${isRTL ? '-left-2' : '-right-2'} bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}>
+                    {getTotalItems()}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -284,6 +334,74 @@ const CustomerMenu: React.FC = () => {
         )}
       </div>
 
+      {/* Header cart popover (desktop only) */}
+      {showCartOverlay && isDesktop() && (
+        <div
+          id="header-cart-popover"
+          className="fixed z-[60] animate-scale-in"
+          style={overlayPos}
+          role="dialog"
+          aria-label={t('cart.miniCartAria')}
+        >
+          <div className="relative">
+            {/* arrow */}
+            <span
+              className={[
+                'absolute -top-2 block w-3 h-3 rotate-45',
+                'bg-white dark:bg-slate-800',
+                'border border-slate-200 dark:border-slate-700',
+                isRTL ? 'left-6 border-l-0 border-b-0' : 'right-6 border-r-0 border-b-0',
+              ].join(' ')}
+              aria-hidden
+            />
+            <div className="w-[340px] max-w-[calc(100vw-24px)] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+              <div className="p-3 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-900 dark:text-white">{t('menu.yourOrder')}</span>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">{getTotalItems()} {t('common.items') || 'items'}</span>
+                </div>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+                {cart.length === 0 ? (
+                  <div className="p-6 text-center text-slate-500 dark:text-slate-400">{t('menu.cartEmpty')}</div>
+                ) : (
+                  cart.map((it) => (
+                    <div key={it.id} className="p-3 flex items-center gap-3">
+                      <img
+                        src={it.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300'}
+                        alt={it.name_en}
+                        className="w-10 h-10 rounded-md object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium text-slate-900 dark:text-white">{isRTL ? it.name_ar || it.name_en : it.name_en}</span>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">${(it.price * it.quantity).toFixed(2)}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{it.quantity} × ${it.price.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-700/30">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-slate-600 dark:text-slate-300">{t('common.total')}</span>
+                  <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">${getTotalPrice().toFixed(2)}</span>
+                </div>
+                <button
+                  onClick={() => { setShowCartOverlay(false); setShowCart(true); }}
+                  className="w-full rounded-lg bg-primary text-white py-2 font-semibold shadow hover:opacity-90 transition"
+                >
+                  {t('cart.viewOrder')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cart Drawer */}
       {showCart && (
         <CartDrawer
@@ -298,18 +416,17 @@ const CustomerMenu: React.FC = () => {
         />
       )}
 
-      {/* Sticky bottom order bar — ANCHOR */}
+      {/* Sticky bottom order bar */}
       {!showCart && getTotalItems() > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 animate-slide-up">
           <div className="max-w-4xl mx-auto px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <button
-              data-cart-anchor
               onClick={() => setShowCart(true)}
               className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-white px-4 py-3 shadow-soft hover:opacity-90 transition"
             >
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
-                <span className="font-semibold">{isRTL ? 'عرض الطلب' : 'View Order'}</span>
+                <span className="font-semibold">{t('cart.viewOrder')}</span>
               </div>
               <div className={`flex items-center gap-2 text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
                 <span className="inline-flex items-center gap-1 bg-white/15 rounded-full px-2 py-1">
@@ -322,16 +439,9 @@ const CustomerMenu: React.FC = () => {
         </div>
       )}
 
-      {/* Invisible cart anchor BEFORE first add */}
+      {/* Floating cart (when empty) */}
       {getTotalItems() === 0 && (
         <FloatingCartButton itemCount={0} isRTL={isRTL} onClick={() => setShowCart(true)} />
-      )}
-
-      {/* Tiny toast */}
-      {flash && (
-        <div className={`fixed top-20 ${isRTL ? 'left-4' : 'right-4'} z-50 bg-slate-900 text-white text-sm px-3 py-2 rounded-lg shadow-soft animate-scale-in`}>
-          {flash}
-        </div>
       )}
     </div>
   );
