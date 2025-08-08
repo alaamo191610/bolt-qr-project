@@ -86,6 +86,7 @@ const translations: Record<Language, any> = {
       decrease: "Decrease",
       increase: "Increase",
       sort: "Sort",
+      clear: "Clear",
     },
     cart: {
       viewOrder: "View order",
@@ -177,7 +178,16 @@ const translations: Record<Language, any> = {
       min: "min",
       priceLowHigh: "Price: Low → High",
       priceHighLow: "Price: High → Low",
-      other: "Other"
+      other: "Other",
+      compare: "Compare",
+      compareLimit: "You can compare up to 2 items",
+      highlightDifferences: "Highlight differences",
+      swapSides: "Swap sides",
+      comparing: "Comparing",
+      compareCount: "Selected to compare:",
+      onlyDifferences: "Only differences",
+      addBoth: "Add both",
+      compareTagline: "Spot the differences and pick your favorite."
     },
     orders: {
       title: "Order Management",
@@ -376,6 +386,7 @@ const translations: Record<Language, any> = {
       decrease: "إنقاص",
       increase: "زيادة",
       sort: "الفرز",
+      clear: "مسح"
     },
     badges: {
       spicy: "حار",
@@ -468,6 +479,15 @@ const translations: Record<Language, any> = {
       priceLowHigh: "السعر: من الأقل إلى الأعلى",
       priceHighLow: "السعر: من الأعلى إلى الأقل",
       other: "أخرى",
+      compare: "Compare",
+      compareLimit: "You can compare up to 2 items",
+      highlightDifferences: "Highlight differences",
+      swapSides: "Swap sides",
+      comparing: "قيد المقارنة",
+      compareCount: "العناصر المحددة للمقارنة:",
+      onlyDifferences: "الفروقات فقط",
+      addBoth: "إضافة الاثنين",
+      compareTagline: "اكتشف الفروقات واختر ما تفضله."
     },
     orders: {
       title: "إدارة الطلبات",

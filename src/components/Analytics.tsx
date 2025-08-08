@@ -9,7 +9,7 @@ import TopRevenueItemsChart from '../components/charts/TopRevenueItemsChart';
 import TopTableRevenueChart from '../components/charts/TopTableRevenueChart';
 import ExportOrdersPDFButton from '../components/exports/ExportOrdersPDFButton';
 import type { OrderWithItems as PdfOrder } from '../lib/supabase';
-import { supabase } from '../lib/supabase'; // ✅ fetch menu names here
+import { supabase } from '../lib/supabase'; 
 
 type OrderStatus = 'pending' | 'preparing' | 'completed' | 'served' | 'cancelled';
 
@@ -212,7 +212,16 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       created_at: o.timestamp.toISOString(),
       total: o.total,
       status: o.status as string,
-      items: o.items.map(i => ({ name: pickLabel(i), quantity: i.quantity })), // snapshot localized label (optional)
+      items: o.items.map(i => ({
+        name: pickLabel(i),
+        quantity: i.quantity,
+        // prefer the price stored on the order item at the time of purchase
+        price:
+          (i as any).price_at_order ??
+          i.price ??                    
+          (i as any).menu?.price ??      
+          0
+      })), 
     }));
 
     const totalOrders = orders.length;
