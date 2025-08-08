@@ -763,59 +763,57 @@ const DigitalMenu: React.FC = () => {
   }
 
   const confirmDelete = async () => {
-    if (!itemToDelete) return
-
+    if (!itemToDelete) return;
+  
     try {
-      setDeleteLoading(true)
-
-      // 1. Fetch the image URL from the menu item
-      const { data: menuData, error: fetchError } = await supabase
+      setDeleteLoading(true);
+  
+      // Step 1: Fetch image_url from the DB
+      const { data: itemData, error: fetchError } = await supabase
         .from('menus')
         .select('image_url')
         .eq('id', itemToDelete)
-        .single()
-
-      if (fetchError) throw fetchError
-
-      const imageUrl: string | null = menuData?.image_url || null
-
-      // 2. Extract the storage path from the public URL
+        .single();
+        console.log(itemData,"data");
+        if (fetchError) throw fetchError;
+  
+      // Step 2: If image is in Supabase Storage, delete it
+      const imageUrl = itemData?.image_url;
+      console.log(imageUrl,"imageUrl");
+      
       if (imageUrl?.includes('/storage/v1/object/public/menu-images/')) {
-        const path = imageUrl.split('/storage/v1/object/public/menu-images/')[1]
-
-        const { error: storageError } = await supabase
-          .storage
+        const imagePath = imageUrl.split('/storage/v1/object/public/')[1];
+        const relativePath = imagePath.replace('menu-images/', '');
+        console.log(relativePath,"relativePath");
+        
+        const { error: deleteError } = await supabase.storage
           .from('menu-images')
-          .remove([path])
-
-        if (storageError) console.warn('Image delete failed:', storageError.message)
+          .remove(['1754513785827.png']);
+        
+        if (deleteError) {
+          console.warn('Image deletion failed:', deleteError.message);
+        }
       }
-
-      // 3. Now delete the menu row from DB
-      const { error } = await supabase
+  
+      // Step 3: Soft-delete the menu item
+      const { error: updateError } = await supabase
         .from('menus')
-        .delete()
-        .eq('id', itemToDelete)
-
-      if (error) {
-        toast.error(t('common.errorOccurred') || 'Something went wrong')
-        throw error
-      }
-
-      // Update UI
-      setItems(prev => prev.filter(item => item.id !== itemToDelete))
-      sessionStorage.removeItem(`menuItems_${user?.id}`)
-      toast.success(t('common.deleted') || 'Item deleted successfully')
-
-      setDeleteModalOpen(false)
-      setItemToDelete(null)
+        .update({ deleted_at: new Date().toISOString(),image_url: null  })
+        .eq('id', itemToDelete);
+  
+      if (updateError) throw updateError;
+  
+      // Step 4: Update UI
+      setItems(prev => prev.filter(item => item.id !== itemToDelete));
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
+  
     } catch (error) {
-      console.error('Error deleting item:', error)
-      fetchItems()
+      console.error('Error deleting menu item or image:', error);
     } finally {
-      setDeleteLoading(false)
+      setDeleteLoading(false);
     }
-  }
+  };  
 
 
 
@@ -1312,10 +1310,10 @@ const DigitalMenu: React.FC = () => {
       <DeleteConfirmModal
         isOpen={deleteModalOpen}
         onClose={() => {
-          setDeleteModalOpen(false)
-          setItemToDelete(null)
+          setDeleteModalOpen(false);
+          setItemToDelete(null);
         }}
-        onConfirm={confirmDelete}
+        onConfirm={confirmDelete} // ✅ now this runs AFTER itemToDelete is set
         title={t('common.deleteItem')}
         message={t('common.deleteItemConfirm')}
         loading={deleteLoading}

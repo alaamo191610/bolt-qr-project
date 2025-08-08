@@ -5,6 +5,8 @@ import { Menu, X, Bell, Search, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import LanguageToggle from './LanguageToggle';
+import { Menu as DropdownMenu, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -248,7 +250,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                       }
                     >
                       <Icon className="w-4 h-4" />
-                      <span>{item.name}</span>
+                      <span className="hidden sm:block">{item.name}</span>
                     </button>
                   );
                 })}
@@ -276,28 +278,54 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
               {/* User info (visible on desktop) */}
               {userInfo && (
-                <div className="hidden lg:flex items-center space-x-3 rtl:space-x-reverse p-2 rounded-lg bg-slate-100 dark:bg-slate-700">
-                  <div className="w-9 h-9 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex flex-col">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                      {userInfo.name}
-                    </p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                      {userInfo.email}
-                    </p>
-                  </div>
-                  {onSignOut && (
-                    <button
-                      onClick={onSignOut}
-                      className="text-xs text-red-600 hover:text-red-800 ml-2"
-                    >
-                      {t('auth.signOut')}
-                    </button>
+                    <DropdownMenu as="div" className="relative">
+                      <div>
+                        <DropdownMenu.Button className="flex rounded-full bg-slate-100 dark:bg-slate-700 p-1 hover:ring-2 hover:ring-offset-2 hover:ring-emerald-500 focus:outline-none">
+                          <span className="sr-only">Open user menu</span>
+                          <div className="w-9 h-9 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center">
+                            <User className="w-4 h-4 text-white" />
+                          </div>
+                        </DropdownMenu.Button>
+                      </div>
+
+                      <Transition
+                        as={Fragment}
+                        enter="transition ease-out duration-100"
+                        enterFrom="transform opacity-0 scale-95"
+                        enterTo="transform opacity-100 scale-100"
+                        leave="transition ease-in duration-75"
+                        leaveFrom="transform opacity-100 scale-100"
+                        leaveTo="transform opacity-0 scale-95"
+                      >
+                        <DropdownMenu.Items className="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                            <p className="text-sm font-medium text-slate-900 dark:text-white">
+                              {userInfo.name}
+                            </p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                              {userInfo.email}
+                            </p>
+                          </div>
+                          {onSignOut && (
+                            <DropdownMenu.Item>
+                              {({ active }) => (
+                                <button
+                                  onClick={onSignOut}
+                                  className={`${
+                                    active
+                                      ? 'bg-slate-100 dark:bg-slate-700'
+                                      : ''
+                                  } w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400`}
+                                >
+                                  {t('auth.signOut')}
+                                </button>
+                              )}
+                            </DropdownMenu.Item>
+                          )}
+                        </DropdownMenu.Items>
+                      </Transition>
+                    </DropdownMenu>
                   )}
-                </div>
-              )}
             </div>
           </div>
         </header>

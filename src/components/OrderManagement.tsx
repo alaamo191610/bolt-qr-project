@@ -54,15 +54,15 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders }) 
     }
   };
 
-  const formatTime = (timestamp: Date) => {
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - timestamp.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    return `${diffInHours}h ${diffInMinutes % 60}m ago`;
+  const formatTime = (timestamp: string | Date) => {
+    const dateObj = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
   };
 
   const getNextStatus = (currentStatus: string) => {
@@ -142,7 +142,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders }) 
               </div>
               <div className="text-right">
                 <div className="text-lg font-bold text-emerald-600">${order.total.toFixed(2)}</div>
-                <div className="text-xs text-slate-500">{formatTime(order.timestamp)}</div>
+                <div className="text-xs text-slate-500">Ordered At: {formatTime(order.timestamp)}</div>
               </div>
             </div>
 
