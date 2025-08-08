@@ -479,7 +479,7 @@ const translations: Record<Language, any> = {
       priceLowHigh: "السعر: من الأقل إلى الأعلى",
       priceHighLow: "السعر: من الأعلى إلى الأقل",
       other: "أخرى",
-      compare: "Compare",
+      compare: "مقارنة",
       compareLimit: "You can compare up to 2 items",
       highlightDifferences: "Highlight differences",
       swapSides: "Swap sides",
