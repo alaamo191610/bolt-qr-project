@@ -81,6 +81,7 @@ function App() {
             <Route path="/menu" element={<CustomerMenu />} />
             <Route path="/ar/menu" element={<CustomerMenu />} />
             <Route path="/en/menu" element={<CustomerMenu />} />
+            <Route path="/menu/:lang" element={<CustomerMenu />} />
             <Route path="/" element={user ? <AdminDashboard /> : <AuthForm />} />
           </Routes>
         </Router>

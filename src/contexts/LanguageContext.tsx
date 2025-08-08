@@ -534,34 +534,99 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlLang = urlParams.get('lang') as Language;
-    const savedLang = localStorage.getItem('restaurant-language') as Language;
+    const initializeLanguage = () => {
+      const isValidLang = (lang: string | null): lang is Language =>
+        lang === 'en' || lang === 'ar';
 
-    const initialLang = savedLang || urlLang || 'en'; setLanguageState(initialLang);
-    updateDocumentDirection(initialLang);
-    setIsLoaded(true); // ✅ mark as loaded
+      // Get language from multiple sources
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlLang = urlParams.get('lang');
+      const pathLang = window.location.pathname.startsWith('/ar/') ? 'ar' : 
+                      window.location.pathname.startsWith('/en/') ? 'en' : null;
+      const savedLang = localStorage.getItem('restaurant-language');
 
+      let detectedLang: Language;
+      
+      // Priority: URL parameter > Path prefix > localStorage > default
+      if (isValidLang(urlLang)) {
+        detectedLang = urlLang;
+      } else if (isValidLang(pathLang)) {
+        detectedLang = pathLang;
+      } else if (isValidLang(savedLang)) {
+        detectedLang = savedLang;
+      } else {
+        detectedLang = 'en';
+      }
+
+      console.log('🔍 Language Detection:', {
+        urlLang,
+        pathLang,
+        savedLang,
+        detectedLang,
+        currentURL: window.location.href
+      });
+      // Set the language state
+      setLanguageState(detectedLang);
+      updateDocumentDirection(detectedLang);
+      
+      // Only update URL if there's no lang parameter or it's different
+      if (!urlLang || urlLang !== detectedLang) {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('lang', detectedLang);
+        window.history.replaceState({}, '', currentUrl.toString());
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('restaurant-language', detectedLang);
+      
+      setIsLoaded(true);
+    };
+
+    initializeLanguage();
+
+    // Listen for popstate events (back/forward navigation)
+    const handlePopState = () => {
+      initializeLanguage();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    // Listen for admin panel language broadcast
     const handleAdminLanguageLoaded = (event: CustomEvent) => {
       const { language: adminLang } = event.detail;
-      if (adminLang && adminLang !== initialLang) {
-        setLanguageState(adminLang);
-        updateDocumentDirection(adminLang);
+      const isValidLang = (lang: string | null): lang is Language =>
+        lang === 'en' || lang === 'ar';
+        
+      if (adminLang && isValidLang(adminLang)) {
+        setLanguage(adminLang);
       }
     };
 
-    window.addEventListener('admin-language-loaded', handleAdminLanguageLoaded as EventListener);
+    window.addEventListener(
+      'admin-language-loaded',
+      handleAdminLanguageLoaded as EventListener
+    );
+
     return () => {
-      window.removeEventListener('admin-language-loaded', handleAdminLanguageLoaded as EventListener);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener(
+        'admin-language-loaded',
+        handleAdminLanguageLoaded as EventListener
+      );
     };
   }, []);
-
+  
 
   const updateDocumentDirection = (lang: Language) => {
     const isRTL = lang === 'ar';
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
 
+    console.log('🎨 Document Direction Updated:', {
+      language: lang,
+      isRTL,
+      documentDir: document.documentElement.dir,
+      documentLang: document.documentElement.lang
+    });
 
     // Update font family based on language
     if (isRTL) {
@@ -579,14 +644,26 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const setLanguage = (lang: Language) => {
+    console.log('🔄 Manual Language Change:', {
+      from: language,
+      to: lang,
+      currentURL: window.location.href
+    });
+    
     setLanguageState(lang);
-    localStorage.setItem('restaurant-language', lang);
     updateDocumentDirection(lang);
 
-    // Update URL parameter
-    const url = new URL(window.location.href);
-    url.searchParams.set('lang', lang);
-    window.history.replaceState({}, '', url.toString());
+    // Update URL parameter only if it's different
+    const currentUrl = new URL(window.location.href);
+    const currentLang = currentUrl.searchParams.get('lang');
+    
+    if (currentLang !== lang) {
+      currentUrl.searchParams.set('lang', lang);
+      window.history.replaceState({}, '', currentUrl.toString());
+    }
+    
+    // Always update localStorage
+    localStorage.setItem('restaurant-language', lang);
   };
 
   const t = (key: string, params?: Record<string, string>): string => {
