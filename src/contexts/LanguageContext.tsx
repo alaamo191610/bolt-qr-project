@@ -296,7 +296,7 @@ const translations: Record<Language, any> = {
       applyChanges: "Apply Changes"
     },
     restaurant: {
-      name: "Bella Vista",
+      name: "AlaaaaXyzn",
       phone: "(555) 123-4567",
       defaultDescription: "Fine dining experience with fresh, locally sourced ingredients and exceptional service."
     },
