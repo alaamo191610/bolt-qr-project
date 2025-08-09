@@ -357,7 +357,7 @@ const translations: Record<Language, any> = {
       selectAll: "تحديد الكل",
       itemsSelected: "عنصر محدد",
       noItems: "لا توجد عناصر",
-      noItemsDescription: "بلّش بإضافة أول صنف، والباقي بساهل.",
+      noItemsDescription: "بلّش بإضافة أول صنف، والباقي سهل.",
       addFirstItem: "أضف أول صنف",
       noCategory: "بدون فئة",
       available: "متاح",
