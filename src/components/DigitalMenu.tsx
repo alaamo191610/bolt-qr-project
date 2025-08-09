@@ -281,6 +281,181 @@ const DeleteConfirmModal = ({
   )
 }
 
+const ImageUploadField = ({
+  value,
+  onChange,
+  disableManualInput = false,
+  uploadPrefix = '',
+  fieldId = 'file-upload',
+}: ImageUploadFieldProps) => {
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { t } = useLanguage()
+
+  const extractFileNameFromUrl = (url: string) => {
+    if (!url.includes('/storage/v1/object/public/menu-images/')) return ''
+    const match = url.match(/menu-images\/(.+)$/)
+    return match?.[1] || ''
+  }
+
+  const handleFileUpload = async (file: File) => {
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File size must be less than 5MB')
+      return
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select an image file')
+      return
+    }
+
+    setUploading(true)
+    setUploadError(null)
+
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = uploadPrefix ? `${uploadPrefix}/${Date.now()}.${fileExt}` : `${Date.now()}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('menu-images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = supabase.storage
+        .from('menu-images')
+        .getPublicUrl(fileName)
+
+      const imageUrl = publicUrlData?.publicUrl || ''
+      onChange(imageUrl)
+    } catch (err: any) {
+      console.error('Upload failed:', err.message)
+      setUploadError('Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files?.[0]) {
+      handleFileUpload(e.dataTransfer.files[0])
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => setIsDragging(false)
+
+  const handleSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      handleFileUpload(e.target.files[0])
+    }
+  }
+
+  const handleRemoveImage = async () => {
+    if (!value) return
+    const confirmDelete = window.confirm('Are you sure you want to delete this image?')
+    if (!confirmDelete) return
+
+    try {
+      const fileName = extractFileNameFromUrl(value)
+      if (fileName) {
+        await supabase.storage.from('menu-images').remove([fileName])
+      }
+    } catch (err) {
+      console.warn('Failed to delete image from Supabase:', err)
+    }
+
+    onChange('')
+  }
+
+  const handleRetryClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  return (
+    <div className="space-y-2">
+      <label
+        htmlFor={fieldId}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        className={`relative flex items-center justify-center px-4 py-10 border-2 border-dashed rounded-lg cursor-pointer transition group
+          ${isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}
+        `}
+      >
+        {uploading ? (
+          <div className="flex items-center gap-2 text-emerald-600">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>{t('common.uploading')}</span>
+          </div>
+        ) : value ? (
+          <div className="w-full flex flex-col items-center gap-2 group relative">
+            <div className="relative w-full">
+              <img src={value} alt={t('common.uploaded')} className="h-40 w-full object-contain rounded-md" />
+              <div className="absolute inset-0 bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                >
+                  {t('common.remove')}
+                </button>
+              </div>
+            </div>
+            <div className="bg-emerald-600 text-white px-3 py-1 rounded text-xs shadow">
+              {t('common.uploaded')}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center text-slate-500 dark:text-slate-300">
+            <UploadCloud className="w-6 h-6 mx-auto mb-2" />
+            <p>{t('common.placeholder')}</p>
+          </div>
+        )}
+
+        <input
+          id={fieldId}
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleSelectFile}
+          disabled={disableManualInput || !!value}
+        />
+      </label>
+
+      {uploadError && (
+        <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-700 dark:text-red-300 text-sm">
+          <div className="flex items-center gap-2">
+            <XCircle className="w-4 h-4" />
+            <span>{uploadError}</span>
+          </div>
+          <button
+            onClick={handleRetryClick}
+            className="text-sm text-red-600 dark:text-red-300 underline hover:text-red-800 dark:hover:text-white"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const DigitalMenu: React.FC = () => {
   const { t, language } = useLanguage()
   const { user } = useAuth()
@@ -419,178 +594,6 @@ const DigitalMenu: React.FC = () => {
     }
   }
 
-  const ImageUploadField = ({
-    value,
-    onChange,
-    disableManualInput = false,
-    uploadPrefix = '',
-    fieldId = 'file-upload',
-  }: ImageUploadFieldProps) => {
-    const [uploading, setUploading] = useState(false)
-    const [uploadError, setUploadError] = useState<string | null>(null)
-    const [isDragging, setIsDragging] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement>(null)
-
-    const extractFileNameFromUrl = (url: string) => {
-      if (!url.includes('/storage/v1/object/public/menu-images/')) return ''
-      const match = url.match(/menu-images\/(.+)$/)
-      return match?.[1] || ''
-    }
-
-    const handleFileUpload = async (file: File) => {
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setUploadError('File size must be less than 5MB')
-        return
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setUploadError('Please select an image file')
-        return
-      }
-
-      setUploading(true)
-      setUploadError(null)
-
-      try {
-        const fileExt = file.name.split('.').pop()
-        const fileName = uploadPrefix ? `${uploadPrefix}/${Date.now()}.${fileExt}` : `${Date.now()}.${fileExt}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('menu-images')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: file.type,
-          })
-
-        if (uploadError) throw uploadError
-
-        const { data: publicUrlData } = supabase.storage
-          .from('menu-images')
-          .getPublicUrl(fileName)
-
-        const imageUrl = publicUrlData?.publicUrl || ''
-        onChange(imageUrl)
-      } catch (err: any) {
-        console.error('Upload failed:', err.message)
-        setUploadError('Upload failed. Please try again.')
-      } finally {
-        setUploading(false)
-      }
-    }
-
-    const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
-      e.preventDefault()
-      setIsDragging(false)
-      if (e.dataTransfer.files?.[0]) {
-        handleFileUpload(e.dataTransfer.files[0])
-      }
-    }
-
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragging(true)
-    }
-
-    const handleDragLeave = () => setIsDragging(false)
-
-    const handleSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.[0]) {
-        handleFileUpload(e.target.files[0])
-      }
-    }
-
-    const handleRemoveImage = async () => {
-      if (!value) return
-      const confirmDelete = window.confirm('Are you sure you want to delete this image?')
-      if (!confirmDelete) return
-
-      try {
-        const fileName = extractFileNameFromUrl(value)
-        if (fileName) {
-          await supabase.storage.from('menu-images').remove([fileName])
-        }
-      } catch (err) {
-        console.warn('Failed to delete image from Supabase:', err)
-      }
-
-      onChange('')
-    }
-
-    const handleRetryClick = () => {
-      fileInputRef.current?.click()
-    }
-    return (
-      <div className="space-y-2">
-        <label
-          htmlFor="file-upload"
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          className={`relative flex items-center justify-center px-4 py-10 border-2 border-dashed rounded-lg cursor-pointer transition group
-            ${isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'}
-          `}
-        >
-          {uploading ? (
-            <div className="flex items-center gap-2 text-emerald-600">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>{t('common.uploading')}</span>
-            </div>
-          ) : value ? (
-            <div className="w-full flex flex-col items-center gap-2 group relative">
-              <div className="relative w-full">
-                <img src={value} alt={t('common.uploaded')} className="h-40 w-full object-contain rounded-md" />
-                <div className="absolute inset-0 bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-                  >
-                    {t('common.remove')}
-                  </button>
-                </div>
-              </div>
-              <div className="bg-emerald-600 text-white px-3 py-1 rounded text-xs shadow">
-                {t('common.uploaded')}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center text-slate-500 dark:text-slate-300">
-              <UploadCloud className="w-6 h-6 mx-auto mb-2" />
-              <p>{t('common.placeholder')}</p>
-            </div>
-          )}
-
-          <input
-            id={fieldId}
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleSelectFile}
-            disabled={disableManualInput || !!value}
-          />
-        </label >
-
-        {uploadError && (
-          <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-700 dark:text-red-300 text-sm">
-            <div className="flex items-center gap-2">
-              <XCircle className="w-4 h-4" />
-              <span>{uploadError}</span>
-            </div>
-            <button
-              onClick={handleRetryClick}
-              className="text-sm text-red-600 dark:text-red-300 underline hover:text-red-800 dark:hover:text-white"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-      </div >
-    )
-  }
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
@@ -691,7 +694,6 @@ const DigitalMenu: React.FC = () => {
     setFormOpen(true)
   }
 
-
   const handleSubmit = async () => {
     const newErrors: Record<string, string> = {}
 
@@ -783,7 +785,6 @@ const DigitalMenu: React.FC = () => {
     }
   }
 
-
   const handleDeleteItem = async (itemId: string) => {
     setItemToDelete(itemId)
     setDeleteModalOpen(true)
@@ -791,57 +792,55 @@ const DigitalMenu: React.FC = () => {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
-  
+
     try {
       setDeleteLoading(true);
-  
+
       // Step 1: Fetch image_url from the DB
       const { data: itemData, error: fetchError } = await supabase
         .from('menus')
         .select('image_url')
         .eq('id', itemToDelete)
         .single();
-        if (fetchError) throw fetchError;
-  
+      if (fetchError) throw fetchError;
+
       // Step 2: If image is in Supabase Storage, delete it
       const imageUrl = itemData?.image_url;
-      
+
       if (imageUrl?.includes('/storage/v1/object/public/menu-images/')) {
         const match = imageUrl.match(/menu-images\/(.+)$/)
         const relativePath = match?.[1]
-        
+
         if (relativePath) {
           const { error: deleteError } = await supabase.storage
             .from('menu-images')
             .remove([relativePath]);
-          
+
           if (deleteError) {
             console.warn('Image deletion failed:', deleteError.message);
           }
         }
       }
-  
+
       // Step 3: Soft-delete the menu item
       const { error: updateError } = await supabase
         .from('menus')
         .update({ deleted_at: new Date().toISOString(), image_url: null })
         .eq('id', itemToDelete);
-  
+
       if (updateError) throw updateError;
-  
+
       // Step 4: Update UI
       setItems(prev => prev.filter(item => item.id !== itemToDelete));
       setDeleteModalOpen(false);
       setItemToDelete(null);
-  
+
     } catch (error) {
       console.error('Error deleting menu item or image:', error);
     } finally {
       setDeleteLoading(false);
     }
-  };  
-
-
+  };
 
   const handleDeleteSelected = async () => {
     if (selectedItems.length === 0) return
@@ -863,7 +862,7 @@ const DigitalMenu: React.FC = () => {
 
       const extractImagePath = (url: string) => {
         if (!isSupabaseStorageImage(url)) return null
-        const match = url.match(/menu-images\/+(.+)$/)
+        const match = url.match(/menu-images\/(.+)$/)
         return match?.[1] || null
       }
 
@@ -883,7 +882,7 @@ const DigitalMenu: React.FC = () => {
         }
       }
 
-      // 5. Delete menu items from the database
+      // 5. Soft-delete menu items from the database
       const { error: updateError } = await supabase
         .from('menus')
         .update({ deleted_at: new Date().toISOString(), image_url: null })
@@ -1316,8 +1315,6 @@ const DigitalMenu: React.FC = () => {
         </div>
       )}
 
-
-
       {/* Category Form Modal */}
       <CategoryForm
         isOpen={categoryFormOpen}
@@ -1341,7 +1338,7 @@ const DigitalMenu: React.FC = () => {
           setDeleteModalOpen(false);
           setItemToDelete(null);
         }}
-        onConfirm={confirmDelete} // ✅ now this runs AFTER itemToDelete is set
+        onConfirm={confirmDelete}
         title={t('common.deleteItem')}
         message={t('common.deleteItemConfirm')}
         loading={deleteLoading}
