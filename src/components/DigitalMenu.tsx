@@ -38,6 +38,8 @@ interface ImageUploadFieldProps {
   value: string
   onChange: (url: string) => void
   disableManualInput?: boolean
+  uploadPrefix?: string
+  fieldId?: string
 }
 
 // Subcomponents
@@ -421,26 +423,46 @@ const DigitalMenu: React.FC = () => {
     value,
     onChange,
     disableManualInput = false,
+    uploadPrefix = '',
+    fieldId = 'file-upload',
   }: ImageUploadFieldProps) => {
     const [uploading, setUploading] = useState(false)
     const [uploadError, setUploadError] = useState<string | null>(null)
     const [isDragging, setIsDragging] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const extractFileNameFromUrl = (url: string) => url.split('/').pop() || ''
+    const extractFileNameFromUrl = (url: string) => {
+      if (!url.includes('/storage/v1/object/public/menu-images/')) return ''
+      const match = url.match(/menu-images\/(.+)$/)
+      return match?.[1] || ''
+    }
 
     const handleFileUpload = async (file: File) => {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError('File size must be less than 5MB')
+        return
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Please select an image file')
+        return
+      }
+
       setUploading(true)
       setUploadError(null)
 
       try {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}.${fileExt}`
+        const fileName = uploadPrefix ? `${uploadPrefix}/${Date.now()}.${fileExt}` : `${Date.now()}.${fileExt}`
 
         const { error: uploadError } = await supabase.storage
           .from('menu-images')
           .upload(fileName, file, {
             cacheControl: '3600',
             upsert: false,
+            contentType: file.type,
           })
 
         if (uploadError) throw uploadError
@@ -487,7 +509,9 @@ const DigitalMenu: React.FC = () => {
 
       try {
         const fileName = extractFileNameFromUrl(value)
-        await supabase.storage.from('menu-images').remove([fileName])
+        if (fileName) {
+          await supabase.storage.from('menu-images').remove([fileName])
+        }
       } catch (err) {
         console.warn('Failed to delete image from Supabase:', err)
       }
@@ -495,6 +519,9 @@ const DigitalMenu: React.FC = () => {
       onChange('')
     }
 
+    const handleRetryClick = () => {
+      fileInputRef.current?.click()
+    }
     return (
       <div className="space-y-2">
         <label
@@ -537,7 +564,8 @@ const DigitalMenu: React.FC = () => {
           )}
 
           <input
-            id="file-upload"
+            id={fieldId}
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             className="hidden"
@@ -553,7 +581,7 @@ const DigitalMenu: React.FC = () => {
               <span>{uploadError}</span>
             </div>
             <button
-              onClick={() => document.getElementById('file-upload')?.click()}
+              onClick={handleRetryClick}
               className="text-sm text-red-600 dark:text-red-300 underline hover:text-red-800 dark:hover:text-white"
             >
               Retry
@@ -696,7 +724,7 @@ const DigitalMenu: React.FC = () => {
       category_id,
       available: form.available,
       user_id: user.id,
-      ...(form.image_url && { image_url: form.image_url }),
+      image_url: form.image_url || null,
     }
 
     setFormLoading(true)
@@ -773,31 +801,30 @@ const DigitalMenu: React.FC = () => {
         .select('image_url')
         .eq('id', itemToDelete)
         .single();
-        console.log(itemData,"data");
         if (fetchError) throw fetchError;
   
       // Step 2: If image is in Supabase Storage, delete it
       const imageUrl = itemData?.image_url;
-      console.log(imageUrl,"imageUrl");
       
       if (imageUrl?.includes('/storage/v1/object/public/menu-images/')) {
-        const imagePath = imageUrl.split('/storage/v1/object/public/')[1];
-        const relativePath = imagePath.replace('menu-images/', '');
-        console.log(relativePath,"relativePath");
+        const match = imageUrl.match(/menu-images\/(.+)$/)
+        const relativePath = match?.[1]
         
-        const { error: deleteError } = await supabase.storage
-          .from('menu-images')
-          .remove(['1754513785827.png']);
-        
-        if (deleteError) {
-          console.warn('Image deletion failed:', deleteError.message);
+        if (relativePath) {
+          const { error: deleteError } = await supabase.storage
+            .from('menu-images')
+            .remove([relativePath]);
+          
+          if (deleteError) {
+            console.warn('Image deletion failed:', deleteError.message);
+          }
         }
       }
   
       // Step 3: Soft-delete the menu item
       const { error: updateError } = await supabase
         .from('menus')
-        .update({ deleted_at: new Date().toISOString(),image_url: null  })
+        .update({ deleted_at: new Date().toISOString(), image_url: null })
         .eq('id', itemToDelete);
   
       if (updateError) throw updateError;
@@ -857,14 +884,14 @@ const DigitalMenu: React.FC = () => {
       }
 
       // 5. Delete menu items from the database
-      const { error: deleteError } = await supabase
+      const { error: updateError } = await supabase
         .from('menus')
-        .delete()
+        .update({ deleted_at: new Date().toISOString(), image_url: null })
         .in('id', selectedItems)
 
-      if (deleteError) {
+      if (updateError) {
         toast.error(t('common.errorOccurred') || 'Something went wrong')
-        throw deleteError
+        throw updateError
       }
 
       // 6. Update UI
@@ -1218,6 +1245,8 @@ const DigitalMenu: React.FC = () => {
                     value={form.image_url}
                     onChange={url => setForm(f => ({ ...f, image_url: url }))}
                     disableManualInput={Boolean(form.image_url)}
+                    uploadPrefix={user?.id ? `${user.id}/menu-items` : ''}
+                    fieldId={`menu-item-image-${form.id || 'new'}`}
                   />
                 </div>
 
