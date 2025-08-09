@@ -112,7 +112,7 @@ const CustomerMenu: React.FC = () => {
   useEffect(() => {
     if (!tableNumber) return;
     try {
-      const saved = localStorage.getItem(cartKeyFor(tableNumber));
+      const saved = sessionStorage.getItem(cartKeyFor(tableNumber));
       if (saved) setCart(JSON.parse(saved));
     } catch { /* ignore */ }
   }, [tableNumber]);
@@ -120,7 +120,7 @@ const CustomerMenu: React.FC = () => {
   useEffect(() => {
     if (!tableNumber) return;
     try {
-      localStorage.setItem(cartKeyFor(tableNumber), JSON.stringify(cart));
+      sessionStorage.setItem(cartKeyFor(tableNumber), JSON.stringify(cart));
     } catch { /* ignore */ }
   }, [cart, tableNumber]);
 
@@ -238,6 +238,7 @@ const CustomerMenu: React.FC = () => {
       setOrderPlaced(true);
       setShowCart(false);
       setCart([]);
+      sessionStorage.removeItem(cartKeyFor(tableNumber)); // clear persisted cart
     } catch (err) {
       setError({ code: 'status.failedToPlaceOrder' });
       console.error('Error placing order:', err);
