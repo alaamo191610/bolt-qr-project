@@ -1,163 +1,98 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics, Analytics } from "firebase/analytics";
-import { logEvent } from "firebase/analytics";
+// src/lib/firebase.ts
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAnalytics, isSupported, type Analytics, logEvent } from "firebase/analytics";
 
-// Your web app's Firebase configuration
+const env = (k: string) =>
+  (import.meta as any)?.env?.[k] ?? (process as any)?.env?.[k];
+
 const firebaseConfig = {
-  apiKey: "AIzaSyATfSEs1COkGl938-46OWaf9EOR3Hc3ELA",
-  authDomain: "qr-code-af651.firebaseapp.com",
-  projectId: "qr-code-af651",
-  storageBucket: "qr-code-af651.firebasestorage.app",
-  messagingSenderId: "100095134739",
-  appId: "1:100095134739:web:b87b80747d3c99477c83e6",
-  measurementId: "G-G42GQGTELR"
+  apiKey:             env("VITE_FIREBASE_API_KEY") || env("NEXT_PUBLIC_FIREBASE_API_KEY"),
+  authDomain:         env("VITE_FIREBASE_AUTH_DOMAIN") || env("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"),
+  projectId:          env("VITE_FIREBASE_PROJECT_ID") || env("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
+  storageBucket:      env("VITE_FIREBASE_STORAGE_BUCKET") || env("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId:  env("VITE_FIREBASE_MESSAGING_SENDER_ID") || env("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
+  appId:              env("VITE_FIREBASE_APP_ID") || env("NEXT_PUBLIC_FIREBASE_APP_ID"),
+  measurementId:      env("VITE_FIREBASE_MEASUREMENT_ID") || env("NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID"),
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Singleton app
+export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Analytics (only in browser environment)
-let analytics: Analytics | null = null;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+// Lazy analytics, guarded for SSR/unsupported browsers
+let analyticsPromise: Promise<Analytics | null> | null = null;
+
+export function getAnalyticsSafe() {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (!analyticsPromise) {
+    analyticsPromise = isSupported().then(s => (s ? getAnalytics(app) : null));
+  }
+  return analyticsPromise;
 }
 
-// Analytics helper functions
-export const trackEvent = (eventName: string, parameters?: Record<string, any>) => {
-  if (analytics) {
-    logEvent(analytics, eventName, parameters);
+// ---- NEW: safe event logger + typed event helpers ----
+async function safeLogEvent(
+  eventName: string,
+  params?: Record<string, unknown>
+) {
+  try {
+    const analytics = await getAnalyticsSafe();
+    if (!analytics) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug(`[analytics disabled] ${eventName}`, params || {});
+      }
+      return;
+    }
+    logEvent(analytics, eventName, params);
+  } catch (e) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug(`[analytics error] ${eventName}`, e);
+    }
   }
-};
+}
 
-// Customer Menu specific tracking events
+type Lang = "en" | "ar";
+
 export const trackMenuEvents = {
-  // Page views
-  menuViewed: (tableNumber: string, language: string) => {
-    trackEvent('menu_viewed', {
-      table_number: tableNumber,
-      language: language,
-      timestamp: new Date().toISOString()
+  languageChanged(prev: Lang, next: Lang) {
+    return safeLogEvent("language_changed", { previous_language: prev, next_language: next });
+  },
+  menuViewed(tableCode: string, language: Lang) {
+    return safeLogEvent("menu_viewed", { table_code: tableCode, language });
+  },
+  menuSearched(term: string, results: number) {
+    return safeLogEvent("menu_searched", { term, results });
+  },
+  categoryFiltered(categoryId: string, categoryName?: string) {
+    return safeLogEvent("category_filtered", { category_id: categoryId, category_name: categoryName });
+  },
+  itemAddedToCart(id: string, name?: string, price?: number, quantity = 1) {
+    return safeLogEvent("add_to_cart", { id, name, price, quantity });
+  },
+  itemRemovedFromCart(id: string, name?: string, price?: number, quantity = 1) {
+    return safeLogEvent("remove_from_cart", { id, name, price, quantity });
+  },
+  cartViewed(totalItems: number, totalPrice: number) {
+    return safeLogEvent("cart_viewed", { total_items: totalItems, total_price: totalPrice });
+  },
+  orderStarted(tableCode: string, totalItems: number, totalPrice: number) {
+    return safeLogEvent("order_started", { table_code: tableCode, total_items: totalItems, total_price: totalPrice });
+  },
+  itemCompareToggled(id: string, name?: string, selected?: boolean) {
+    return safeLogEvent("compare_toggle", { id, name, selected });
+  },
+  
+  orderCompleted(
+    tableCode: string,
+    items: Array<{ id: string; name?: string; price?: number; quantity?: number }>,
+    totalPrice: number
+  ) {
+    return safeLogEvent("order_completed", {
+      table_code: tableCode,
+      total_price: totalPrice,
+      items: items.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.quantity ?? 1 })),
     });
   },
-
-  // Item interactions
-  itemViewed: (itemId: string, itemName: string, category: string) => {
-    trackEvent('menu_item_viewed', {
-      item_id: itemId,
-      item_name: itemName,
-      category: category
-    });
+  compareSheetViewed(ids: string[]) {
+    return safeLogEvent("compare_sheet_viewed", { ids });
   },
-
-  itemAddedToCart: (itemId: string, itemName: string, price: number, quantity: number) => {
-    trackEvent('add_to_cart', {
-      currency: 'QAR',
-      value: price * quantity,
-      items: [{
-        item_id: itemId,
-        item_name: itemName,
-        price: price,
-        quantity: quantity
-      }]
-    });
-  },
-
-  itemRemovedFromCart: (itemId: string, itemName: string, price: number, quantityRemoved: number) => {
-    trackEvent('remove_from_cart', {
-      currency: 'QAR',
-      value: price * quantityRemoved,
-      items: [{
-        item_id: itemId,
-        item_name: itemName,
-        price: price,
-        quantity: quantityRemoved
-      }]
-    });
-  },
-
-  // Cart interactions
-  cartViewed: (itemCount: number, totalValue: number) => {
-    trackEvent('view_cart', {
-      currency: 'QAR',
-      value: totalValue,
-      item_count: itemCount
-    });
-  },
-
-  // Order process
-  orderStarted: (tableNumber: string, itemCount: number, totalValue: number) => {
-    trackEvent('begin_checkout', {
-      currency: 'QAR',
-      value: totalValue,
-      table_number: tableNumber,
-      item_count: itemCount
-    });
-  },
-
-  orderCompleted: (tableNumber: string, orderItems: any[], totalValue: number) => {
-    trackEvent('purchase', {
-      transaction_id: `${tableNumber}_${Date.now()}`,
-      currency: 'QAR',
-      value: totalValue,
-      table_number: tableNumber,
-      items: orderItems.map(item => ({
-        item_id: item.id,
-        item_name: item.name_en || item.name,
-        price: item.price,
-        quantity: item.quantity
-      }))
-    });
-  },
-
-  // Search and filtering
-  menuSearched: (searchTerm: string, resultsCount: number) => {
-    trackEvent('search', {
-      search_term: searchTerm,
-      results_count: resultsCount
-    });
-  },
-
-  categoryFiltered: (categoryId: string, categoryName: string) => {
-    trackEvent('category_filtered', {
-      category_id: categoryId,
-      category_name: categoryName
-    });
-  },
-
-  // Language switching
-  languageChanged: (fromLanguage: string, toLanguage: string) => {
-    trackEvent('language_changed', {
-      from_language: fromLanguage,
-      to_language: toLanguage
-    });
-  },
-
-  // Compare feature
-  itemCompareToggled: (itemId: string, itemName: string, isSelected: boolean) => {
-    trackEvent('compare_item_toggled', {
-      item_id: itemId,
-      item_name: itemName,
-      is_selected: isSelected
-    });
-  },
-
-  compareSheetViewed: (itemIds: string[]) => {
-    trackEvent('compare_sheet_viewed', {
-      item_ids: itemIds,
-      item_count: itemIds.length
-    });
-  },
-
-  // Customization
-  itemCustomized: (itemId: string, itemName: string, customizations: any) => {
-    trackEvent('item_customized', {
-      item_id: itemId,
-      item_name: itemName,
-      customization_count: Object.keys(customizations).length
-    });
-  }
 };
-
-export { analytics };
-export default app;
