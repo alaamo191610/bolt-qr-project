@@ -38,7 +38,7 @@ type OverlayPos = { top: number; left?: number; right?: number };
 const cartKeyFor = (table: string) => `qr-cart-v1:${table || 'unknown'}`;
 
 const CustomerMenu: React.FC = () => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL,language } = useLanguage();
 
   // data
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -91,14 +91,13 @@ const CustomerMenu: React.FC = () => {
   // bootstrap
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const table = urlParams.get('table') || 'T01'; // fallback if missing param
+    const table = (urlParams.get('table') || 'T01').trim();
     setTableNumber(table);
     loadMenuItems(table);
-    
-    // Track menu view
-    trackMenuEvents.menuViewed(table, language);
+  
+    if (table) trackMenuEvents.menuViewed(table, language);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  }, [language]);  
 
   // load selected category per table
   useEffect(() => {
@@ -180,28 +179,36 @@ const CustomerMenu: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
     const filtered = menuItems.filter(item => {
       const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory;
-
+  
       const baseName = isRTL ? (item.name_ar || item.name_en) : item.name_en;
       const name = (baseName || '').toLowerCase();
       const nameMatch = term ? name.includes(term) : true;
-
+  
       const ingredientMatch = term
         ? item.ingredients_details?.some(({ ingredient }) => {
-          if (!ingredient) return false;
-          const iname = isRTL ? ingredient.name_ar : ingredient.name_en;
-          return ((iname || '').toLowerCase()).includes(term);
-        })
+            if (!ingredient) return false;
+            const iname = isRTL ? ingredient.name_ar : ingredient.name_en;
+            return ((iname || '').toLowerCase()).includes(term);
+          })
         : false;
-
+  
       return matchesCategory && (nameMatch || ingredientMatch);
     });
-    
-    // Track search if there's a search term
-    if (term) {
-      trackMenuEvents.menuSearched(term, filtered.length);
-    }
+  
     return filtered;
   }, [menuItems, selectedCategory, searchTerm, isRTL]);
+  
+  // NEW: debounce search tracking
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (!term) return; // only track when user typed something
+  
+    const id = window.setTimeout(() => {
+      trackMenuEvents.menuSearched(term.toLowerCase(), filteredItems.length);
+    }, 350); // debounce ~0.35s
+  
+    return () => clearTimeout(id);
+  }, [searchTerm, filteredItems.length]);
 
   // derived: quantity map / totals
   const quantityMap = useMemo(
@@ -582,7 +589,6 @@ const CustomerMenu: React.FC = () => {
                 </button>
                 <button
                   disabled={compareIds.length < 2}
-                  onClick={() => setShowCompare(true)}
                   onClick={() => {
                     trackMenuEvents.compareSheetViewed(compareIds);
                     setShowCompare(true);

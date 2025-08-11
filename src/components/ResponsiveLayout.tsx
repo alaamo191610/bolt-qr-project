@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Bell, Search, User } from 'lucide-react';
+import { Menu, X, Search, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import LanguageToggle from './LanguageToggle';
