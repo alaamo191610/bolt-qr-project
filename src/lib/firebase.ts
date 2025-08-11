@@ -2,8 +2,16 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics, logEvent } from "firebase/analytics";
 
-const env = (k: string) =>
-  (import.meta as any)?.env?.[k] ?? (process as any)?.env?.[k];
+const env = (k: string) => {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[k]) {
+      return (import.meta as any).env[k];
+    }
+    if (typeof process !== 'undefined' && (process as any).env?.[k]) {
+      return (process as any).env[k];
+    }
+    return undefined;
+  };
+  
 
 const firebaseConfig = {
   apiKey:             env("VITE_FIREBASE_API_KEY") || env("NEXT_PUBLIC_FIREBASE_API_KEY"),
