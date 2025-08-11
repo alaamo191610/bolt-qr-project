@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { trackMenuEvents } from '../lib/firebase';
 
 export type Language = 'en' | 'ar';
 
@@ -722,9 +723,15 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const setLanguage = (lang: Language) => {
+    const previousLanguage = language;
 
     setLanguageState(lang);
     updateDocumentDirection(lang);
+    
+    // Track language change
+    if (previousLanguage !== lang) {
+      trackMenuEvents.languageChanged(previousLanguage, lang);
+    }
 
     // Update URL parameter only if it's different
     const currentUrl = new URL(window.location.href);

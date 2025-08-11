@@ -6,6 +6,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { menuService } from '../services/menuService';
 import { orderService } from '../services/orderService';
 import { tableService } from '../services/tableService';
+import { trackMenuEvents } from '../lib/firebase';
 import LanguageToggle from '../components/LanguageToggle';
 import CartDrawer from '../components/ui/CartDrawer';
 import CategoryFilter from '../components/ui/CategoryFilter';
@@ -93,8 +94,11 @@ const CustomerMenu: React.FC = () => {
     const table = urlParams.get('table') || 'T01'; // fallback if missing param
     setTableNumber(table);
     loadMenuItems(table);
+    
+    // Track menu view
+    trackMenuEvents.menuViewed(table, language);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [language]);
 
   // load selected category per table
   useEffect(() => {
@@ -174,7 +178,7 @@ const CustomerMenu: React.FC = () => {
   // derived: filtered items
   const filteredItems = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return menuItems.filter(item => {
+    const filtered = menuItems.filter(item => {
       const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory;
 
       const baseName = isRTL ? (item.name_ar || item.name_en) : item.name_en;
@@ -191,6 +195,12 @@ const CustomerMenu: React.FC = () => {
 
       return matchesCategory && (nameMatch || ingredientMatch);
     });
+    
+    // Track search if there's a search term
+    if (term) {
+      trackMenuEvents.menuSearched(term, filtered.length);
+    }
+    return filtered;
   }, [menuItems, selectedCategory, searchTerm, isRTL]);
 
   // derived: quantity map / totals
@@ -213,7 +223,12 @@ const CustomerMenu: React.FC = () => {
   const addToCart = useCallback((item: MenuItem) => {
     setCart(prev => {
       const found = prev.find(c => c.id === item.id);
-      if (found) return prev.map(c => (c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
+      if (found) {
+        const newQuantity = found.quantity + 1;
+        trackMenuEvents.itemAddedToCart(item.id, item.name_en, item.price, 1);
+        return prev.map(c => (c.id === item.id ? { ...c, quantity: newQuantity } : c));
+      }
+      trackMenuEvents.itemAddedToCart(item.id, item.name_en, item.price, 1);
       return [...prev, { ...item, quantity: 1 }];
     });
   }, []);
@@ -221,13 +236,23 @@ const CustomerMenu: React.FC = () => {
   const removeFromCart = useCallback((itemId: string) => {
     setCart(prev => {
       const found = prev.find(c => c.id === itemId);
-      if (found && found.quantity > 1) return prev.map(c => (c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c));
+      if (found && found.quantity > 1) {
+        trackMenuEvents.itemRemovedFromCart(itemId, found.name_en, found.price, 1);
+        return prev.map(c => (c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c));
+      }
+      if (found) {
+        trackMenuEvents.itemRemovedFromCart(itemId, found.name_en, found.price, found.quantity);
+      }
       return prev.filter(c => c.id !== itemId);
     });
   }, []);
 
   const placeOrder = async () => {
     setIsOrdering(true);
+    
+    // Track order started
+    trackMenuEvents.orderStarted(tableNumber, totalItems, totalPrice);
+    
     try {
       const orderItems = cart.map(item => ({
         menu_item_id: item.id,
@@ -235,6 +260,10 @@ const CustomerMenu: React.FC = () => {
         price_at_order: item.price,
       }));
       await orderService.createOrder({ table_code: tableNumber, items: orderItems });
+      
+      // Track successful order
+      trackMenuEvents.orderCompleted(tableNumber, cart, totalPrice);
+      
       setOrderPlaced(true);
       setShowCart(false);
       setCart([]);
@@ -305,6 +334,10 @@ const CustomerMenu: React.FC = () => {
 
   const onHeaderCartClick = () => {
     if (!totalItems) return;
+    
+    // Track cart view
+    trackMenuEvents.cartViewed(totalItems, totalPrice);
+    
     if (isDesktop()) setShowCartOverlay(v => !v);
     else setShowCart(true);
   };
@@ -410,7 +443,14 @@ const CustomerMenu: React.FC = () => {
               <CategoryFilter
                 categories={categories}
                 selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
+                onSelectCategory={(categoryId) => {
+                  setSelectedCategory(categoryId);
+                  // Track category filtering
+                  const category = categories.find(c => c.id === categoryId);
+                  if (category) {
+                    trackMenuEvents.categoryFiltered(categoryId, isRTL ? category.name_ar : category.name_en);
+                  }
+                }}
               />
             </div>
           </div>
@@ -423,7 +463,14 @@ const CustomerMenu: React.FC = () => {
           onAdd={addToCart}
           onRemove={removeFromCart}
           compareIds={compareIds}            // 🆕 pass compare selection
-          onToggleCompare={toggleCompare}    // 🆕 pass toggler
+          onToggleCompare={(id) => {
+            const item = filteredItems.find(i => i.id === id);
+            const isSelected = compareIds.includes(id);
+            if (item) {
+              trackMenuEvents.itemCompareToggled(id, item.name_en, !isSelected);
+            }
+            toggleCompare(id);
+          }}
         />
 
         {filteredItems.length === 0 && (
@@ -536,6 +583,10 @@ const CustomerMenu: React.FC = () => {
                 <button
                   disabled={compareIds.length < 2}
                   onClick={() => setShowCompare(true)}
+                  onClick={() => {
+                    trackMenuEvents.compareSheetViewed(compareIds);
+                    setShowCompare(true);
+                  }}
                   className={`px-3 py-2 rounded-lg ${compareIds.length < 2 ? 'bg-white/20 cursor-not-allowed' : 'bg-primary hover:opacity-90'}`}
                 >
                   {t('menu.compare') || 'Compare'}
@@ -551,7 +602,10 @@ const CustomerMenu: React.FC = () => {
         <div className="fixed bottom-0 inset-x-0 z-40 animate-slide-up">
           <div className="max-w-4xl mx-auto px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <button
-              onClick={() => setShowCart(true)}
+              onClick={() => {
+                trackMenuEvents.cartViewed(totalItems, totalPrice);
+                setShowCart(true);
+              }}
               className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-white px-4 py-3 shadow-soft hover:opacity-90 transition"
             >
               <div className="flex items-center gap-2">
@@ -571,7 +625,14 @@ const CustomerMenu: React.FC = () => {
 
       {/* Floating cart (when empty) */}
       {totalItems === 0 && (
-        <FloatingCartButton itemCount={0} isRTL={isRTL} onClick={() => setShowCart(true)} />
+        <FloatingCartButton 
+          itemCount={0} 
+          isRTL={isRTL} 
+          onClick={() => {
+            trackMenuEvents.cartViewed(0, 0);
+            setShowCart(true);
+          }} 
+        />
       )}
 
       {/* 🆕 Compare sheet */}
