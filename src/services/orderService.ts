@@ -1,11 +1,37 @@
+// orderService.ts
 import { supabase } from '../lib/supabase'
 
-// ---------- Types used by Analytics (optional export) ----------
+// ---------------- Types (kept compatible) ----------------
+type IngredientAction = 'no' | 'normal' | 'extra'
+
+/** One cart line going into createOrder */
+export type CreateOrderItemInput = {
+  menu_item_id: string
+  quantity: number
+  /** Base unit price at the time of order (no extras) */
+  price_at_order: number
+  /** Optional extras (per unit). We will *fold* this into price_at_order for storage */
+  price_delta?: number
+  /** Tri-state ingredient choices coming from your customize modal */
+  custom_ingredients?: { id: string; action: IngredientAction }[]
+  /** Optional legacy list like ["ing:<id>:extra"] — ignored here but supported if you need */
+  selected_modifiers?: string[]
+  /** Optional free text note from the UI for this line */
+  note?: string
+  /**
+   * Optional map for pretty notes: ingredient id -> localized name
+   * e.g., { "abc-123": "Onions", "def-456": "Cheese" } or Arabic equivalents
+   */
+  ingredient_names_map?: Record<string, string>
+}
+
+// ---------- Types used by Analytics (kept) ----------
 export interface AnalyticsOrderItem {
   id?: string
   name?: string        // fallback (legacy)
   name_en?: string
   name_ar?: string
+  /** unit price (already includes extras, because we fold them in) */
   price: number
   quantity: number
 }
@@ -19,16 +45,39 @@ export interface AnalyticsOrder {
   items: AnalyticsOrderItem[]
 }
 
+// ---------------- Helpers ----------------
+function mergeNotes(a?: string, b?: string) {
+  const A = (a ?? '').trim()
+  const B = (b ?? '').trim()
+  if (A && B) return `${A} | ${B}`
+  return A || B || ''
+}
+
+function formatIngredientChoices(
+  choices: { id: string; action: IngredientAction }[],
+  names?: Record<string, string>
+) {
+  if (!choices?.length) return ''
+  const noList: string[] = []
+  const extraList: string[] = []
+
+  for (const c of choices) {
+    if (c.action === 'no') noList.push(names?.[c.id] || c.id)
+    if (c.action === 'extra') extraList.push(names?.[c.id] || c.id)
+  }
+
+  const parts: string[] = []
+  if (noList.length) parts.push(`no: ${noList.join(', ')}`)
+  if (extraList.length) parts.push(`extra: ${extraList.join(', ')}`)
+  return parts.join(' | ')
+}
+
+// ---------------- Service ----------------
 export const orderService = {
-  // Create new order with items
+  // Create new order with items — extras are *folded into* price_at_order (no schema change)
   async createOrder(orderData: {
     table_code: string
-    items: Array<{
-      menu_item_id: string
-      quantity: number
-      price_at_order: number
-      note?: string
-    }>
+    items: CreateOrderItemInput[]
     note?: string
     admin_id?: string
   }) {
@@ -41,11 +90,11 @@ export const orderService = {
         .single()
       if (tableError) throw tableError
 
-      // 2) Calculate total
-      const total = orderData.items.reduce(
-        (sum, item) => sum + item.price_at_order * item.quantity,
-        0
-      )
+      // 2) Calculate order total = Σ ((base + extras) * qty)
+      const total = orderData.items.reduce((sum, it) => {
+        const unit = (it.price_at_order || 0) + (it.price_delta ?? 0)
+        return sum + unit * (it.quantity || 0)
+      }, 0)
 
       // 3) Next order number for this admin
       const { data: lastOrder } = await supabase
@@ -57,16 +106,15 @@ export const orderService = {
 
       const nextOrderNumber = (lastOrder?.[0]?.order_number || 0) + 1
 
-      // 4) Create order
+      // 4) Create order header
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert([
           {
-            // ✅ IMPORTANT: save the actual table ID, not the code
-            table_id: tableData.id,
+            table_id: tableData.id,        // save actual table id
             status: 'pending',
             total,
-            note: orderData.note,
+            note: orderData.note || null,
             admin_id: tableData.admin_id,
             order_number: nextOrderNumber,
             user_id: crypto.randomUUID(),
@@ -77,13 +125,25 @@ export const orderService = {
       if (orderError) throw orderError
 
       // 5) Create order items
-      const orderItems = orderData.items.map((item) => ({
-        order_id: order.id,
-        menu_item_id: item.menu_item_id,
-        quantity: item.quantity,
-        price_at_order: item.price_at_order,
-        note: item.note,
-      }))
+      const orderItems = orderData.items.map((it) => {
+        const unitWithExtras = (it.price_at_order || 0) + (it.price_delta ?? 0)
+
+        // Make a readable note so the kitchen sees choices (no onions | extra cheese)
+        const extrasNote = formatIngredientChoices(
+          it.custom_ingredients ?? [],
+          it.ingredient_names_map
+        )
+        const mergedNote = mergeNotes(it.note, extrasNote)
+
+        return {
+          order_id: order.id,
+          menu_item_id: it.menu_item_id,
+          quantity: it.quantity,
+          // ✅ We store the unit price INCLUDING extras (no schema change required)
+          price_at_order: unitWithExtras,
+          note: mergedNote || null,
+        }
+      })
 
       const { data: items, error: itemsError } = await supabase
         .from('order_items')
@@ -98,27 +158,27 @@ export const orderService = {
     }
   },
 
-  // Get orders for admin (raw, with nested menus; keep existing)
+  // Get orders for admin (raw, with nested menus; unchanged columns)
   async getOrders(adminId: string, status?: string) {
     try {
       let query = supabase
-      .from('orders')
-      .select(`
-        id,
-        order_number,
-        total,
-        status,
-        created_at,
-        table:tables ( id, code ),
-        order_items (
-          quantity,
-          price_at_order,
-          menus ( name_en, price )
-        )
-      `)
-      .eq('admin_id', adminId)
-      .order('created_at', { ascending: false });
-
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          total,
+          status,
+          created_at,
+          table:tables ( id, code ),
+          order_items (
+            quantity,
+            price_at_order,
+            note,
+            menus ( name_en, price )
+          )
+        `)
+        .eq('admin_id', adminId)
+        .order('created_at', { ascending: false })
 
       if (status) query = query.eq('status', status)
 
@@ -131,7 +191,7 @@ export const orderService = {
     }
   },
 
-  // ✅ NEW: Cleaned, mapped shape for Analytics (with AR/EN names)
+  // Cleaned, mapped shape for Analytics (unit price already includes extras)
   async getOrdersForAnalytics(adminId: string): Promise<AnalyticsOrder[]> {
     const { data, error } = await supabase
       .from('orders')
@@ -145,38 +205,29 @@ export const orderService = {
       .eq('admin_id', adminId)
       .order('created_at', { ascending: false })
 
-    // If your PostgREST needs an explicit relation alias, use:
-    // .select(`
-    //   id, table_id, status, total, created_at,
-    //   order_items (
-    //     id, quantity, price_at_order, created_at,
-    //     menu:menu_item_id ( id, name_en, name_ar )  -- alias via FK column
-    //   )
-    // `)
-
     if (error) throw error
 
     return (data ?? []).map((o: any) => ({
       id: o.id,
-      tableNumber: o.table_id, // if you want the table *code*, join tables here
+      tableNumber: o.table_id, // join tables for code if you want the code instead of id
       status: o.status ?? 'pending',
       total: o.total ?? 0,
       timestamp: new Date(o.created_at),
       items: (o.order_items ?? []).map((oi: any) => {
-        const m = oi.menus ?? oi.menu // support both alias forms
+        const m = oi.menus
         return {
           id: m?.id,
           name_en: m?.name_en ?? undefined,
           name_ar: m?.name_ar ?? undefined,
           name: m?.name_en ?? undefined, // legacy fallback
-          price: oi.price_at_order,
+          price: oi.price_at_order || 0, // ✅ already includes any extras
           quantity: oi.quantity,
         } as AnalyticsOrderItem
       }),
     }))
   },
 
-  // Update order status
+  // Update order status (same behavior)
   async updateOrderStatus(orderId: string, status: string) {
     try {
       const updates: any = {

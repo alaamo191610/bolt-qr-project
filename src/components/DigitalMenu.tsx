@@ -49,6 +49,23 @@ const LoadingSpinner = () => (
   </div>
 )
 
+// ✅ Converts a Supabase public URL -> "object path" expected by .remove()
+function getPathFromPublicUrl(url: string, expectedBucket = 'menu-images'): string | null {
+  try {
+    const u = new URL(url);
+    // URL looks like: /storage/v1/object/public/<bucket>/<path...>
+    const marker = '/object/public/';
+    const i = u.pathname.indexOf(marker);
+    if (i === -1) return null;
+    const after = u.pathname.slice(i + marker.length); // "<bucket>/<path>"
+    const [bucket, ...pathParts] = after.split('/');
+    if (bucket !== expectedBucket) return null;
+    return decodeURIComponent(pathParts.join('/')); // "<path>"
+  } catch {
+    return null;
+  }
+}
+
 const EmptyState = ({ title, description, action }: { title: string, description: string, action?: React.ReactNode }) => (
   <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -294,12 +311,6 @@ const ImageUploadField = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { t } = useLanguage()
 
-  const extractFileNameFromUrl = (url: string) => {
-    if (!url.includes('/storage/v1/object/public/menu-images/')) return ''
-    const match = url.match(/menu-images\/(.+)$/)
-    return match?.[1] || ''
-  }
-
   const handleFileUpload = async (file: File) => {
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
@@ -366,21 +377,36 @@ const ImageUploadField = ({
   }
 
   const handleRemoveImage = async () => {
-    if (!value) return
-    const confirmDelete = window.confirm('Are you sure you want to delete this image?')
-    if (!confirmDelete) return
+    if (!value) return;
+    if (!window.confirm('Are you sure you want to delete this image?')) return;
 
     try {
-      const fileName = extractFileNameFromUrl(value)
-      if (fileName) {
-        await supabase.storage.from('menu-images').remove([fileName])
+      // Ensure the user is logged in (needed if your policy is "owner = auth.uid()")
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('No auth user; delete will be blocked by RLS.');
+        return;
       }
-    } catch (err) {
-      console.warn('Failed to delete image from Supabase:', err)
-    }
 
-    onChange('')
-  }
+      // If you already store "imagePath" in DB, prefer that:
+      // const path = imagePath ?? getPathFromPublicUrl(value);
+      const path = getPathFromPublicUrl(value);
+      if (!path) {
+        console.warn('Could not resolve storage path from URL:', value);
+        return;
+      }
+
+      const { error } = await supabase.storage.from('menu-images').remove([path]);
+      if (error) {
+        console.warn('Failed to delete image from Supabase:', error);
+        return;
+      }
+
+      onChange(''); // clear the field
+    } catch (err) {
+      console.warn('Failed to delete image from Supabase:', err);
+    }
+  };
 
   const handleRetryClick = () => {
     fileInputRef.current?.click()
@@ -693,6 +719,22 @@ const DigitalMenu: React.FC = () => {
     }
     setFormOpen(true)
   }
+  const STORAGE_BUCKET = 'menu-images';
+
+  const isSupabasePublicUrl = (url: string) =>
+    !!url && url.includes(`/storage/v1/object/public/${STORAGE_BUCKET}/`);
+
+  const pathFromPublicUrl = (url: string): string | null => {
+    try {
+      const u = new URL(url);
+      const marker = `/object/public/${STORAGE_BUCKET}/`;
+      const i = u.pathname.indexOf(marker);
+      if (i === -1) return null;
+      return decodeURIComponent(u.pathname.slice(i + marker.length)); // e.g. "uid/123.jpg" or "1754743853513.jpg"
+    } catch {
+      return null;
+    }
+  };
 
   const handleSubmit = async () => {
     const newErrors: Record<string, string> = {}
@@ -796,121 +838,133 @@ const DigitalMenu: React.FC = () => {
     try {
       setDeleteLoading(true);
 
-      // Step 1: Fetch image_url from the DB
-      const { data: itemData, error: fetchError } = await supabase
+      // 1) Get the image_url for this item
+      const { data: item, error: fetchErr } = await supabase
         .from('menus')
-        .select('image_url')
+        .select('id, image_url')
         .eq('id', itemToDelete)
         .single();
-      if (fetchError) throw fetchError;
+      if (fetchErr) throw fetchErr;
 
-      // Step 2: If image is in Supabase Storage, delete it
-      const imageUrl = itemData?.image_url;
+      const imageUrl = item?.image_url;
 
-      if (imageUrl?.includes('/storage/v1/object/public/menu-images/')) {
-        const match = imageUrl.match(/menu-images\/(.+)$/)
-        const relativePath = match?.[1]
+      // 2) If it’s a Supabase image, only delete from Storage if *no other* active rows use it
+      if (isSupabasePublicUrl(imageUrl || '')) {
+        // count other (non-deleted) rows using the same image
+        const { data: others, error: countErr } = await supabase
+          .from('menus')
+          .select('id', { count: 'exact', head: true })
+          .neq('id', itemToDelete)
+          .is('deleted_at', null)
+          .eq('image_url', imageUrl);
+        if (countErr) throw countErr;
 
-        if (relativePath) {
-          const { error: deleteError } = await supabase.storage
-            .from('menu-images')
-            .remove([relativePath]);
+        const canDeleteFromStorage = (others?.length ?? 0) === 0; // head:true => data is empty array, rely on count via error? some libs return null; safer:
+        // If your client doesn’t return count with head:true, switch to:
+        // .select('id', { count: 'exact' }) then use `others?.length === 0`
 
-          if (deleteError) {
-            console.warn('Image deletion failed:', deleteError.message);
+        if (canDeleteFromStorage) {
+          const path = pathFromPublicUrl(imageUrl!);
+          if (path) {
+            const { error: remErr } = await supabase.storage
+              .from(STORAGE_BUCKET)
+              .remove([path]);
+            if (remErr) console.warn('Storage delete failed:', remErr.message);
           }
         }
       }
 
-      // Step 3: Soft-delete the menu item
-      const { error: updateError } = await supabase
+      // 3) Soft-delete the row (and clear image_url)
+      const { error: updErr } = await supabase
         .from('menus')
         .update({ deleted_at: new Date().toISOString(), image_url: null })
         .eq('id', itemToDelete);
+      if (updErr) throw updErr;
 
-      if (updateError) throw updateError;
-
-      // Step 4: Update UI
-      setItems(prev => prev.filter(item => item.id !== itemToDelete));
+      // 4) UI
+      setItems(prev => prev.filter(it => it.id !== itemToDelete));
       setDeleteModalOpen(false);
       setItemToDelete(null);
-
-    } catch (error) {
-      console.error('Error deleting menu item or image:', error);
+    } catch (e) {
+      console.error('Delete item failed:', e);
     } finally {
       setDeleteLoading(false);
     }
   };
 
+
   const handleDeleteSelected = async () => {
-    if (selectedItems.length === 0) return
+    if (selectedItems.length === 0) return;
 
     try {
-      setDeleteLoading(true)
+      setDeleteLoading(true);
 
-      // 1. Fetch image URLs for all selected menu items
-      const { data: menusToDelete, error: fetchError } = await supabase
+      // 1) Fetch image URLs for selected items
+      const { data: rows, error: fetchErr } = await supabase
         .from('menus')
         .select('id, image_url')
-        .in('id', selectedItems)
+        .in('id', selectedItems);
+      if (fetchErr) throw fetchErr;
 
-      if (fetchError) throw fetchError
+      // 2) Collect unique Supabase URLs from selected
+      const urls = Array.from(
+        new Set(
+          (rows ?? [])
+            .map(r => r.image_url || '')
+            .filter(isSupabasePublicUrl)
+        )
+      );
 
-      // 2. Helper functions
-      const isSupabaseStorageImage = (url: string) =>
-        url.includes('/storage/v1/object/public/menu-images/')
+      // 3) Find which of those URLs are still used by other (non-selected, non-deleted) rows
+      let deletablePaths: string[] = [];
+      if (urls.length) {
+        const { data: stillUsed, error: useErr } = await supabase
+          .from('menus')
+          .select('image_url')
+          .in('image_url', urls)
+          .not('id', 'in', `(${selectedItems.map(id => `'${id}'`).join(',')})`)
+          .is('deleted_at', null);
+        if (useErr) throw useErr;
 
-      const extractImagePath = (url: string) => {
-        if (!isSupabaseStorageImage(url)) return null
-        const match = url.match(/menu-images\/(.+)$/)
-        return match?.[1] || null
+        const stillUsedSet = new Set((stillUsed ?? []).map(r => r.image_url));
+        deletablePaths = urls
+          .filter(u => !stillUsedSet.has(u))
+          .map(u => pathFromPublicUrl(u))
+          .filter((p): p is string => !!p);
       }
 
-      // 3. Extract Supabase image paths only
-      const imagePaths = (menusToDelete || [])
-        .map(menu => extractImagePath(menu.image_url || ''))
-        .filter(Boolean) as string[]
-
-      // 4. Delete images from Supabase Storage
-      if (imagePaths.length > 0) {
-        const { error: removeError } = await supabase.storage
-          .from('menu-images')
-          .remove(imagePaths)
-
-        if (removeError) {
-          console.warn('Failed to remove some images:', removeError.message)
-        }
+      // 4) Delete unused images from Storage in one call
+      if (deletablePaths.length) {
+        const { error: remErr } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove(deletablePaths);
+        if (remErr) console.warn('Some images failed to remove:', remErr.message);
       }
 
-      // 5. Soft-delete menu items from the database
-      const { error: updateError } = await supabase
+      // 5) Soft-delete DB rows + clear image_url
+      const { error: updErr } = await supabase
         .from('menus')
         .update({ deleted_at: new Date().toISOString(), image_url: null })
-        .in('id', selectedItems)
+        .in('id', selectedItems);
+      if (updErr) throw updErr;
 
-      if (updateError) {
-        toast.error(t('common.errorOccurred') || 'Something went wrong')
-        throw updateError
-      }
-
-      // 6. Update UI
-      setItems(prev => prev.filter(item => !selectedItems.includes(item.id)))
-      sessionStorage.removeItem(`menuItems_${user?.id}`)
-
+      // 6) UI
+      setItems(prev => prev.filter(item => !selectedItems.includes(item.id)));
+      sessionStorage.removeItem(`menuItems_${user?.id}`);
       toast.success(
         t('common.deletedSelected', { count: String(selectedItems.length) }) ||
         `${selectedItems.length} items deleted successfully`
-      )
-
-      setSelectedItems([])
-      setDeleteAllModalOpen(false)
-    } catch (error) {
-      console.error('Error deleting selected items:', error)
-      fetchItems()
+      );
+      setSelectedItems([]);
+      setDeleteAllModalOpen(false);
+    } catch (e) {
+      console.error('Bulk delete failed:', e);
+      fetchItems(); // fallback refresh
     } finally {
-      setDeleteLoading(false)
+      setDeleteLoading(false);
     }
-  }
+  };
+
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItems(prev =>
