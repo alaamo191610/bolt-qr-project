@@ -93,7 +93,6 @@ export default {
   },
 
   plugins: [
-    require('@tailwindcss/line-clamp'),
     require('@tailwindcss/aspect-ratio'),
     require('@tailwindcss/forms')({ strategy: 'class' }),
     // Optional RTL utilities:

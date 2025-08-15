@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, SortAsc, SortDesc, AlertCircle } from 'lucide-react';
+import { Search, AlertCircle } from 'lucide-react';
 import MenuItemCard, { MenuItem } from './MenuItemCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -13,7 +13,7 @@ interface Props {
   compareIds?: string[];
   onToggleCompare?: (id: string) => void;
 
-  /** Optional: error + retry for better UX */
+  /** Optional: error + retry */
   error?: string;
   onRetry?: () => void;
 }
@@ -23,8 +23,6 @@ function track(name: string, props?: Record<string, unknown>) {
   try { (window as any).dataLayer?.push({ event: name, ...props }); } catch {}
   try { window.dispatchEvent(new CustomEvent('analytics:event', { detail: { name, props } })); } catch {}
 }
-
-type SortKey = 'name' | 'price_asc' | 'price_desc';
 
 const MenuGrid: React.FC<Props> = ({
   items,
@@ -37,7 +35,6 @@ const MenuGrid: React.FC<Props> = ({
   onRetry,
 }) => {
   const { t, isRTL } = useLanguage();
-  const [sort, setSort] = useState<SortKey>('name');
 
   const canCompare = Boolean(onToggleCompare);
   const selectedSet = useMemo(() => new Set(compareIds ?? []), [compareIds]);
@@ -46,52 +43,71 @@ const MenuGrid: React.FC<Props> = ({
   // keep UI responsive while parent filters/searches
   const deferredItems = useDeferredValue(items);
 
-  // locale-aware collator + visible name (AR when RTL, EN otherwise)
-  const collator = useMemo(
-    () => new Intl.Collator(isRTL ? 'ar' : 'en', { sensitivity: 'base', numeric: true }),
-    [isRTL]
-  );
-
-  const sorted = useMemo(() => {
-    const copy = [...deferredItems];
-    switch (sort) {
-      case 'price_asc':
-        return copy.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-      case 'price_desc':
-        return copy.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
-      default:
-        return copy.sort((a, b) => {
-          const an = (isRTL ? a.name_ar || a.name_en : a.name_en) || '';
-          const bn = (isRTL ? b.name_ar || b.name_en : b.name_en) || '';
-          return collator.compare(an, bn);
-        });
-    }
-  }, [deferredItems, sort, isRTL, collator]);
-
+  // Group by category (preserve incoming order)
   const grouped = useMemo(() => {
     const map = new Map<string, { label: string; items: MenuItem[] }>();
-    sorted.forEach((it) => {
-      const id = it.categories?.id || 'other';
-      const label = isRTL ? it.categories?.name_ar || t('menu.other') : it.categories?.name_en || t('menu.other');
+    const fallbackOther = isRTL ? 'أخرى' : 'Other';
+  
+    deferredItems.forEach((it) => {
+      const id = it.categories?.id ?? it.category_id ?? 'other';
+      const label =
+        (isRTL ? it.categories?.name_ar : it.categories?.name_en) ??
+        t('menu.other') ??
+        fallbackOther;
+  
       if (!map.has(id)) map.set(id, { label, items: [] });
       map.get(id)!.items.push(it);
     });
+  
     return Array.from(map.entries());
-  }, [sorted, isRTL, t]);
+  }, [deferredItems, isRTL, t]);
+  
 
+  // Build anchor list
+  const anchors = useMemo(
+    () => grouped.map(([id, g]) => ({ id, label: g.label, count: g.items.length })),
+    [grouped]
+  );
+
+  // Active section highlighting
+  const [activeCat, setActiveCat] = useState<string>(anchors[0]?.id || '');
+  const sectionsRef = useRef<Map<string, HTMLElement>>(new Map());
   const containerRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
     const els = Array.from(root.querySelectorAll<HTMLElement>('.reveal-on-scroll'));
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-      });
-    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.08 });
+  
+    // NEW: show the first few immediately so we never render a blank screen
+    els.slice(0, Math.min(8, els.length)).forEach((el) => el.classList.add('in'));
+  
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add('in');
+            io.unobserve(e.target);
+          }
+        });
+      },
+      // Looser threshold so initial viewport triggers consistently
+      { root: null, rootMargin: '0px 0px -15% 0px', threshold: 0 }
+    );
+  
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [grouped]);
+  
+
+  const scrollToCategory = (catId: string) => {
+    const el = sectionsRef.current.get(catId);
+    if (!el) return;
+    // smooth scroll with offset for sticky header (≈ 76px)
+    const y = el.getBoundingClientRect().top + window.scrollY - 76;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+    track('category_anchor_click', { category_id: catId });
+  };
 
   // Empty or error states
   if (error) {
@@ -101,7 +117,7 @@ const MenuGrid: React.FC<Props> = ({
           <AlertCircle className="w-8 h-8 text-red-500" />
         </div>
         <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-          {t('status.failedToLoadMenu') || 'Failed to load menu'}
+          {t('status.failedToLoadMenu')}
         </h3>
         <p className="text-slate-600 dark:text-slate-400 mb-4">{error}</p>
         {onRetry && (
@@ -109,7 +125,7 @@ const MenuGrid: React.FC<Props> = ({
             onClick={() => { track('retry_click'); onRetry(); }}
             className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow"
           >
-            {t('status.tryAgain') || 'Try again'}
+            {t('status.tryAgain')}
           </button>
         )}
       </div>
@@ -129,37 +145,52 @@ const MenuGrid: React.FC<Props> = ({
   }
 
   return (
-    <div ref={containerRef} className="space-y-10 max-w-[1600px] mx-auto px-2 sm:px-4 mb-16" >
-      {/* Toolbar */}
-      <div className={`flex items-center justify-between gap-3 text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+    <div ref={containerRef} className="space-y-10 max-w-[1600px] mx-auto px-2 sm:px-4">
+      {/* Toolbar (count only) */}
+      <div className={`flex items-center ${isRTL ? 'justify-start' : 'justify-start'} gap-3 text-sm`}>
         <div className="text-slate-600 dark:text-slate-400">
-          {t('common.total')}: <span className="font-semibold text-slate-900 dark:text-white">{items.length}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-slate-500 dark:text-slate-400">{t('common.sort') || 'Sort'}:</label>
-          <div className="relative">
-            <select
-              value={sort}
-              onChange={(e) => { const v = e.target.value as SortKey; setSort(v); track('sort_change', { sort: v }); }}
-              className="input pr-8 py-2"
-              aria-label={t('common.sort') || 'Sort'}
-            >
-              <option value="name">{t('common.name') || 'Name'}</option>
-              <option value="price_asc">{t('menu.priceLowHigh') || 'Price: Low → High'}</option>
-              <option value="price_desc">{t('menu.priceHighLow') || 'Price: High → Low'}</option>
-            </select>
-            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
-              {sort === 'price_desc' ? <SortDesc className="w-4 h-4" /> : <SortAsc className="w-4 h-4" />}
-            </span>
-          </div>
+          {t('common.total')}: <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{items.length}</span>
         </div>
       </div>
 
+      {/* Sticky category anchor bar */}
+      {anchors.length > 1 && (
+        <div className="sticky top-[60px] z-30 -mx-2 sm:-mx-4 px-2 sm:px-4 py-2 bg-white/85 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur border-b border-slate-200/60 dark:border-slate-700/60">
+          <div className={`flex gap-2 overflow-x-auto no-scrollbar ${isRTL ? 'flex-row-reverse' : ''}`}>
+            {anchors.map(a => {
+              const isActive = a.id === activeCat;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => scrollToCategory(a.id)}
+                  className={[
+                    'px-3 py-1.5 rounded-full text-xs font-medium border transition whitespace-nowrap',
+                    isActive
+                      ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700',
+                  ].join(' ')}
+                  aria-current={isActive ? 'true' : undefined}
+                >
+                  <span className="mr-1">{emojiFor(a.label)}</span>
+                  <span>{a.label}</span>
+                  <span className="ml-1 text-slate-400">· {a.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Sections */}
       {grouped.map(([categoryId, group], sectionIdx) => (
-        <section key={categoryId} className="space-y-5">
-          {/* Sticky category header */}
-          <div className="sticky top-[76px] z-20 -mx-1 px-1">
+        <section
+          key={categoryId}
+          data-section-id={categoryId}
+          ref={(el) => { if (el) sectionsRef.current.set(categoryId, el); }}
+          className="space-y-5"
+        >
+          {/* Sticky category header (local) */}
+          <div className="sticky top-[96px] z-20 -mx-1 px-1">
             <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-sm w-fit">
               <span className="text-lg">{emojiFor(group.label)}</span>
               <h2 className="text-base font-semibold text-slate-900 dark:text-white">
@@ -177,11 +208,15 @@ const MenuGrid: React.FC<Props> = ({
               return (
                 <div
                   key={item.id}
-                  className="reveal-on-scroll h-full relative"
-                  style={{ transitionDelay: `${Math.min(i * 35 + sectionIdx * 50, 300)}ms` }}
+                  className="reveal-on-scroll h-full relative will-change-[opacity,transform]"
+                  style={{
+                    transitionDelay: `${Math.min(i * 35 + sectionIdx * 50, 300)}ms`,
+                    // big paint-skip for offscreen cards
+                    contentVisibility: 'auto' as any,
+                    containIntrinsicSize: '400px 320px' as any,
+                  }}
                 >
                   <div className="h-full">
-                    {/* Pass compare props ONLY when compare is enabled to avoid TS prop errors */}
                     {canCompare ? (
                       <MenuItemCard
                         item={item}
@@ -211,15 +246,17 @@ const MenuGrid: React.FC<Props> = ({
 
       {/* Reveal animation */}
       <style>{`
-        .reveal-on-scroll { opacity: 0; transform: translateY(8px) scale(.98); transition: opacity .28s cubic-bezier(0.4,0,0.2,1), transform .28s cubic-bezier(0.4,0,0.2,1); will-change: opacity, transform; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .reveal-on-scroll { opacity: 0; transform: translateY(8px) scale(.98); transition: opacity .28s cubic-bezier(0.4,0,0.2,1), transform .28s cubic-bezier(0.4,0,0.2,1); }
         .reveal-on-scroll.in { opacity: 1; transform: none; }
       `}</style>
     </div>
   );
 };
 
-const emojiFor = (label: string) => {
-  const L = label.toLowerCase();
+const emojiFor = (label?: string) => {
+  const L = (label ?? '').toString().toLowerCase();
   if (/(burger|برجر)/.test(L)) return '🍔';
   if (/(pizza|بيتزا)/.test(L)) return '🍕';
   if (/(drink|juice|مشروب|عصير)/.test(L)) return '🥤';
@@ -228,5 +265,6 @@ const emojiFor = (label: string) => {
   if (/(grill|bbq|مشوي|مشويات)/.test(L)) return '🍖';
   return '🍽️';
 };
+
 
 export default React.memo(MenuGrid);
