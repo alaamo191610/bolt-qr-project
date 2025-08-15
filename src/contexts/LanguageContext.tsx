@@ -193,7 +193,8 @@ const translations: Record<Language, any> = {
       onlyDifferences: "Only differences",
       addBoth: "Add both",
       compareTagline: "Spot the differences and pick your favorite.",
-      customize: "Customize"
+      customize: "Customize",
+      addToOrder: "Add To Order"
     },
     compare: {
       compare: "Compare",
