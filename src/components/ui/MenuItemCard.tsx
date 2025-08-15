@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Minus,ArrowLeft, X, RefreshCw, Star, Scale } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /* ---------- Types ---------- */
 interface Ingredient { id: string; name_en: string; name_ar: string; extra_price?: number }
@@ -255,6 +256,7 @@ const MenuItemCard: React.FC<Props> = ({
     if (rect) requestAnimationFrame(() => flyToHeaderFromRect(rect, isRTL));
     setOpenPage(false);
   };
+  const { colors } = useTheme();
 
   // page behavior (lock + focus + ESC)
   // Lock body scroll, close on Escape, trap focus
@@ -466,7 +468,7 @@ const MenuItemCard: React.FC<Props> = ({
                 </h3>
                 {/* Short “description”: first few ingredients if available */}
                 {displayDesc ? (
-                  <p className="mt-1 text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2">
+                  <p className="mt-1 text-slate-500 dark:text-slate-400 text-[12px] leading-snug line-clamp-2">
                     {displayDesc}
                   </p>
                 ) : !!(item.ingredients_details?.length) && (
@@ -483,30 +485,37 @@ const MenuItemCard: React.FC<Props> = ({
 
               {/* Footer row: price left — controls right */}
               <div className={`mt-auto pt-2 flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <div className="text-[15px] font-bold text-slate-900 dark:text-white tabular-nums">
+                <div className="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums">
                   {priceFmt.format(item.price ?? 0)}
                 </div>
 
                 {quantity > 0 ? (
                   <div
-                    className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}
+                    className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''}`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
                       onClick={() => { onRemove(item.id); track('remove_from_cart', { item_id: item.id }); }}
-                      className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
+                      className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition "
+                      style={{
+                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                      }}
                       aria-label={t('common.decrease')}
+                      
                     >
-                      <Minus className="w-4 h-4" />
+                      <Minus className="w-4 h-4 " />
                     </button>
                     <span className="min-w-[2ch] text-center font-bold text-slate-900 dark:text-white">{quantity}</span>
                     <button
                       onClick={onPlus}
                       disabled={!isAvailable}
-                      className={`w-10 h-10 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
+                      className={`w-8 h-8 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                         }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                        }}
                       aria-label={t('common.increase')}
                     >
                       <Plus className="w-4 h-4" />
@@ -521,6 +530,9 @@ const MenuItemCard: React.FC<Props> = ({
                         ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-95'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                         }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                        }}
                       aria-label={t('menu.addToCart')}
                       title={t('menu.addToCart')}
                     >
