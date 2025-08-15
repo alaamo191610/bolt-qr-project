@@ -9,6 +9,8 @@ export default {
         'playpen-arabic': ['var(--font-playpen-arabic)'],
         arabic: ['var(--font-playpen-arabic)', 'system-ui', 'sans-serif'],
       },
+      borderRadius: { '2xl': '1rem' },
+      boxShadow: { 'soft': '0 8px 30px rgba(0,0,0,0.06)' },   
       colors: {
         primary: 'var(--color-primary)',
         secondary: 'var(--color-secondary)',

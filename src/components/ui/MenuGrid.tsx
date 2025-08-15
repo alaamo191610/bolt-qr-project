@@ -131,8 +131,8 @@ const MenuGrid: React.FC<Props> = ({
               aria-label={t('common.sort') || 'Sort'}
             >
               <option value="name">{t('common.name') || 'Name'}</option>
-              <option value="price_asc">{t('common.priceLowHigh') || 'Price: Low → High'}</option>
-              <option value="price_desc">{t('common.priceHighLow') || 'Price: High → Low'}</option>
+              <option value="price_asc">{t('menu.priceLowHigh') || 'Price: Low → High'}</option>
+              <option value="price_desc">{t('menu.priceHighLow') || 'Price: High → Low'}</option>
             </select>
             <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
               {sort === 'price_desc' ? <SortDesc className="w-4 h-4" /> : <SortAsc className="w-4 h-4" />}
