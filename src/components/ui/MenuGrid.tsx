@@ -129,7 +129,7 @@ const MenuGrid: React.FC<Props> = ({
   }
 
   return (
-    <div ref={containerRef} className="space-y-10 max-w-[1600px] mx-auto px-2 sm:px-4">
+    <div ref={containerRef} className="space-y-10 max-w-[1600px] mx-auto px-2 sm:px-4 mb-16" >
       {/* Toolbar */}
       <div className={`flex items-center justify-between gap-3 text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
         <div className="text-slate-600 dark:text-slate-400">
