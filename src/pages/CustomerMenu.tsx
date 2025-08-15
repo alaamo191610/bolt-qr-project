@@ -14,6 +14,7 @@ import MenuGrid from '../components/ui/MenuGrid';
 import OrderConfirmation from '../components/ui/OrderConfirmation';
 import FloatingCartButton from '../components/ui/FloatingCartButton';
 import CompareSheet from '../components/ui/CompareSheet'; // 🆕 compare modal
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Ingredient { id: string; name_en: string; name_ar: string; }
 interface Category { id: string; name_en: string; name_ar: string; }
@@ -100,7 +101,7 @@ const CustomerMenu: React.FC = () => {
     if (table) trackMenuEvents.menuViewed(table, language);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
-
+  const { colors } = useTheme();
   // load selected category per table
   useEffect(() => {
     if (!tableNumber) return;
@@ -412,6 +413,10 @@ const CustomerMenu: React.FC = () => {
                 aria-haspopup="dialog"
                 aria-expanded={showCartOverlay}
                 aria-controls="header-cart-popover"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                }}
+                
               >
                 <ShoppingCart className="w-5 h-5" />
                 <span className="font-medium hidden sm:inline">{currency.format(totalPrice)}</span>
@@ -610,6 +615,10 @@ const CustomerMenu: React.FC = () => {
                 setShowCart(true);
               }}
               className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-white px-4 py-3 shadow-soft hover:opacity-90 transition"
+              style={{
+                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+              }}
+
             >
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
