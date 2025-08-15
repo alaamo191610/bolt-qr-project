@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ShoppingCart, Search, MapPin, Phone, Check } from 'lucide-react';
+import { ShoppingCart, Search, MapPin, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { menuService } from '../services/menuService';
 import { orderService } from '../services/orderService';

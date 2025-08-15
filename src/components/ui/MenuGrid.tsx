@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef } from 'react';
 import { Search, AlertCircle } from 'lucide-react';
 import MenuItemCard, { MenuItem } from './MenuItemCard';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -62,15 +62,7 @@ const MenuGrid: React.FC<Props> = ({
     return Array.from(map.entries());
   }, [deferredItems, isRTL, t]);
   
-
-  // Build anchor list
-  const anchors = useMemo(
-    () => grouped.map(([id, g]) => ({ id, label: g.label, count: g.items.length })),
-    [grouped]
-  );
-
   // Active section highlighting
-  const [activeCat, setActiveCat] = useState<string>(anchors[0]?.id || '');
   const sectionsRef = useRef<Map<string, HTMLElement>>(new Map());
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -98,16 +90,6 @@ const MenuGrid: React.FC<Props> = ({
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [grouped]);
-  
-
-  const scrollToCategory = (catId: string) => {
-    const el = sectionsRef.current.get(catId);
-    if (!el) return;
-    // smooth scroll with offset for sticky header (≈ 76px)
-    const y = el.getBoundingClientRect().top + window.scrollY - 76;
-    window.scrollTo({ top: y, behavior: 'smooth' });
-    track('category_anchor_click', { category_id: catId });
-  };
 
   // Empty or error states
   if (error) {
@@ -152,34 +134,6 @@ const MenuGrid: React.FC<Props> = ({
           {t('common.total')}: <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{items.length}</span>
         </div>
       </div>
-
-      {/* Sticky category anchor bar */}
-      {anchors.length > 1 && (
-        <div className="sticky top-[60px] z-30 -mx-2 sm:-mx-4 px-2 sm:px-4 py-2 bg-white/85 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur border-b border-slate-200/60 dark:border-slate-700/60">
-          <div className={`flex gap-2 overflow-x-auto no-scrollbar ${isRTL ? 'flex-row-reverse' : ''}`}>
-            {anchors.map(a => {
-              const isActive = a.id === activeCat;
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => scrollToCategory(a.id)}
-                  className={[
-                    'px-3 py-1.5 rounded-full text-xs font-medium border transition whitespace-nowrap',
-                    isActive
-                      ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
-                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700',
-                  ].join(' ')}
-                  aria-current={isActive ? 'true' : undefined}
-                >
-                  <span className="mr-1">{emojiFor(a.label)}</span>
-                  <span>{a.label}</span>
-                  <span className="ml-1 text-slate-400">· {a.count}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Sections */}
       {grouped.map(([categoryId, group], sectionIdx) => (

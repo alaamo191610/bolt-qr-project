@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Minus, Info, ChevronDown, ChevronUp, ArrowLeft, X, RefreshCw, Star, Scale } from 'lucide-react';
+import { Plus, Minus,ArrowLeft, X, RefreshCw, Star, Scale } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 /* ---------- Types ---------- */

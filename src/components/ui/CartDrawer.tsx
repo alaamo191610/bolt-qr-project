@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Minus, Plus, ShoppingCart, Clock, X, Trash2, Info } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Clock, X, Info } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import type { MenuItem } from './MenuItemCard';
 
