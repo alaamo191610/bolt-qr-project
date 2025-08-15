@@ -398,10 +398,6 @@ const CustomerMenu: React.FC = () => {
                   <MapPin className="w-4 h-4" />
                   <span>{t('orders.table')} {tableNumber}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Phone className="w-4 h-4" />
-                  <span>{t('restaurant.phone')}</span>
-                </div>
               </div>
             </div>
             {/* right: language toggle + cart — cart last, even in Arabic */}

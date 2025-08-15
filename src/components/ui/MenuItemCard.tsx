@@ -618,7 +618,7 @@ const MenuItemCard: React.FC<Props> = ({
             </div>
 
             {/* Body (dvh/safe areas) */}
-            <div className="px-4 py-4 max-h-[calc(100dvh-220px)] overflow-auto" ref={panelScrollRef}>
+            <div className="px-4 py-4 max-h-[calc(100dvh-520px)] overflow-auto" ref={panelScrollRef}>
               {/* Tabs */}
               <div className={`flex ${isRTL ? 'flex-row-reverse' : ''} bg-slate-100 dark:bg-slate-700 rounded-xl p-1 w-fit`}>
                 {(['ingredients', 'notes'] as const).map(tab => (
@@ -641,9 +641,6 @@ const MenuItemCard: React.FC<Props> = ({
     <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-white/90 dark:bg-slate-800/90 supports-[backdrop-filter]:backdrop-blur border-b border-slate-200/60 dark:border-slate-700/60">
       {/* Title + extras total */}
       <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-2`}>
-        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
-          {t('menu.customize')}
-        </span>
         <span className={`${isRTL ? 'mr-auto' : 'ml-auto'} text-xs text-slate-500`}>
           {t('pricing.extras')}: <strong className="tabular-nums">{priceFmt.format(extrasTotal)}</strong>
         </span>
