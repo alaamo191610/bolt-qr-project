@@ -91,6 +91,7 @@ const translations: Record<Language, any> = {
       notes: "Notes",
       notesPlaceholder: "e.g., no onions / extra sauce",
       unavailableTemp: "Temporarily unavailable",
+
     },
     cart: {
       viewOrder: "View order",
@@ -194,12 +195,19 @@ const translations: Record<Language, any> = {
       addBoth: "Add both",
       compareTagline: "Spot the differences and pick your favorite.",
       customize: "Customize",
-      addToOrder: "Add To Order"
+      addToOrder: "Add To Order",
+      compareTray: "Compare tray",
+      unique: "Unique",
+      common: "Common",
     },
     compare: {
       compare: "Compare",
       comparing: "Comparing",
-      limit: "You can compare up to 2 items"
+      limit: "You can compare up to 2 items",
+      needTwo: "Select two items to compare",
+      compareTray: "Compare tray",
+      compareCount: "{{n}} item selected",
+      cleared: "Comparison list cleared"
     },
     custom: {
       reset: "Reset",
@@ -211,8 +219,8 @@ const translations: Record<Language, any> = {
       normal: "Normal",
       extra: "Extra",
       extraPrice: "Extra",
-      "include": "Include",
-      "extraShort": "Extra",
+      include: "Include",
+      extraShort: "Extra",
     },
     pricing: {
       base: "Base",
@@ -523,12 +531,19 @@ const translations: Record<Language, any> = {
       addBoth: "الاثنين أحلى",
       compareTagline: "قارن بهدوء… وخذ اللي قلبك مال له.",
       addToOrder: "أضف إلى الطلب",
-      customize: "تخصيص"
+      customize: "تخصيص",
+      compareTray: "شريط المقارنة",
+      unique: "فريد",
+      common: "مشترك",
     },
     compare: {
       compare: "قارن",
       comparing: "قيد المقارنة",
-      limit: "يمكنك مقارنة عنصرين فقط"
+      limit: "يمكنك مقارنة عنصرين فقط",
+      needTwo: "اختر عنصرين للمقارنة",
+      compareTray: "شريط المقارنة",
+      compareCount: "تم اختيار {{n}} عنصر",
+      cleared: "تم مسح قائمة المقارنة"
     },
     custom: {
       reset: "إعادة الضبط",
@@ -540,8 +555,8 @@ const translations: Record<Language, any> = {
       normal: "عادي",
       extra: "إضافي",
       extraPrice: "سعر الإضافة",
-      "include": "تضمين",
-      "extraShort": "إضافي",
+      include: "تضمين",
+      extraShort: "إضافي",
     },
     pricing: {
       base: "الأساسي",
