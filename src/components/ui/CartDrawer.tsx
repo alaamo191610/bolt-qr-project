@@ -3,12 +3,7 @@ import { Minus, Plus, ShoppingCart, Clock, X, Trash2, Info } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext';
 import type { MenuItem } from './MenuItemCard';
 
-// 🆕 CartItem supports base/extras breakdown
-interface CartItem extends MenuItem {
-  quantity: number;
-  base_price?: number;    // original item.price at time of add
-  extras_price?: number;  // sum of paid extras at time of add
-}
+interface CartItem extends MenuItem { quantity: number; }
 
 interface Props {
   cart: CartItem[];
@@ -19,8 +14,6 @@ interface Props {
   onAdd: (item: MenuItem) => void;
   onRemove: (id: string) => void;
   onPlaceOrder: () => void;
-  // 🆕 optional: open customize sheet with current line
-  onEditLine?: (item: CartItem) => void;
 }
 
 const money = (v: number) =>
@@ -30,19 +23,8 @@ const money = (v: number) =>
     maximumFractionDigits: 2,
   }).format(v || 0);
 
-// 🆕 helpers that are robust to both new (base/extras) and old (price_delta) shapes
-function splitPrices(item: CartItem) {
-  const legacyDelta = (item as any).price_delta ?? 0;
-  const extras = typeof item.extras_price === 'number' ? item.extras_price : legacyDelta;
-  // try to infer base if not provided: price may already include extras
-  const inferredBase =
-    typeof item.base_price === 'number'
-      ? item.base_price
-      : Math.max(0, (item.price ?? 0) - (typeof extras === 'number' ? extras : 0));
-  const unit = (inferredBase || 0) + (extras || 0);
-  return { base: inferredBase || 0, extras: extras || 0, unit };
-}
-const unitTotal = (item: CartItem) => splitPrices(item).unit;
+// helpers aware of extras (price_delta)
+const unitTotal = (item: CartItem) => (item.price || 0) + ((item as any).price_delta || 0);
 const lineTotal = (item: CartItem) => unitTotal(item) * (item.quantity || 0);
 
 const CartDrawer: React.FC<Props> = ({
@@ -54,11 +36,8 @@ const CartDrawer: React.FC<Props> = ({
   onAdd,
   onRemove,
   onPlaceOrder,
-  onEditLine,
 }) => {
   const { t } = useLanguage();
-  const fmt = moneyFmt(isRTL);
-
   const panelRef = useRef<HTMLDivElement | null>(null);
   const startY = useRef<number | null>(null);
   const dragged = useRef(false);
@@ -113,8 +92,8 @@ const CartDrawer: React.FC<Props> = ({
     dragged.current = false;
     const node = panelRef.current;
     if (!node) return;
-    const matrix = new (window as any).DOMMatrixReadOnly(getComputedStyle(node).transform);
-    const y = (matrix.m42 as number) || 0;
+    const matrix = new WebKitCSSMatrix(getComputedStyle(node).transform);
+    const y = matrix.m42 || 0;
     if (y > 90) {
       node.style.transition = 'transform .22s ease-out';
       node.style.transform = 'translateY(100%)';
@@ -127,9 +106,6 @@ const CartDrawer: React.FC<Props> = ({
   };
 
   const nameForIng = (item: CartItem, id: string) => {
-    const list = (item.ingredients_details || [])
-      .map((d: any) => d.ingredient)
-      .filter(Boolean);
     const list = (item.ingredients_details || [])
       .map((d: any) => d.ingredient)
       .filter(Boolean);
