@@ -15,6 +15,8 @@ import OrderConfirmation from '../components/ui/OrderConfirmation';
 import FloatingCartButton from '../components/ui/FloatingCartButton';
 import CompareSheet from '../components/ui/CompareSheet'; // 🆕 compare modal
 import { useTheme } from '../contexts/ThemeContext';
+import toast from 'react-hot-toast';
+import clsx from 'clsx';
 
 interface Ingredient { id: string; name_en: string; name_ar: string; }
 interface Category { id: string; name_en: string; name_ar: string; }
@@ -69,20 +71,32 @@ const CustomerMenu: React.FC = () => {
   const toggleCompare = useCallback((id: string) => {
     setCompareIds(prev => {
       if (prev.includes(id)) return prev.filter(x => x !== id);
+
       if (prev.length >= 2) {
-        // TODO: replace with a toast if you have one
-        console.warn('You can compare up to 2 items');
+        toast.error('You can compare up to 2 items', {
+          position: 'bottom-center',
+          duration: 2500,
+          style: {
+            background: '#ef4444', // Tailwind red-500
+            color: '#fff',
+            fontWeight: 600,
+            borderRadius: '8px',
+            padding: '8px 16px',
+          },
+        });
         return prev;
       }
+
       return [...prev, id];
     });
   }, []);
+
   const clearCompare = useCallback(() => setCompareIds([]), []);
+
   const comparedItems = useMemo(
     () => menuItems.filter(m => compareIds.includes(m.id)),
     [menuItems, compareIds]
   );
-
   const isDesktop = () => typeof window !== 'undefined' && window.innerWidth >= 640; // tailwind sm
 
   // currency (default QAR; change as needed)
@@ -130,6 +144,26 @@ const CustomerMenu: React.FC = () => {
     } catch { /* ignore */ }
   }, [cart, tableNumber]);
 
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    // Briefly highlight the bar when the user reaches 2 selections
+    if (compareIds.length === 2) {
+      const el = document.getElementById('compare-bar');
+      if (el && !prefersReducedMotion && el.animate) {
+        el.animate(
+          [
+            { boxShadow: '0 0 0 0 rgba(16,185,129,0.0)' },
+            { boxShadow: '0 0 0 6px rgba(16,185,129,0.35)' },
+            { boxShadow: '0 0 0 0 rgba(16,185,129,0.0)' },
+          ],
+          { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)' }
+        );
+      }
+    }
+  }, [compareIds.length, prefersReducedMotion]);
   // fetch menu
   const loadMenuItems = async (tableCode: string) => {
     if (!tableCode) { setError({ code: 'status.tableNotFound' }); return; }
@@ -151,7 +185,7 @@ const CustomerMenu: React.FC = () => {
           name_en: item.name_en,
           name_ar: item.name_ar,
           description_en: item.description_en ?? null,
-          description_ar: item.description_ar ?? null, 
+          description_ar: item.description_ar ?? null,
           price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
           image_url: item.image_url || '/images/placeholder.png',
           available: item.available,
@@ -184,20 +218,20 @@ const CustomerMenu: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
     const filtered = menuItems.filter(item => {
       const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory;
-  
+
       const baseName = isRTL ? (item.name_ar || item.name_en) : item.name_en;
       const desc = isRTL
         ? (item.description_ar || item.description_en || '')
         : (item.description_en || item.description_ar || '');
-  
+
       const nameMatch = term ? (baseName || '').toLowerCase().includes(term) : true;
       const descMatch = term ? (desc || '').toLowerCase().includes(term) : false;
-  
+
       return matchesCategory && (nameMatch || descMatch);
     });
-  
+
     return filtered;
-  }, [menuItems, selectedCategory, searchTerm, isRTL]);  
+  }, [menuItems, selectedCategory, searchTerm, isRTL]);
 
   // NEW: debounce search tracking
   useEffect(() => {
@@ -300,7 +334,18 @@ const CustomerMenu: React.FC = () => {
     if (isRTL) return { top, left: r.left + window.scrollX };
     return { top, right: window.innerWidth - r.right + window.scrollX };
   };
-
+  const nudgeIfDisabled = (btn: HTMLButtonElement | null) => {
+    if (prefersReducedMotion || !btn?.animate) return;
+    btn.animate(
+      [
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(-4px)' },
+        { transform: 'translateX(4px)' },
+        { transform: 'translateX(0)' },
+      ],
+      { duration: 180, easing: 'ease-out' }
+    );
+  };
   useEffect(() => {
     if (!showCartOverlay) return;
     const update = () => {
@@ -416,7 +461,7 @@ const CustomerMenu: React.FC = () => {
                 style={{
                   background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                 }}
-                
+
               >
                 <ShoppingCart className="w-5 h-5" />
                 <span className="font-medium hidden sm:inline">{currency.format(totalPrice)}</span>
@@ -577,27 +622,95 @@ const CustomerMenu: React.FC = () => {
 
       {/* 🆕 Sticky compare bar (above order bar) */}
       {compareIds.length > 0 && !showCart && (
-        <div
-          className="fixed inset-x-0 z-20 bottom-16 sm:bottom-20"  // 
-        >
+        <div className="fixed inset-x-0 z-20 bottom-16 sm:bottom-20 pb-[env(safe-area-inset-bottom)] pointer-events-none">
           <div className="max-w-4xl mx-auto px-4">
-            <div className="flex items-center justify-between bg-slate-900 text-white rounded-xl shadow-lg px-4 py-3">
-              <span className="text-sm">        
-              {t('menu.compareCount', { n: String(compareIds.length) })} {compareIds.length}/2
-              </span>
-              <div className="flex gap-2">
-                <button onClick={clearCompare} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20">
+            <div
+              id="compare-bar"
+              role="region"
+              aria-live="polite"
+              aria-label={t('menu.compareTray') || 'Compare tray'}
+              className="pointer-events-auto flex items-center justify-between gap-3 bg-slate-900 text-white rounded-xl shadow-xl px-3 sm:px-4 py-3"
+            >
+              {/* Left: selected thumbnails + count */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex -space-x-2 rtl:space-x-reverse">
+                  {comparedItems.slice(0, 2).map((m) => (
+                    <img
+                      key={m.id}
+                      src={m.image_url || '/images/placeholder.png'}
+                      alt={(isRTL ? m.name_ar || m.name_en : m.name_en) || ''}
+                      className="w-8 h-8 rounded-full ring-2 ring-slate-900 object-cover"
+                      loading="lazy"
+                    />
+                  ))}
+                  {/* ghost slots to show capacity */}
+                  {Array.from({ length: Math.max(0, 2 - comparedItems.length) }).map((_, i) => (
+                    <div
+                      key={`ghost-${i}`}
+                      className="w-8 h-8 rounded-full ring-2 ring-slate-900 bg-white/10 grid place-items-center text-xs"
+                      aria-hidden="true"
+                    >
+                      +
+                    </div>
+                  ))}
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-sm font-medium truncate">
+                    {t('menu.compareCount', { n: String(compareIds.length) })}{' '}
+                    <span className="opacity-90">{compareIds.length}/2</span>
+                  </div>
+
+                  {/* subtle progress bar */}
+                  <div className="mt-1 h-1.5 w-24 sm:w-32 bg-white/15 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 rounded-full transition-all"
+                      style={{ width: `${(Math.min(compareIds.length, 2) / 2) * 100}%` }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: actions */}
+              <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <button
+                  onClick={() => {
+                    clearCompare();
+                    // trackMenuEvents?.compareCleared?.(compareIds);
+                  }}
+                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm"
+                >
                   {t('common.clear') || 'Clear'}
                 </button>
+
                 <button
+                  ref={(el) => {
+                    // no-op; we just want a ref for the nudge function if needed
+                  }}
                   disabled={compareIds.length < 2}
-                  onClick={() => {
+                  onClick={(e) => {
+                    if (compareIds.length < 2) {
+                      toast.error(t('compare.needTwo') || 'Select two items to compare', {
+                        position: 'bottom-center',
+                        duration: 2000,
+                      });
+                      nudgeIfDisabled(e.currentTarget);
+                      return;
+                    }
                     trackMenuEvents.compareSheetViewed(compareIds);
                     setShowCompare(true);
                   }}
-                  className={`px-3 py-2 rounded-lg ${compareIds.length < 2 ? 'bg-white/20 cursor-not-allowed' : 'bg-primary hover:opacity-90'}`}
+                  aria-disabled={compareIds.length < 2 || undefined}
+                  className={[
+                    'px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400',
+                    compareIds.length < 2
+                      ? 'bg-white/20 cursor-not-allowed'
+                      : 'bg-primary hover:opacity-90',
+                  ].join(' ')}
                 >
-                  {t('menu.compare') || 'Compare'}
+                  {/* Include the count for clarity */}
+                  {(t('menu.compare') || 'Compare')}
                 </button>
               </div>
             </div>

@@ -1,11 +1,20 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { MenuItem } from './MenuItemCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 
+/** Optional, adjust to your real schema if exported elsewhere */
+type IngredientDetail = {
+  ingredient?: {
+    id?: string;
+    name_en?: string;
+    name_ar?: string;
+  };
+};
+
 interface Props {
-  items: MenuItem[];                 // usually 2; handles 1 gracefully
+  items: MenuItem[]; // usually 2; handles 0/1 gracefully
   isRTL: boolean;
   currency: Intl.NumberFormat;
   onClose: () => void;
@@ -18,39 +27,55 @@ interface Props {
 
 type Chip = { text: string; kind: 'common' | 'unique' };
 
-const normalizeToken = (s: string) =>
-  s.toLowerCase()
-    .normalize('NFKD')
-    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+// ----------------------- Utilities -----------------------
+const ARABIC_SEPARATORS = /،|؛/g; // Arabic comma/semicolon
+const GENERIC_SEPARATORS = /•|,|\/|;|\||·/g;
 
 const splitIngredients = (s: string) =>
-  s ? s.split(/•|,|\/|;|\||·/g).map(x => x.trim()).filter(Boolean) : [];
+  s
+    ? s
+        .replace(ARABIC_SEPARATORS, ',')
+        .split(GENERIC_SEPARATORS)
+        .map(x => x.trim())
+        .filter(Boolean)
+    : [];
 
-function diffIngredientTokens(aStr: string, bStr: string): { A: Chip[]; B: Chip[] } {
-  const aTokens = splitIngredients(aStr);
-  const bTokens = splitIngredients(bStr);
-  const aNorm = new Set(aTokens.map(normalizeToken));
-  const bNorm = new Set(bTokens.map(normalizeToken));
-  const common = new Set<string>();
-  aNorm.forEach(n => bNorm.has(n) && common.add(n));
-  return {
-    A: aTokens.map(txt => ({ text: txt, kind: common.has(normalizeToken(txt)) ? 'common' : 'unique' })),
-    B: bTokens.map(txt => ({ text: txt, kind: common.has(normalizeToken(txt)) ? 'common' : 'unique' })),
-  };
-}
+const normalizeToken = (s: string) =>
+  s
+    .toLowerCase()
+    // keep Arabic letters; remove common punctuation & extra spaces
+    .replace(/[./#!$%^&*;:{}=\-_`~()،؛]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 function prefersReducedMotion() {
   if (typeof window === 'undefined') return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-/** Subtle emoji confetti (lighter than the original) */
+/** Simple particle budget to avoid jank on low-end devices */
+const particleBudget = (() => {
+  let active = 0;
+  const limit = 40;
+  return {
+    canSpawn() {
+      return active < limit;
+    },
+    inc() {
+      active++;
+    },
+    dec() {
+      active = Math.max(0, active - 1);
+    },
+  };
+})();
+
+/** Subtle emoji confetti with budget & reduced-motion guard */
 function burstConfettiSoft(x: number, y: number, count = 10) {
-  if (prefersReducedMotion()) return;
-  const EMOJIS = ['🍔','🍕','🍟','🌯','🥙','🥗','🍤','🍣','🍩','🥤','🧄','🧀','🥑','🌶️','🍪'];
+  if (prefersReducedMotion() || !particleBudget.canSpawn()) return;
+  const EMOJIS = ['🍔', '🍕', '🍟', '🌯', '🥙', '🥗', '🍤', '🍣', '🍩', '🥤', '🧄', '🧀', '🥑', '🌶️', '🍪'];
   for (let i = 0; i < count; i++) {
+    particleBudget.inc();
     const el = document.createElement('div');
     el.textContent = EMOJIS[(Math.random() * EMOJIS.length) | 0];
     el.style.position = 'fixed';
@@ -65,13 +90,18 @@ function burstConfettiSoft(x: number, y: number, count = 10) {
     const dy = -(40 + Math.random() * 90);
     const rot = (Math.random() - 0.5) * 180;
 
-    el.animate(
-      [
-        { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
-        { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 }
-      ],
-      { duration: 900 + Math.random() * 300, easing: 'cubic-bezier(.2,.95,.4,1)' }
-    ).onfinish = () => el.remove();
+    el
+      .animate(
+        [
+          { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+          { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 },
+        ],
+        { duration: 900 + Math.random() * 300, easing: 'cubic-bezier(.2,.95,.4,1)' }
+      )
+      .addEventListener('finish', () => {
+        el.remove();
+        particleBudget.dec();
+      });
   }
 }
 
@@ -96,202 +126,85 @@ function pulsePlus(x: number, y: number, text = '+2') {
   el.style.pointerEvents = 'none';
   document.body.appendChild(el);
 
-  el.animate(
-    [
-      { transform: 'translate(-50%, -50%) scale(.9)', opacity: 0 },
-      { transform: 'translate(-50%, -70%) scale(1.05)', opacity: 1, offset: 0.35 },
-      { transform: 'translate(-50%, -95%) scale(.98)', opacity: 0 }
-    ],
-    { duration: 700, easing: 'cubic-bezier(.2,.8,.3,1)' }
-  ).onfinish = () => el.remove();
+  el
+    .animate(
+      [
+        { transform: 'translate(-50%, -50%) scale(.9)', opacity: 0 },
+        { transform: 'translate(-50%, -70%) scale(1.05)', opacity: 1, offset: 0.35 },
+        { transform: 'translate(-50%, -95%) scale(.98)', opacity: 0 },
+      ],
+      { duration: 700, easing: 'cubic-bezier(.2,.8,.3,1)' }
+    )
+    .addEventListener('finish', () => el.remove());
 }
 
+/** Compare ingredients via IDs when possible; fallback to text match */
+function diffIngredientTokensFromDetails(
+  aDetails?: IngredientDetail[],
+  bDetails?: IngredientDetail[],
+  isRTL?: boolean
+): { A: Chip[]; B: Chip[] } {
+  const a = (aDetails ?? []).map(x => ({
+    id: x.ingredient?.id,
+    text: (isRTL ? x.ingredient?.name_ar : x.ingredient?.name_en) ?? '',
+  }));
+  const b = (bDetails ?? []).map(x => ({
+    id: x.ingredient?.id,
+    text: (isRTL ? x.ingredient?.name_ar : x.ingredient?.name_en) ?? '',
+  }));
+
+  // Prefer structural diff by id; fallback to normalized text
+  const aIds = new Set(a.map(x => x.id).filter(Boolean) as string[]);
+  const bIds = new Set(b.map(x => x.id).filter(Boolean) as string[]);
+  const hasIds = aIds.size > 0 || bIds.size > 0;
+
+  const bTextSet = new Set(b.map(x => normalizeToken(x.text)));
+  const aTextSet = new Set(a.map(x => normalizeToken(x.text)));
+
+  const A: Chip[] = a.map(x => {
+    const common = hasIds
+      ? x.id
+        ? bIds.has(x.id)
+        : bTextSet.has(normalizeToken(x.text))
+      : bTextSet.has(normalizeToken(x.text));
+    return { text: x.text, kind: common ? 'common' : 'unique' };
+  });
+
+  const B: Chip[] = b.map(x => {
+    const common = hasIds
+      ? x.id
+        ? aIds.has(x.id)
+        : aTextSet.has(normalizeToken(x.text))
+      : aTextSet.has(normalizeToken(x.text));
+    return { text: x.text, kind: common ? 'common' : 'unique' };
+  });
+
+  return { A, B };
+}
+
+/** Price with potential modifiers like price_delta */
+const unitTotal = (it: MenuItem) =>
+  (it.price ?? 0) + (typeof (it as any).price_delta === 'number' ? (it as any).price_delta : 0);
+
+// ----------------------- UI bits -----------------------
 function ChipBadge({ chip }: { chip: Chip }) {
-  const base = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-tight border whitespace-nowrap';
-  const common = 'border-slate-300 bg-slate-50/80 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300';
-  const unique = 'ring-2 ring-offset-1 ring-fuchsia-200 border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 dark:ring-fuchsia-800/40 dark:border-fuchsia-700/60 dark:bg-fuchsia-900/30 dark:text-fuchsia-200';
+  const base =
+    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-tight border whitespace-nowrap';
+  const common =
+    'border-slate-300 bg-slate-50/80 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300';
+  const unique =
+    'ring-2 ring-offset-1 ring-fuchsia-200 border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 dark:ring-fuchsia-800/40 dark:border-fuchsia-700/60 dark:bg-fuchsia-900/30 dark:text-fuchsia-200';
   return (
     <span className={`${base} ${chip.kind === 'unique' ? unique : common}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${chip.kind === 'unique' ? 'bg-fuchsia-500' : 'bg-slate-400'}`} />
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${
+          chip.kind === 'unique' ? 'bg-fuchsia-500' : 'bg-slate-400'
+        }`}
+      />
       {chip.text}
     </span>
   );
 }
-
-const CompareSheet: React.FC<Props> = ({
-  items, isRTL, currency, onClose, onAddToCart, onRemoveFromCart, quantityMap
-}) => {
-  const { t } = useLanguage();
-  const [onlyDiffs, setOnlyDiffs] = useState(false);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
-  }, [onClose]);
-
-  const a = items[0];
-  const b = items[1];
-
-  const aIngs = (a?.ingredients_details || [])
-    .map(x => (isRTL ? x?.ingredient?.name_ar : x?.ingredient?.name_en))
-    .filter(Boolean) as string[];
-  const bIngs = (b?.ingredients_details || [])
-    .map(x => (isRTL ? x?.ingredient?.name_ar : x?.ingredient?.name_en))
-    .filter(Boolean) as string[];
-
-  const { A: chipsAAll, B: chipsBAll } = useMemo(
-    () => diffIngredientTokens(aIngs.join(' • '), bIngs.join(' • ')),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [aIngs.join('|'), bIngs.join('|')]
-  );
-
-  const chipsA = onlyDiffs ? chipsAAll.filter(c => c.kind === 'unique') : chipsAAll;
-  const chipsB = onlyDiffs ? chipsBAll.filter(c => c.kind === 'unique') : chipsBAll;
-
-  const displayA = isRTL ? a?.name_ar || a?.name_en : a?.name_en;
-  const displayB = isRTL ? b?.name_ar || b?.name_en : b?.name_en;
-
-  const qtyA = a ? (quantityMap?.[a.id] || 0) : 0;
-  const qtyB = b ? (quantityMap?.[b.id] || 0) : 0;
-
-  const handleAddBoth = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (a) onAddToCart(a);
-    if (b) onAddToCart(b);
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    burstConfettiSoft(cx, cy, 10);
-    pulsePlus(cx, r.top - 6, '+2');
-  };
-
-  return (
-    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
-      {/* backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-
-      {/* container */}
-      <div className="absolute bottom-0 left-0 right-0 sm:inset-0 sm:m-auto sm:h-[86vh] sm:w-[min(1000px,95vw)] bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-        {/* header */}
-        <div className={`sticky top-0 z-10 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur ${isRTL ? 'rtl' : 'ltr'}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="flex -space-x-3 rtl:space-x-reverse">
-                <img src={a?.image_url || '/images/placeholder.png'} alt={displayA || ''} className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900" loading="lazy" />
-                <img src={b?.image_url || '/images/placeholder.png'} alt={displayB || ''} className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900" loading="lazy" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
-                  {(displayA || t('menu.comparing') || 'Comparing')}
-                  {displayB ? ` ${isRTL ? 'و' : '&'} ${displayB}` : ''}
-                </div>
-                <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                  {t('menu.compare') || 'Compare'}
-                </div>
-              </div>
-            </div>
-
-            {/* header controls: Only differences + close */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <label className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs sm:text-sm cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                <input
-                  type="checkbox"
-                  className="accent-emerald-600"
-                  checked={onlyDiffs}
-                  onChange={e => setOnlyDiffs(e.target.checked)}
-                />
-                {t('menu.onlyDifferences') || 'Only differences'}
-              </label>
-              <button
-                onClick={onClose}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs sm:text-sm hover:opacity-90"
-                aria-label={t('common.close') || 'Close'}
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* body */}
-        <div className={`p-4 sm:p-6 space-y-4 ${isRTL ? 'rtl' : 'ltr'}`}>
-          {/* CTA row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-sm text-slate-600 dark:text-slate-300">
-              {a && b
-                ? (t('menu.compareTagline') || 'Spot the differences and pick your favorite.')
-                : (t('menu.compareEmptyHint') || 'Pick another item to compare side by side.')}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {a && (
-                <button
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
-                  onClick={(e) => {
-                    onAddToCart(a);
-                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
-                  }}
-                >
-                  {t('menu.addToCart') || 'Add to cart'} {isRTL ? (a.name_ar || a.name_en ? `• ${a.name_ar || a.name_en}` : '') : (a.name_en ? `• ${a.name_en}` : '')}
-                </button>
-              )}
-              {b && (
-                <button
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
-                  onClick={(e) => {
-                    onAddToCart(b);
-                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
-                  }}
-                >
-                  {t('menu.addToCart') || 'Add to cart'} {isRTL ? (b.name_ar || b.name_en ? `• ${b.name_ar || b.name_en}` : '') : (b.name_en ? `• ${b.name_en}` : '')}
-                </button>
-              )}
-              {a && b && (
-                <button
-                  className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold text-sm relative overflow-visible"
-                  onClick={handleAddBoth}
-                >
-                  {t('menu.addBoth') || 'Add both'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* layout: JUST TWO CARDS (desktop & mobile) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <MiniCard
-              side="left"
-              item={a}
-              isRTL={isRTL}
-              currency={currency}
-              qty={a ? (quantityMap?.[a.id] || 0) : 0}
-              add={onAddToCart}
-              remove={onRemoveFromCart}
-              chips={chipsA}
-            />
-            <MiniCard
-              side="right"
-              item={b}
-              isRTL={isRTL}
-              currency={currency}
-              qty={b ? (quantityMap?.[b.id] || 0) : 0}
-              add={onAddToCart}
-              remove={onRemoveFromCart}
-              chips={chipsB}
-            />
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        .rtl { direction: rtl; } .ltr { direction: ltr; }
-      `}</style>
-    </div>
-  );
-};
 
 function MiniCard({
   side,
@@ -317,7 +230,7 @@ function MiniCard({
   if (!item) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-4 sm:p-6 flex items-center justify-center text-slate-400 dark:text-slate-500">
-        —
+        <span className="text-sm">{t('menu.compareEmptyHint') || 'Pick another item to compare.'}</span>
       </div>
     );
   }
@@ -325,7 +238,10 @@ function MiniCard({
   const name = isRTL ? item.name_ar || item.name_en : item.name_en;
 
   return (
-    <div className="bg-white/80 dark:bg-slate-900/70 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div
+      className="bg-white/80 dark:bg-slate-900/70 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+      dir={isRTL ? 'rtl' : 'ltr'}
+    >
       <img
         src={item.image_url || '/images/placeholder.png'}
         className="w-full h-16 sm:h-40 object-cover"
@@ -337,22 +253,30 @@ function MiniCard({
         {/* title + price */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-[13px] sm:text-base font-semibold text-slate-900 dark:text-white truncate">{name}</div>
+            <div className="text-[13px] sm:text-base font-semibold text-slate-900 dark:text-white truncate">
+              {name}
+            </div>
             <div className="text-[11px] sm:text-sm text-slate-500 dark:text-slate-400">
-              {currency.format(item.price ?? 0)}
+              {currency.format(unitTotal(item))}
             </div>
           </div>
         </div>
 
-        {/* INGREDIENT CHIPS (wrap inside the card) */}
+        {/* INGREDIENT CHIPS */}
         <div className="mt-2">
           <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
             {t('common.ingredients') || 'Ingredients'}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {chips.length
-              ? chips.map((c, i) => <span key={`${c.text}-${i}`}><ChipBadge chip={c} /></span>)
-              : <span className="text-xs text-slate-400">—</span>}
+            {chips.length ? (
+              chips.map((c, i) => (
+                <span key={`${c.text}-${i}`}>
+                  <ChipBadge chip={c} />
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
+            )}
           </div>
         </div>
 
@@ -369,7 +293,9 @@ function MiniCard({
               </button>
               <span className="min-w-[2rem] text-center font-bold">{qty}</span>
               <button
-                className={`w-10 h-10 rounded-full text-white active:scale-95 ${side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`w-10 h-10 rounded-full text-white active:scale-95 ${
+                  side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
                 onClick={() => add(item)}
                 aria-label={t('common.increase') || 'Increase'}
               >
@@ -379,14 +305,19 @@ function MiniCard({
           </div>
         ) : (
           <button
-            className={`hidden sm:block w-full mt-3 sm:mt-4 rounded-xl ${side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white py-2.5 text-sm shadow`}
-            onClick={(e) => {
+            className={`hidden sm:block w-full mt-3 sm:mt-4 rounded-xl ${
+              side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+            } text-white py-2.5 text-sm shadow`}
+            onClick={e => {
               add(item);
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
               burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
             }}
+            aria-label={t('menu.addToCart') || 'Add to cart'}
           >
-            {side === 'left' ? '✓ ' : '+ '} {t('menu.addToCart') || 'Add to cart'}
+            {isRTL ? '' : side === 'left' ? '✓ ' : '+ '}
+            {t('menu.addToCart') || 'Add to cart'}
+            {isRTL ? (side === 'left' ? ' ✓' : ' +') : ''}
           </button>
         )}
 
@@ -398,27 +329,32 @@ function MiniCard({
                 <button
                   className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95"
                   onClick={() => remove(item.id)}
-                  aria-label="Decrease"
+                  aria-label={t('common.decrease') || 'Decrease'}
                 >
                   −
                 </button>
                 <span className="min-w-[1.75rem] text-center font-semibold text-sm">{qty}</span>
                 <button
-                  className={`w-8 h-8 rounded-full text-white active:scale-95 ${side === 'left' ? 'bg-emerald-600' : 'bg-blue-600'}`}
+                  className={`w-8 h-8 rounded-full text-white active:scale-95 ${
+                    side === 'left' ? 'bg-emerald-600' : 'bg-blue-600'
+                  }`}
                   onClick={() => add(item)}
-                  aria-label="Increase"
+                  aria-label={t('common.increase') || 'Increase'}
                 >
                   +
                 </button>
               </div>
             ) : (
               <button
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs text-white active:scale-95 ${side === 'left' ? 'bg-emerald-600' : 'bg-blue-600'}`}
-                onClick={(e) => {
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs text-white active:scale-95 ${
+                  side === 'left' ? 'bg-emerald-600' : 'bg-blue-600'
+                }`}
+                onClick={e => {
                   add(item);
                   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                   burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
                 }}
+                aria-label={t('menu.addToCart') || 'Add'}
               >
                 + {t('menu.addToCart') || 'Add'}
               </button>
@@ -429,5 +365,269 @@ function MiniCard({
     </div>
   );
 }
+
+// ----------------------- Main component -----------------------
+const CompareSheet: React.FC<Props> = ({
+  items,
+  isRTL,
+  currency,
+  onClose,
+  onAddToCart,
+  onRemoveFromCart,
+  quantityMap,
+}) => {
+  const { t } = useLanguage();
+  const [onlyDiffs, setOnlyDiffs] = useState(false);
+
+  const a = items[0];
+  const b = items[1];
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Lock body scroll, focus management & trap
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+      previouslyFocused.current?.focus?.();
+    };
+  }, [onClose]);
+
+  // Ingredient chips (ID-aware, AR-aware)
+  const { A: chipsAAll, B: chipsBAll } = useMemo(
+    () => diffIngredientTokensFromDetails(a?.ingredients_details as any, b?.ingredients_details as any, isRTL),
+    [a?.ingredients_details, b?.ingredients_details, isRTL]
+  );
+  const chipsA = onlyDiffs ? chipsAAll.filter(c => c.kind === 'unique') : chipsAAll;
+  const chipsB = onlyDiffs ? chipsBAll.filter(c => c.kind === 'unique') : chipsBAll;
+
+  const displayA = isRTL ? a?.name_ar || a?.name_en : a?.name_en;
+  const displayB = isRTL ? b?.name_ar || b?.name_en : b?.name_en;
+
+  const qtyA = a ? quantityMap?.[a.id] ?? 0 : 0;
+  const qtyB = b ? quantityMap?.[b.id] ?? 0 : 0;
+
+  const handleAddBoth = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (a) onAddToCart(a);
+    if (b) onAddToCart(b);
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    burstConfettiSoft(cx, cy, 10);
+    pulsePlus(cx, r.top - 6, '+2');
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[70]"
+      role="presentation"
+      aria-hidden="false"
+      dir={isRTL ? 'rtl' : 'ltr'}
+    >
+      {/* backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60"
+        onClick={onClose}
+        aria-label={t('common.close') || 'Close'}
+      />
+
+      {/* panel */}
+      <div
+        ref={panelRef}
+        className="absolute bottom-0 left-0 right-0 sm:inset-0 sm:m-auto sm:h-[86vh] sm:w-[min(1000px,95vw)] bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 outline-none"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="compare-title"
+        tabIndex={-1}
+      >
+        {/* header */}
+        <div className="sticky top-0 z-10 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="flex -space-x-3 rtl:space-x-reverse">
+                <img
+                  src={a?.image_url || '/images/placeholder.png'}
+                  alt={displayA || ''}
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900"
+                  loading="lazy"
+                />
+                <img
+                  src={b?.image_url || '/images/placeholder.png'}
+                  alt={displayB || ''}
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900"
+                  loading="lazy"
+                />
+              </div>
+              <div className="min-w-0">
+                <div
+                  id="compare-title"
+                  className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate"
+                >
+                  {(t('menu.comparing') || 'Comparing')}
+                  {displayA ? `: ${displayA}` : ''}
+                  {displayB ? ` ${isRTL ? 'و' : '&'} ${displayB}` : ''}
+                </div>
+                <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                  {t('menu.compare') || 'Compare'}
+                </div>
+              </div>
+            </div>
+
+            {/* header controls: Only differences + close */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <label className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs sm:text-sm cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
+                <input
+                  type="checkbox"
+                  className="accent-emerald-600"
+                  checked={onlyDiffs}
+                  onChange={e => setOnlyDiffs(e.target.checked)}
+                  aria-label={t('menu.onlyDifferences') || 'Only differences'}
+                />
+                {t('menu.onlyDifferences') || 'Only differences'}
+              </label>
+              <button
+                onClick={onClose}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs sm:text-sm hover:opacity-90"
+                aria-label={t('common.close') || 'Close'}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* optional legend */}
+          {!onlyDiffs && (
+            <div className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-slate-400" /> {t('menu.common') || 'Common'}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-fuchsia-500" /> {t('menu.unique') || 'Unique'}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* body */}
+        <div className="p-4 sm:p-6 space-y-4">
+          {/* CTA row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              {a && b
+                ? t('menu.compareTagline') || 'Spot the differences and pick your favorite.'
+                : t('menu.compareEmptyHint') || 'Pick another item to compare side by side.'}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {a && (
+                <button
+                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+                  onClick={e => {
+                    onAddToCart(a);
+                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
+                  }}
+                  aria-label={(t('menu.addToCart') || 'Add to cart') + (isRTL ? ` • ${a.name_ar || a.name_en || ''}` : ` • ${a.name_en || ''}`)}
+                >
+                  {t('menu.addToCart') || 'Add to cart'}{' '}
+                  {isRTL
+                    ? a.name_ar || a.name_en
+                      ? `• ${a.name_ar || a.name_en}`
+                      : ''
+                    : a.name_en
+                    ? `• ${a.name_en}`
+                    : ''}
+                </button>
+              )}
+              {b && (
+                <button
+                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+                  onClick={e => {
+                    onAddToCart(b);
+                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
+                  }}
+                  aria-label={(t('menu.addToCart') || 'Add to cart') + (isRTL ? ` • ${b.name_ar || b.name_en || ''}` : ` • ${b.name_en || ''}`)}
+                >
+                  {t('menu.addToCart') || 'Add to cart'}{' '}
+                  {isRTL
+                    ? b.name_ar || b.name_en
+                      ? `• ${b.name_ar || b.name_en}`
+                      : ''
+                    : b.name_en
+                    ? `• ${b.name_en}`
+                    : ''}
+                </button>
+              )}
+              {a && b && (
+                <button
+                  className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold text-sm relative overflow-visible"
+                  onClick={handleAddBoth}
+                  aria-label={t('menu.addBoth') || 'Add both'}
+                >
+                  {t('menu.addBoth') || 'Add both'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* layout: TWO CARDS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <MiniCard
+              side="left"
+              item={a}
+              isRTL={isRTL}
+              currency={currency}
+              qty={qtyA}
+              add={onAddToCart}
+              remove={onRemoveFromCart}
+              chips={chipsA}
+            />
+            <MiniCard
+              side="right"
+              item={b}
+              isRTL={isRTL}
+              currency={currency}
+              qty={qtyB}
+              add={onAddToCart}
+              remove={onRemoveFromCart}
+              chips={chipsB}
+            />
+          </div>
+        </div>
+      </div>
+
+      <style>{`.rtl { direction: rtl; } .ltr { direction: ltr; }`}</style>
+    </div>
+  );
+};
 
 export default CompareSheet;

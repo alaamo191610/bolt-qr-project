@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, Minus,ArrowLeft, X, RefreshCw, Star, Scale } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import toast from 'react-hot-toast';
 
 /* ---------- Types ---------- */
 interface Ingredient { id: string; name_en: string; name_ar: string; extra_price?: number }
@@ -374,42 +375,75 @@ const MenuItemCard: React.FC<Props> = ({
         className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-md hover:shadow-lg transition overflow-hidden"
         role="group"
       >
-        {/* Compare top-right on the CARD (not the image) */}
-        {isAvailable && showCompareChip && onToggleCompare && (
-          <button
-            type="button"
-            onClick={(ev) => {
-              ev.stopPropagation();
-              onToggleCompare(item.id);
-              track('compare_toggle', { id: item.id, selected: !compareSelected });
-            }}
-            disabled={compareDisabled && !compareSelected}
-            aria-pressed={compareSelected}
-            className={[
-              'absolute top-3 z-10 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm min-h-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400',
-              isRTL ? 'left-3' : 'right-3',
-              compareSelected
-                ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
-                : compareDisabled
-                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 cursor-not-allowed'
-                  : 'bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-800',
-            ].join(' ')}
-            title={
-              compareDisabled && !compareSelected
-                ? t('compare.limit')
-                : compareSelected
-                  ? t('compare.comparing')
-                  : t('compare.compare')
-            }
-          >
-            <span className="inline-flex items-center gap-1">
-              <Scale className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {t(compareSelected ? 'compare.comparing' : 'compare.compare')}
-              </span>
-            </span>
-          </button>
-        )}
+        {/* Compare top-right on the CARD */}
+{isAvailable && showCompareChip && onToggleCompare && (
+  <>
+    {/* SR-only live region for limit announcements */}
+    <span className="sr-only" aria-live="polite">
+      {compareDisabled && !compareSelected ? (t('compare.limit') || '') : ''}
+    </span>
+
+    <button
+      type="button"
+      onClick={(ev) => {
+        ev.stopPropagation();
+
+        // if limit reached and this item isn't already selected → toast + block
+        if (compareDisabled && !compareSelected) {
+          toast.error(t('compare.limit') || 'You can compare up to 2 items', {
+            position: 'bottom-center',
+            duration: 2200,
+          });
+          track('compare_toggle_blocked', { id: item.id, reason: 'limit_reached' });
+          return;
+        }
+
+        onToggleCompare(item.id);
+        track('compare_toggle', { id: item.id, selected: !compareSelected });
+
+        // subtle pulse only when selecting (skip on reduced motion)
+        if (!compareSelected && !prefersReducedMotion) {
+          const el = ev.currentTarget;
+          el.animate(
+            [
+              { transform: 'scale(1)', offset: 0 },
+              { transform: 'scale(1.06)', offset: 0.45 },
+              { transform: 'scale(1)', offset: 1 },
+            ],
+            { duration: 180, easing: 'cubic-bezier(.2,.8,.3,1)' }
+          );
+        }
+      }}
+      disabled={compareDisabled && !compareSelected}
+      aria-pressed={compareSelected}
+      aria-controls="compare-bar"                         // set this id on your compare tray/bar
+      aria-label={
+        compareDisabled && !compareSelected
+          ? (t('compare.limit') || 'Compare limit reached')
+          : compareSelected
+          ? (t('compare.comparing') || 'Comparing')
+          : (t('compare.compare') || 'Compare')
+      }
+      className={[
+        'absolute top-3 z-10 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm min-h-[32px]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400',
+        isRTL ? 'left-3' : 'right-3',
+        compareSelected
+          ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
+          : compareDisabled
+            ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 cursor-not-allowed'
+            : 'bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-800',
+      ].join(' ')}
+    >
+      <span className="inline-flex items-center gap-1">
+        <Scale className="w-3.5 h-3.5" aria-hidden="true" />
+        <span className="hidden sm:inline">
+          {t(compareSelected ? 'compare.comparing' : 'compare.compare')}
+        </span>
+      </span>
+    </button>
+  </>
+)}
 
         {/* Clickable row opens the page (not the qty/buttons) */}
         <div
