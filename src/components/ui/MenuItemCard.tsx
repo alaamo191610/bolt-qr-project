@@ -548,23 +548,25 @@ const MenuItemCard: React.FC<Props> = ({
       {/* ======= FULLSCREEN PAGE======= */}
       {openPage && createPortal(
         <div className="fixed inset-0 z-[9999]">
-          {/* backdrop */}
+          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/40" />
 
+          {/* Panel: bottom sheet (mobile) / right panel (desktop) */}
           <div
+            className={[
+              // height not fullscreen
+              'absolute inset-x-0 bottom-0 h-[86dvh]',
+              'sm:inset-auto sm:top-4 sm:bottom-4 sm:right-4 sm:left-auto sm:w-[520px] sm:h-[92dvh]',
+              'bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl',
+              // 🔥 grid layout: header | hero | controls | LIST(1fr) | footer
+              'overflow-hidden grid grid-rows-[auto_auto_auto_1fr_auto]'
+            ].join(' ')}
             role="dialog"
             aria-modal="true"
             aria-labelledby="item-panel-title"
-            dir={isRTL ? 'rtl' : 'ltr'}
-            className={[
-              "absolute inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[520px]",
-              "bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-none shadow-2xl",
-              "animate-page-in sm:animate-panel-in",
-              "h-full sm:h-auto grid grid-rows-[auto_auto_1fr_auto] overflow-hidden relative"
-            ].join(" ")}
           >
-            {/* HEADER — fixed, opaque */}
-            <div className="row-start-1 sticky top-0 z-40 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+            {/* row 1: Header (fixed) */}
+            <div className="row-start-1 row-end-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between z-[90]">
               <button
                 ref={firstFocusRef}
                 onClick={() => setOpenPage(false)}
@@ -586,8 +588,8 @@ const MenuItemCard: React.FC<Props> = ({
               </button>
             </div>
 
-            {/* HERO — fixed, opaque under header */}
-            <div className="row-start-2 px-4 pt-4 pb-3 bg-white dark:bg-slate-800 z-30 border-b border-slate-200/60 dark:border-slate-700/60">
+            {/* row 2: Hero (fixed) */}
+            <div className="row-start-2 row-end-3 px-4 pt-4">
               <img
                 src={item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=800'}
                 alt={displayName}
@@ -613,7 +615,7 @@ const MenuItemCard: React.FC<Props> = ({
                     dir="auto"
                     lang={isRTL ? 'ar' : 'en'}
                     style={{ unicodeBidi: 'plaintext' as any }}
-                    className="text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2"
+                    className="mt-1 text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2"
                   >
                     {displayDesc}
                   </p>
@@ -621,146 +623,145 @@ const MenuItemCard: React.FC<Props> = ({
               )}
             </div>
 
-            {/* CONTENT — the ONLY scroller */}
-            <div
-              ref={panelScrollRef}
-              className="row-start-3 overflow-y-auto min-h-0 relative overscroll-contain"
-            >
-              {/* Sticky strip INSIDE the scroller: Tabs + quick actions + extras total */}
-              <div className="sticky top-0 z-[80] bg-white dark:bg-slate-800 border-b border-slate-200/60 dark:border-slate-700/60">
-                {/* Tabs row */}
-                <div className={`px-4 pt-2 pb-2 flex ${isRTL ? 'flex-row-reverse' : ''} items-center gap-2`}>
-                  {(['ingredients', 'notes'] as const).map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${activeTab === tab
-                          ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
-                          : 'text-slate-600 dark:text-slate-300'
-                        }`}
-                      aria-pressed={activeTab === tab}
-                    >
-                      {tab === 'ingredients' ? t('menu.customize') : t('common.notes')}
-                    </button>
-                  ))}
-
-                  {activeTab === 'ingredients' && (
-                    <span className={`${isRTL ? 'mr-auto' : 'ml-auto'} text-xs text-slate-500`}>
-                      {t('pricing.extras')}: <strong className="tabular-nums">{priceFmt.format(extrasTotal)}</strong>
-                    </span>
-                  )}
-                </div>
-
-                {/* Quick actions (only when Ingredients) */}
+            {/* row 3: Controls (fixed): tabs + quick actions */}
+            <div className="row-start-3 row-end-4 border-t border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-800 z-[85]">
+              {/* Tabs */}
+              <div className={`px-4 pt-3 pb-2 flex ${isRTL ? 'flex-row-reverse' : ''} items-center gap-2`}>
+                {(['ingredients', 'notes'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${activeTab === tab
+                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
+                        : 'text-slate-600 dark:text-slate-300'
+                      }`}
+                    aria-pressed={activeTab === tab}
+                  >
+                    {tab === 'ingredients' ? t('menu.customize') : t('common.notes')}
+                  </button>
+                ))}
                 {activeTab === 'ingredients' && (
-                  <div className={`px-4 pb-2 flex flex-nowrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''} overflow-x-auto whitespace-nowrap`}>
-                    <button
-                      onClick={() => {
-                        const next: Record<string, 'no' | 'normal' | 'extra'> = {};
-                        ingList.forEach(i => (next[i.id] = 'normal'));
-                        setIngChoice(next);
-                        track('customize_quick_reset', { item_id: item.id });
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" /> {t('custom.reset')}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        const next: Record<string, 'no' | 'normal' | 'extra'> = {};
-                        ingList.forEach(i => (next[i.id] = 'no'));
-                        setIngChoice(next);
-                        track('customize_quick_remove_all', { item_id: item.id });
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200"
-                    >
-                      <X className="w-3.5 h-3.5" /> {t('custom.removeAll')}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        if (!anyPaidExtra) return;
-                        const next: Record<string, 'no' | 'normal' | 'extra'> = {};
-                        ingList.forEach(i => (next[i.id] = (i.extra_price ?? 0) > 0 ? 'extra' : 'normal'));
-                        setIngChoice(next);
-                        track('customize_quick_extra_all', { item_id: item.id });
-                      }}
-                      disabled={!anyPaidExtra}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs ${anyPaidExtra
-                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
-                        }`}
-                    >
-                      <Star className="w-3.5 h-3.5" /> {t(anyPaidExtra ? 'custom.extraAllPaid' : 'custom.extraAll')}
-                    </button>
-                  </div>
+                  <span className={`${isRTL ? 'mr-auto' : 'ml-auto'} text-xs text-slate-500`}>
+                    {t('pricing.extras')}: <strong className="tabular-nums">{priceFmt.format(extrasTotal)}</strong>
+                  </span>
                 )}
               </div>
 
-              {/* BODY under the sticky strip */}
-              {activeTab === 'ingredients' ? (
-                <div className="px-4 pt-3 space-y-3 relative z-0">
-                  {ingList.map((ing) => {
-                    const choice = ingChoice[ing.id] || 'normal';
-                    const checked = choice !== 'no';
-                    const canExtra = (ing.extra_price ?? 0) > 0;
+              {/* Quick actions (only for ingredients) */}
+              {activeTab === 'ingredients' && (
+                <div className={`px-4 pb-3 flex flex-nowrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''} overflow-x-auto whitespace-nowrap`}>
+                  <button
+                    onClick={() => {
+                      const next: Record<string, 'no' | 'normal' | 'extra'> = {};
+                      ingList.forEach(i => (next[i.id] = 'normal'));
+                      setIngChoice(next);
+                      track('customize_quick_reset', { item_id: item.id });
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> {t('custom.reset')}
+                  </button>
 
-                    const toggleCheck = (e: React.ChangeEvent<HTMLInputElement>) => {
-                      const on = e.target.checked;
-                      setIngChoice(prev => ({ ...prev, [ing.id]: on ? 'normal' : 'no' }));
-                    };
-                    const toggleExtra = () => {
-                      if (!checked) return;
-                      setIngChoice(prev => ({ ...prev, [ing.id]: choice === 'extra' ? 'normal' : 'extra' }));
-                    };
+                  <button
+                    onClick={() => {
+                      const next: Record<string, 'no' | 'normal' | 'extra'> = {};
+                      ingList.forEach(i => (next[i.id] = 'no'));
+                      setIngChoice(next);
+                      track('customize_quick_remove_all', { item_id: item.id });
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200"
+                  >
+                    <X className="w-3.5 h-3.5" /> {t('custom.removeAll')}
+                  </button>
 
-                    return (
-                      <div
-                        key={ing.id}
-                        className="border border-slate-200 dark:border-slate-600 rounded-xl p-3 hover:border-emerald-400/60 transition bg-white dark:bg-slate-800"
-                        role="group"
-                        aria-label={isRTL ? ing.name_ar : ing.name_en}
-                      >
-                        <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-3`}>
-                          <label className="flex items-center gap-2 cursor-pointer flex-1">
-                            <input
-                              type="checkbox"
-                              className="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-emerald-600 focus:ring-emerald-500"
-                              checked={checked}
-                              onChange={toggleCheck}
-                              aria-label={t('custom.include')}
-                            />
-                            <span className="text-sm font-medium text-slate-800 dark:text-slate-100" dir="auto" lang={isRTL ? 'ar' : 'en'}>
-                              {(isRTL ? ing.name_ar : ing.name_en) || ''}
-                            </span>
-                          </label>
-
-                          {canExtra && (
-                            <button
-                              type="button"
-                              onClick={toggleExtra}
-                              disabled={!checked}
-                              className={[
-                                'text-xs px-2 py-1 rounded-full border transition',
-                                checked && choice === 'extra'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700'
-                                  : checked
-                                    ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600'
-                                    : 'bg-slate-100 text-slate-400 border-slate-300 dark:bg-slate-700 dark:text-slate-500 dark:border-slate-600 cursor-not-allowed'
-                              ].join(' ')}
-                              aria-pressed={checked && choice === 'extra'}
-                            >
-                              {t('custom.extra')} + {priceFmt.format(ing.extra_price!)}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <button
+                    onClick={() => {
+                      if (!anyPaidExtra) return;
+                      const next: Record<string, 'no' | 'normal' | 'extra'> = {};
+                      ingList.forEach(i => (next[i.id] = (i.extra_price ?? 0) > 0 ? 'extra' : 'normal'));
+                      setIngChoice(next);
+                      track('customize_quick_extra_all', { item_id: item.id });
+                    }}
+                    disabled={!anyPaidExtra}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs ${anyPaidExtra
+                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                      }`}
+                  >
+                    <Star className="w-3.5 h-3.5" /> {t(anyPaidExtra ? 'custom.extraAllPaid' : 'custom.extraAll')}
+                  </button>
                 </div>
+              )}
+            </div>
+
+            {/* row 4: SCROLLER — ONLY this scrolls */}
+            <div ref={panelScrollRef} className="row-start-4 row-end-5 overflow-y-auto min-h-0 px-4 py-4">
+              {activeTab === 'ingredients' ? (
+                ingList.length ? (
+                  <div className="space-y-3">
+                    {ingList.map((ing) => {
+                      const choice = ingChoice[ing.id] || 'normal';
+                      const checked = choice !== 'no';
+                      const canExtra = (ing.extra_price ?? 0) > 0;
+
+                      const toggleCheck = (e: React.ChangeEvent<HTMLInputElement>) => {
+                        const on = e.target.checked;
+                        setIngChoice(prev => ({ ...prev, [ing.id]: on ? 'normal' : 'no' }));
+                      };
+                      const toggleExtra = () => {
+                        if (!checked) return;
+                        setIngChoice(prev => ({ ...prev, [ing.id]: choice === 'extra' ? 'normal' : 'extra' }));
+                      };
+
+                      return (
+                        <div
+                          key={ing.id}
+                          className="border border-slate-200 dark:border-slate-600 rounded-xl p-3 hover:border-emerald-400/60 transition bg-white dark:bg-slate-800"
+                          role="group"
+                          aria-label={isRTL ? ing.name_ar : ing.name_en}
+                        >
+                          <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-3`}>
+                            <label className="flex items-center gap-2 cursor-pointer flex-1">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-emerald-600 focus:ring-emerald-500"
+                                checked={checked}
+                                onChange={toggleCheck}
+                                aria-label={t('custom.include')}
+                              />
+                              <span className="text-sm font-medium text-slate-800 dark:text-slate-100" dir="auto" lang={isRTL ? 'ar' : 'en'}>
+                                {(isRTL ? ing.name_ar : ing.name_en) || ''}
+                              </span>
+                            </label>
+
+                            {canExtra && (
+                              <button
+                                type="button"
+                                onClick={toggleExtra}
+                                disabled={!checked}
+                                className={[
+                                  'text-xs px-2 py-1 rounded-full border transition',
+                                  checked && choice === 'extra'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700'
+                                    : checked
+                                      ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600'
+                                      : 'bg-slate-100 text-slate-400 border-slate-300 dark:bg-slate-700 dark:text-slate-500 dark:border-slate-600 cursor-not-allowed'
+                                ].join(' ')}
+                                aria-pressed={checked && choice === 'extra'}
+                              >
+                                {t('custom.extra')} + {priceFmt.format(ing.extra_price!)}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-slate-500 text-sm">{t('menu.noCustomizations') || 'No customizations for this item.'}</div>
+                )
               ) : (
-                <div className="px-4 pt-3 relative z-0">
+                <div>
                   <label className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-1 block">{t('common.notes')}</label>
                   <textarea
                     value={notes}
@@ -774,9 +775,8 @@ const MenuItemCard: React.FC<Props> = ({
               )}
             </div>
 
-
-            {/* FOOTER — fixed */}
-            <div className="row-start-4 sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-3 pb-[max(env(safe-area-inset-bottom),12px)] z-40">
+            {/* row 5: Footer (fixed) */}
+            <div className="row-start-5 row-end-6 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-4 py-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-slate-600 dark:text-slate-300">
                   {t('pricing.total')}: <strong>{priceFmt.format((item.price ?? 0) + extrasTotal)}</strong>
@@ -792,7 +792,7 @@ const MenuItemCard: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Motion safety */}
+          {/* small helpers */}
           <style>{`
       .animate-page-in { animation: pageIn .32s cubic-bezier(.22,1,.36,1) forwards; }
       @keyframes pageIn { from { transform: translateY(100%) } to { transform: translateY(0) } }
@@ -800,7 +800,6 @@ const MenuItemCard: React.FC<Props> = ({
         .animate-panel-in { animation: panelIn .30s cubic-bezier(.22,1,.36,1) forwards; }
         @keyframes panelIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
       }
-      @media (prefers-reduced-motion: reduce) { }
       .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     `}</style>
         </div>,
