@@ -44,7 +44,10 @@
     --color-text: #F8FAFC;         /* slate-50 */
     --color-textSecondary: #94A3B8;/* slate-400 */
   }
-
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+  
   /* Optional: respect OS dark when no .dark class is forced */
   @media (prefers-color-scheme: dark) {
     :root:not(.dark) { /* noop, app controls theme */ }

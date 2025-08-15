@@ -4,16 +4,17 @@ import type { MenuItem, Category } from '../lib/supabase'
 export const menuService = {
   // Get all menu items with categories
   async getMenuItems(adminId?: string) {
-  try {
-    let query = supabase
-      .from('menus')
-      .select(`
+    try {
+      let query = supabase
+        .from('menus')
+        .select(`
         *,
         categories (
           id,
           name_en,
           name_ar
         ),
+        description_en, description_ar,
         ingredients_details:menu_ingredients (
           ingredient:ingredients (
             id,
@@ -22,23 +23,23 @@ export const menuService = {
           )
         )
       `)
-      .is('deleted_at', null)
-      .eq('available', true)
+        .is('deleted_at', null)
+        .eq('available', true)
 
-    if (adminId) {
-      query = query.eq('user_id', adminId)
+      if (adminId) {
+        query = query.eq('user_id', adminId)
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data || []
+    } catch (error) {
+      console.error('Error fetching menu items:', error)
+      throw error
     }
-
-    const { data, error } = await query.order('created_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    console.error('Error fetching menu items:', error)
-    throw error
   }
-}
-,
+  ,
 
   // Get categories
   async getCategories() {
@@ -62,10 +63,10 @@ export const menuService = {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('User not authenticated')
-      
+
       // Add user_id to the item
       const itemWithUser = { ...item, user_id: user.id }
-      
+
       const { data, error } = await supabase
         .from('menus')
         .insert([itemWithUser])

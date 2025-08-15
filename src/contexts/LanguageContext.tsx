@@ -88,13 +88,17 @@ const translations: Record<Language, any> = {
       increase: "Increase",
       sort: "Sort",
       clear: "Clear",
+      notes: "Notes",
+      notesPlaceholder: "e.g., no onions / extra sauce",
+      unavailableTemp: "Temporarily unavailable",
     },
     cart: {
       viewOrder: "View order",
       items: "items",
       miniCartAria: "Mini cart",
       estimated: "Estimated",
-      min: "min"
+      min: "min",
+      itemAdded: "Item added to cart"
     },
     badges: {
       spicy: "Spicy",
@@ -188,7 +192,32 @@ const translations: Record<Language, any> = {
       compareCount: "Selected to compare:",
       onlyDifferences: "Only differences",
       addBoth: "Add both",
-      compareTagline: "Spot the differences and pick your favorite."
+      compareTagline: "Spot the differences and pick your favorite.",
+      customize: "Customize"
+    },
+    compare: {
+      compare: "Compare",
+      comparing: "Comparing",
+      limit: "You can compare up to 2 items"
+    },
+    custom: {
+      reset: "Reset",
+      removeAll: "Remove all",
+      extraAll: "Extra all",
+      extraAllPaid: "Extra all (paid)",
+      chooseOption: "Customization options",
+      no: "No",
+      normal: "Normal",
+      extra: "Extra",
+      extraPrice: "Extra",
+      "include": "Include",
+      "extraShort": "Extra",
+    },
+    pricing: {
+      base: "Base",
+      extras: "Extras",
+      total: "Total",
+      from: "From "
     },
     orders: {
       title: "Order Management",
@@ -387,7 +416,9 @@ const translations: Record<Language, any> = {
       decrease: "نقّص",
       increase: "زيد",
       sort: "ترتيب",
-      clear: "مسح"
+      clear: "مسح",
+      notesPlaceholder: "مثال: بدون بصل / صلصة إضافية",
+      unavailableTemp: "غير متاح مؤقتاً",
     },
     badges: {
       spicy: "حرّ",
@@ -406,7 +437,7 @@ const translations: Record<Language, any> = {
       sideSalad: "سلطة جانبية",
       bread: "خبز طازج",
       juice: "عصير طبيعي",
-    },    
+    },
     auth: {
       welcome: "أهلًا برجعتك",
       createAccount: "إنشاء حساب جديد",
@@ -428,6 +459,7 @@ const translations: Record<Language, any> = {
       miniCartAria: "سلة مصغّرة",
       estimated: "تقريبًا",
       min: "دقيقة",
+      itemAdded: "تمت إضافة العنصر إلى السلة",
     },
     nav: {
       qrCodes: "رموز QR",
@@ -488,7 +520,33 @@ const translations: Record<Language, any> = {
       compareCount: "عناصر المقارنة:",
       onlyDifferences: "الفروقات فقط",
       addBoth: "الاثنين أحلى",
-      compareTagline: "قارن بهدوء… وخذ اللي قلبك مال له."
+      compareTagline: "قارن بهدوء… وخذ اللي قلبك مال له.",
+      addToOrder: "أضف إلى الطلب",
+      customize: "تخصيص"
+    },
+    compare: {
+      compare: "قارن",
+      comparing: "قيد المقارنة",
+      limit: "يمكنك مقارنة عنصرين فقط"
+    },
+    custom: {
+      reset: "إعادة الضبط",
+      removeAll: "إزالة الكل",
+      extraAll: "إضافة الكل",
+      extraAllPaid: "إضافة الكل (مدفوع)",
+      chooseOption: "خيارات التخصيص",
+      no: "بدون",
+      normal: "عادي",
+      extra: "إضافي",
+      extraPrice: "سعر الإضافة",
+      "include": "تضمين",
+      "extraShort": "إضافي",
+    },
+    pricing: {
+      base: "الأساسي",
+      extras: "الإضافات",
+      total: "الإجمالي",
+      from: "ابتداءً من "
     },
     orders: {
       title: "إدارة الطلبات",
@@ -614,7 +672,7 @@ const translations: Record<Language, any> = {
       english: "الإنجليزية",
       arabic: "العربية",
       switchTo: "بدّل إلى"
-    }    
+    }
   }
 };
 
@@ -727,7 +785,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setLanguageState(lang);
     updateDocumentDirection(lang);
-    
+
     // Track language change
     if (previousLanguage !== lang) {
       trackMenuEvents.languageChanged(previousLanguage, lang);

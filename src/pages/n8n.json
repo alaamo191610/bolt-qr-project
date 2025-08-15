@@ -1,0 +1,615 @@
+{
+    "name": "WhatsApp → n8n → Supabase (Add Menu Item: text/voice)",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "={{$method}}",
+          "path": "whatsapp/menu",
+          "responseMode": "responseNode",
+          "options": {
+            "responseData": "Use Respond to Webhook node"
+          }
+        },
+        "id": "Webhook_WhatsApp",
+        "name": "Webhook (WhatsApp)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [160, 200]
+      },
+      {
+        "parameters": {
+          "functionCode": "const q = $json;\n// If GET: Meta webhook verification\nif ($method === 'GET') {\n  const mode = q['hub.mode'];\n  const token = q['hub.verify_token'];\n  const challenge = q['hub.challenge'];\n  const ok = mode === 'subscribe' && token === $env.WHATSAPP_VERIFY_TOKEN;\n  return [{ is_verify: true, status: ok ? 200 : 403, body: ok ? challenge : 'Forbidden' }];\n}\n// If POST: normalize message\ntry {\n  const entry = q.entry?.[0];\n  const change = entry?.changes?.[0]?.value;\n  const msg = change?.messages?.[0];\n  const from = msg?.from;\n  const type = msg?.type;\n  const out = { is_verify: false, from, type, text: '', audioMediaId: null };\n  if (type === 'text') out.text = msg.text?.body || '';\n  if (type === 'audio') out.audioMediaId = msg.audio?.id || null;\n  return [out];\n} catch (e) {\n  return [{ is_verify: false, error: String(e), from: null }];\n}"
+        },
+        "id": "Fn_Normalize",
+        "name": "Function (Normalize + Verify)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [380, 200]
+      },
+      {
+        "parameters": {
+          "responseBody": "={{$json.body}}",
+          "responseCode": "={{$json.status}}"
+        },
+        "id": "Respond_Verify",
+        "name": "Respond to Webhook (Verify)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [620, 80]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [],
+            "string": [
+              {
+                "value1": "={{$json.is_verify}}",
+                "operation": "is true"
+              }
+            ]
+          }
+        },
+        "id": "IF_Verify",
+        "name": "IF is Verify?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [600, 200]
+      },
+      {
+        "parameters": {
+          "resource": "message",
+          "operation": "send",
+          "additionalFields": {
+            "messageType": "text",
+            "text": "={{$json.replyText}}",
+            "to": "={{$json.from}}"
+          }
+        },
+        "id": "WhatsApp_Reply",
+        "name": "WhatsApp Send (Text)",
+        "type": "n8n-nodes-base.whatsapp",
+        "typeVersion": 1,
+        "credentials": {
+          "whatsAppCloudApi": {
+            "id": "={{$env.PHONE_NUMBER_ID}}"
+          }
+        },
+        "position": [1880, 520]
+      },
+      {
+        "parameters": {
+          "functionCode": "if ($json.type === 'text') {\n  return [{ from: $json.from, text: $json.text, source: 'text' }];\n}\nreturn [{ from: $json.from, audioMediaId: $json.audioMediaId, source: 'audio' }];"
+        },
+        "id": "Fn_SwitchType",
+        "name": "Function (Switch text/audio)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [820, 200]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "url": "={{'https://graph.facebook.com/v21.0/' + $json.audioMediaId}}",
+          "options": {},
+          "headerParametersUi": {
+            "parameter": [
+              {
+                "name": "Authorization",
+                "value": "={{'Bearer ' + $env.WHATSAPP_TOKEN}}"
+              }
+            ]
+          }
+        },
+        "id": "HTTP_GetMedia",
+        "name": "HTTP (Get Media URL)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1040, 120]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "requestMethod": "GET",
+          "url": "={{$json.url}}",
+          "responseFormat": "file",
+          "download": true,
+          "headerParametersUi": {
+            "parameter": [
+              {
+                "name": "Authorization",
+                "value": "={{'Bearer ' + $env.WHATSAPP_TOKEN}}"
+              }
+            ]
+          }
+        },
+        "id": "HTTP_DownloadMedia",
+        "name": "HTTP (Download Audio)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1260, 120]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "requestMethod": "POST",
+          "url": "https://api.openai.com/v1/audio/transcriptions",
+          "responseFormat": "json",
+          "jsonParameters": false,
+          "options": {},
+          "sendBinaryData": true,
+          "headerParametersUi": {
+            "parameter": [
+              {
+                "name": "Authorization",
+                "value": "={{'Bearer ' + $env.OPENAI_API_KEY}}"
+              }
+            ]
+          },
+          "binaryPropertyName": "data",
+          "bodyParametersUi": {
+            "parameter": [
+              {
+                "name": "model",
+                "value": "whisper-1"
+              }
+            ]
+          }
+        },
+        "id": "HTTP_Whisper",
+        "name": "OpenAI Whisper (Transcribe)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1480, 120]
+      },
+      {
+        "parameters": {
+          "functionCode": "if ($json.source === 'text') {\n  return [{ from: $json.from, text: $json.text }];\n}\n// audio path → transcript\nreturn [{ from: $json.from, text: $json.text }];"
+        },
+        "id": "Fn_EnsureText",
+        "name": "Function (Ensure text)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1700, 200]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "requestMethod": "POST",
+          "url": "https://api.openai.com/v1/chat/completions",
+          "responseFormat": "json",
+          "jsonParameters": true,
+          "options": {},
+          "headerParametersUi": {
+            "parameter": [
+              {
+                "name": "Authorization",
+                "value": "={{'Bearer ' + $env.OPENAI_API_KEY}}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "bodyParametersJson": "={{ {\n  model: 'gpt-4o-mini',\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: 'Extract fields into strict JSON: name_en, name_ar, price (number), category (string), ingredients (array of strings), notes (string). If Arabic text, fill name_ar; if English, fill name_en. Return ONLY JSON.' },\n    { role: 'user', content: $json.text }\n  ]\n} }}"
+        },
+        "id": "HTTP_LLM_Extract",
+        "name": "OpenAI (Extract JSON)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1920, 200]
+      },
+      {
+        "parameters": {
+          "functionCode": "const raw = $json.choices?.[0]?.message?.content || '{}';\nlet data;\ntry { data = JSON.parse(raw); } catch(e) { data = {}; }\n// Basic validation\nif (typeof data.price === 'string') data.price = parseFloat(data.price.replace(/[^\\d.]/g,''));\nif (!data.category) data.category = '';\nif (!Array.isArray(data.ingredients)) data.ingredients = [];\n// store\nreturn [{\n  from: $json.from,\n  name_en: data.name_en || '',\n  name_ar: data.name_ar || '',\n  price: isFinite(data.price) ? Number(data.price) : null,\n  category_name: data.category,\n  ingredients: data.ingredients,\n  notes: data.notes || ''\n}];"
+        },
+        "id": "Fn_Validate",
+        "name": "Function (Validate & Shape)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [2140, 200]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "requestMethod": "GET",
+          "url": "={{$env.SUPABASE_URL + '/rest/v1/categories'}}",
+          "responseFormat": "json",
+          "jsonParameters": true,
+          "options": {},
+          "headerParametersUi": {
+            "parameter": [
+              { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE}}" },
+              { "name": "Authorization", "value": "={{'Bearer ' + $env.SUPABASE_SERVICE_ROLE}}" }
+            ]
+          },
+          "queryParametersJson": "={{ { select: 'id,name_en,name_ar', or: '(name_en.eq.' + encodeURIComponent($json.category_name) + ',name_ar.eq.' + encodeURIComponent($json.category_name) + ')' } }}"
+        },
+        "id": "HTTP_GetCategory",
+        "name": "Supabase GET category by name",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [2360, 120]
+      },
+      {
+        "parameters": {
+          "functionCode": "const found = Array.isArray($json) ? $json[0] : null;\nif (found && found.id) {\n  return [{ category_id: found.id }];\n}\n// Need to create\nreturn [{ category_id: null }];"
+        },
+        "id": "Fn_CategoryFound?",
+        "name": "Function (Category found?)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [2580, 120]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{$json.category_id}}",
+                "operation": "is empty"
+              }
+            ]
+          }
+        },
+        "id": "IF_CreateCategory",
+        "name": "IF create category?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [2800, 120]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "requestMethod": "POST",
+          "url": "={{$env.SUPABASE_URL + '/rest/v1/categories'}}",
+          "responseFormat": "json",
+          "jsonParameters": true,
+          "options": {},
+          "headerParametersUi": {
+            "parameter": [
+              { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE}}" },
+              { "name": "Authorization", "value": "={{'Bearer ' + $env.SUPABASE_SERVICE_ROLE}}" },
+              { "name": "Prefer", "value": "return=representation" }
+            ]
+          },
+          "bodyParametersJson": "={{ [ { name_en: $json.category_name || '', name_ar: $json.category_name || null } ] }}"
+        },
+        "id": "HTTP_CreateCategory",
+        "name": "Supabase POST category",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [3020, 20]
+      },
+      {
+        "parameters": {
+          "functionCode": "const created = Array.isArray($json) ? $json[0] : null;\nreturn [{ category_id: created?.id }];"
+        },
+        "id": "Fn_CatID_fromCreate",
+        "name": "Function (Cat ID from create)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [3240, 20]
+      },
+      {
+        "parameters": {
+          "mode": "mergeByIndex"
+        },
+        "id": "Merge_CatID",
+        "name": "Merge (category_id)",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 2,
+        "position": [3440, 120]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "requestMethod": "POST",
+          "url": "={{$env.SUPABASE_URL + '/rest/v1/menus'}}",
+          "responseFormat": "json",
+          "jsonParameters": true,
+          "options": {},
+          "headerParametersUi": {
+            "parameter": [
+              { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_ROLE}}" },
+              { "name": "Authorization", "value": "={{'Bearer ' + $env.SUPABASE_SERVICE_ROLE}}" },
+              { "name": "Prefer", "value": "return=representation" }
+            ]
+          },
+          "bodyParametersJson": "={{ [ {\n  user_id: $env.ADMIN_ID,\n  name_en: $item(0).$node[\"Fn_Validate\"].json[\"name_en\"],\n  name_ar: $item(0).$node[\"Fn_Validate\"].json[\"name_ar\"],\n  price: $item(0).$node[\"Fn_Validate\"].json[\"price\"],\n  category_id: $json.category_id || null,\n  available: true,\n  image_url: null\n} ] }}"
+        },
+        "id": "HTTP_CreateMenu",
+        "name": "Supabase POST menu",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [3660, 120]
+      },
+      {
+        "parameters": {
+          "functionCode": "const newItem = Array.isArray($json) ? $json[0] : null;\nconst name = $item(0).$node[\"Fn_Validate\"].json.name_ar || $item(0).$node[\"Fn_Validate\"].json.name_en || 'Item';\nconst price = $item(0).$node[\"Fn_Validate\"].json.price ?? 'N/A';\nconst cat = $item(0).$node[\"Fn_Validate\"].json.category_name || '—';\nreturn [{ from: $item(0).$node[\"Fn_Validate\"].json.from, replyText: `✅ تمت الإضافة: ${name} — ${price}\\nالفئة: ${cat}\\n#${newItem?.id || ''}` }];"
+        },
+        "id": "Fn_BuildReply",
+        "name": "Function (Build confirmation)",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1660, 520]
+      },
+      {
+        "parameters": {},
+        "id": "Merge_ToReply",
+        "name": "Merge",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 2,
+        "position": [1660, 380]
+      },
+      {
+        "parameters": {},
+        "id": "NoOp",
+        "name": "NoOp",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [1300, 320]
+      },
+      {
+        "parameters": {},
+        "id": "NoOp2",
+        "name": "NoOp2",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [1300, 420]
+      }
+    ],
+    "connections": {
+      "Webhook (WhatsApp)": {
+        "main": [
+          [
+            {
+              "node": "Function (Normalize + Verify)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Normalize + Verify)": {
+        "main": [
+          [
+            {
+              "node": "IF is Verify?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF is Verify?": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook (Verify)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Function (Switch text/audio)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Switch text/audio)": {
+        "main": [
+          [
+            {
+              "node": "NoOp",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Function (Ensure text)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "HTTP (Get Media URL)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP (Get Media URL)": {
+        "main": [
+          [
+            {
+              "node": "HTTP (Download Audio)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP (Download Audio)": {
+        "main": [
+          [
+            {
+              "node": "OpenAI Whisper (Transcribe)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Whisper (Transcribe)": {
+        "main": [
+          [
+            {
+              "node": "Function (Ensure text)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Ensure text)": {
+        "main": [
+          [
+            {
+              "node": "OpenAI (Extract JSON)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI (Extract JSON)": {
+        "main": [
+          [
+            {
+              "node": "Function (Validate & Shape)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Validate & Shape)": {
+        "main": [
+          [
+            {
+              "node": "Supabase GET category by name",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase GET category by name": {
+        "main": [
+          [
+            {
+              "node": "Function (Category found?)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Category found?)": {
+        "main": [
+          [
+            {
+              "node": "IF create category?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF create category?": {
+        "main": [
+          [
+            {
+              "node": "Supabase POST menu",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase POST category",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase POST category": {
+        "main": [
+          [
+            {
+              "node": "Function (Cat ID from create)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Cat ID from create)": {
+        "main": [
+          [
+            {
+              "node": "Merge (category_id)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF create category?": {
+        "main": [
+          null,
+          [
+            {
+              "node": "Merge (category_id)",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge (category_id)": {
+        "main": [
+          [
+            {
+              "node": "Supabase POST menu",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase POST menu": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge": {
+        "main": [
+          [
+            {
+              "node": "Function (Build confirmation)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Function (Build confirmation)": {
+        "main": [
+          [
+            {
+              "node": "WhatsApp Send (Text)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "pinData": {},
+    "meta": {
+      "instanceId": "whatsapp-supabase-menu"
+    }
+  }

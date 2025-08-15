@@ -22,6 +22,8 @@ export interface MenuItem {
   id: string;
   name_en: string;
   name_ar?: string;
+  description_en?: string
+  description_ar?: string
   price: number;
   image_url?: string;
   available?: boolean;
@@ -38,7 +40,7 @@ type OverlayPos = { top: number; left?: number; right?: number };
 const cartKeyFor = (table: string) => `qr-cart-v1:${table || 'unknown'}`;
 
 const CustomerMenu: React.FC = () => {
-  const { t, isRTL,language } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
 
   // data
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -94,10 +96,10 @@ const CustomerMenu: React.FC = () => {
     const table = (urlParams.get('table') || 'T01').trim();
     setTableNumber(table);
     loadMenuItems(table);
-  
+
     if (table) trackMenuEvents.menuViewed(table, language);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);  
+  }, [language]);
 
   // load selected category per table
   useEffect(() => {
@@ -147,6 +149,8 @@ const CustomerMenu: React.FC = () => {
           id: item.id,
           name_en: item.name_en,
           name_ar: item.name_ar,
+          description_en: item.description_en ?? null,
+          description_ar: item.description_ar ?? null, 
           price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
           image_url: item.image_url || '/images/placeholder.png',
           available: item.available,
@@ -181,32 +185,28 @@ const CustomerMenu: React.FC = () => {
       const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory;
   
       const baseName = isRTL ? (item.name_ar || item.name_en) : item.name_en;
-      const name = (baseName || '').toLowerCase();
-      const nameMatch = term ? name.includes(term) : true;
+      const desc = isRTL
+        ? (item.description_ar || item.description_en || '')
+        : (item.description_en || item.description_ar || '');
   
-      const ingredientMatch = term
-        ? item.ingredients_details?.some(({ ingredient }) => {
-            if (!ingredient) return false;
-            const iname = isRTL ? ingredient.name_ar : ingredient.name_en;
-            return ((iname || '').toLowerCase()).includes(term);
-          })
-        : false;
+      const nameMatch = term ? (baseName || '').toLowerCase().includes(term) : true;
+      const descMatch = term ? (desc || '').toLowerCase().includes(term) : false;
   
-      return matchesCategory && (nameMatch || ingredientMatch);
+      return matchesCategory && (nameMatch || descMatch);
     });
   
     return filtered;
-  }, [menuItems, selectedCategory, searchTerm, isRTL]);
-  
+  }, [menuItems, selectedCategory, searchTerm, isRTL]);  
+
   // NEW: debounce search tracking
   useEffect(() => {
     const term = searchTerm.trim();
     if (!term) return; // only track when user typed something
-  
+
     const id = window.setTimeout(() => {
       trackMenuEvents.menuSearched(term.toLowerCase(), filteredItems.length);
     }, 350); // debounce ~0.35s
-  
+
     return () => clearTimeout(id);
   }, [searchTerm, filteredItems.length]);
 
@@ -256,10 +256,10 @@ const CustomerMenu: React.FC = () => {
 
   const placeOrder = async () => {
     setIsOrdering(true);
-    
+
     // Track order started
     trackMenuEvents.orderStarted(tableNumber, totalItems, totalPrice);
-    
+
     try {
       const orderItems = cart.map(item => ({
         menu_item_id: item.id,
@@ -267,10 +267,10 @@ const CustomerMenu: React.FC = () => {
         price_at_order: item.price,
       }));
       await orderService.createOrder({ table_code: tableNumber, items: orderItems });
-      
+
       // Track successful order
       trackMenuEvents.orderCompleted(tableNumber, cart, totalPrice);
-      
+
       setOrderPlaced(true);
       setShowCart(false);
       setCart([]);
@@ -341,10 +341,10 @@ const CustomerMenu: React.FC = () => {
 
   const onHeaderCartClick = () => {
     if (!totalItems) return;
-    
+
     // Track cart view
     trackMenuEvents.cartViewed(totalItems, totalPrice);
-    
+
     if (isDesktop()) setShowCartOverlay(v => !v);
     else setShowCart(true);
   };
@@ -410,6 +410,7 @@ const CustomerMenu: React.FC = () => {
               <button
                 id="header-cart-anchor"
                 data-cart-anchor="header"
+                data-cart-icon
                 onClick={onHeaderCartClick}
                 className="relative px-3 py-2 rounded-lg bg-primary text-white flex items-center gap-2 hover:opacity-90 transition"
                 aria-haspopup="dialog"
@@ -580,8 +581,8 @@ const CustomerMenu: React.FC = () => {
         >
           <div className="max-w-4xl mx-auto px-4">
             <div className="flex items-center justify-between bg-slate-900 text-white rounded-xl shadow-lg px-4 py-3">
-              <span className="text-sm">
-                {(t('menu.compareCount', { n: String(compareIds.length) }) || 'Selected to compare:')} {compareIds.length}/2
+              <span className="text-sm">        
+              {t('menu.compareCount', { n: String(compareIds.length) })} {compareIds.length}/2
               </span>
               <div className="flex gap-2">
                 <button onClick={clearCompare} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20">
@@ -631,13 +632,13 @@ const CustomerMenu: React.FC = () => {
 
       {/* Floating cart (when empty) */}
       {totalItems === 0 && (
-        <FloatingCartButton 
-          itemCount={0} 
-          isRTL={isRTL} 
+        <FloatingCartButton
+          itemCount={0}
+          isRTL={isRTL}
           onClick={() => {
             trackMenuEvents.cartViewed(0, 0);
             setShowCart(true);
-          }} 
+          }}
         />
       )}
 
