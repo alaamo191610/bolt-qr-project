@@ -525,9 +525,8 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${
-        isRTL ? "rtl" : "ltr"
-      }`}
+      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${isRTL ? "rtl" : "ltr"
+        }`}
     >
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
@@ -539,9 +538,8 @@ const CustomerMenu: React.FC = () => {
                 {t("restaurant.name")}
               </h1>
               <div
-                className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
@@ -573,9 +571,8 @@ const CustomerMenu: React.FC = () => {
                 </span>
                 {totalItems > 0 && (
                   <span
-                    className={`absolute -top-2 ${
-                      isRTL ? "-left-2" : "-right-2"
-                    } bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}
+                    className={`absolute -top-2 ${isRTL ? "-left-2" : "-right-2"
+                      } bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}
                   >
                     {totalItems}
                   </span>
@@ -593,18 +590,16 @@ const CustomerMenu: React.FC = () => {
             {/* Search */}
             <div className="relative">
               <Search
-                className={`absolute ${
-                  isRTL ? "right-3" : "left-3"
-                } top-3 w-5 h-5 text-slate-400 dark:text-slate-500`}
+                className={`absolute ${isRTL ? "right-3" : "left-3"
+                  } top-3 w-5 h-5 text-slate-400 dark:text-slate-500`}
               />
               <input
                 type="text"
                 placeholder={t("menu.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full ${
-                  isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
-                } py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+                className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
+                  } py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
               />
             </div>
 
@@ -766,8 +761,8 @@ const CustomerMenu: React.FC = () => {
 
       {/* 🆕 Sticky compare bar (above order bar) */}
       {compareIds.length > 0 && !showCart && (
-        <div className="fixed inset-x-0 z-20 bottom-16 sm:bottom-20 pb-[env(safe-area-inset-bottom)] pointer-events-none">
-          <div className="max-w-4xl mx-auto px-4">
+        <div className="fixed inset-x-0 z-20 bottom-16 sm:bottom-20 pointer-events-none">
+          <div className="max-w-4xl mx-auto px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div
               id="compare-bar"
               role="region"
@@ -822,9 +817,8 @@ const CustomerMenu: React.FC = () => {
 
               {/* Right: actions */}
               <div
-                className={`flex items-center gap-2 ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
                 <button
                   onClick={() => {
@@ -892,9 +886,8 @@ const CustomerMenu: React.FC = () => {
                 <span className="font-semibold">{t("cart.viewOrder")}</span>
               </div>
               <div
-                className={`flex items-center gap-2 text-sm ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`flex items-center gap-2 text-sm ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
                 <span className="inline-flex items-center gap-1 bg-white/15 rounded-full px-2 py-1">
                   <Check className="w-4 h-4" /> {totalItems}
