@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Menu, X, Search, User } from 'lucide-react';
-import { useTheme } from '../contexts/ThemeContext';
-import { useLanguage } from '../contexts/LanguageContext';
-import LanguageToggle from './LanguageToggle';
-import { Menu as DropdownMenu, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
+import React, { useState, useEffect } from "react";
+import { Menu, X, Search, User } from "lucide-react";
+import { useTheme } from "../contexts/ThemeContext";
+import { useLanguage } from "../contexts/LanguageContext";
+import LanguageToggle from "./LanguageToggle";
+import { Menu as DropdownMenu, Transition } from "@headlessui/react";
+import { Fragment } from "react";
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -41,54 +41,54 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
     const handleVisibilityChange = () => {
       if (document.hidden) {
         // Tab is hidden - preserve state
-        sessionStorage.setItem('activeTab', activeTab);
-        sessionStorage.setItem('sidebarOpen', sidebarOpen.toString());
+        sessionStorage.setItem("activeTab", activeTab);
+        sessionStorage.setItem("sidebarOpen", sidebarOpen.toString());
       } else {
         // Tab is visible - restore state if needed
-        const savedTab = sessionStorage.getItem('activeTab');
-        const savedSidebar = sessionStorage.getItem('sidebarOpen');
+        const savedTab = sessionStorage.getItem("activeTab");
+        const savedSidebar = sessionStorage.getItem("sidebarOpen");
 
         if (savedTab && savedTab !== activeTab) {
           setActiveTab(savedTab);
         }
         if (savedSidebar) {
-          setSidebarOpen(savedSidebar === 'true');
+          setSidebarOpen(savedSidebar === "true");
         }
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [activeTab, sidebarOpen, setActiveTab]);
 
   // Prevent page refresh on navigation
   const handleTabChange = (tabId: string) => {
     // Mark that we have unsaved state
-    sessionStorage.setItem('hasUnsavedChanges', 'true');
+    sessionStorage.setItem("hasUnsavedChanges", "true");
 
-    const lang = localStorage.getItem('restaurant-language') || 'en';
+    const lang = localStorage.getItem("restaurant-language") || "en";
     const url = new URL(window.location.href);
-    url.searchParams.set('lang', lang);
+    url.searchParams.set("lang", lang);
 
     // Use replaceState instead of pushState to prevent back button issues
-    window.history.replaceState({ tab: tabId }, '', url.toString());
+    window.history.replaceState({ tab: tabId }, "", url.toString());
 
     setActiveTab(tabId);
     setSidebarOpen(false);
 
     // Clear unsaved changes flag after successful navigation
     setTimeout(() => {
-      sessionStorage.removeItem('hasUnsavedChanges');
+      sessionStorage.removeItem("hasUnsavedChanges");
     }, 100);
   };
 
   return (
     <div
       className={`min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-200`}
-      dir={isRTL ? 'rtl' : 'ltr'}
+      dir={isRTL ? "rtl" : "ltr"}
     >
       {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
@@ -100,9 +100,15 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
       {/* Sidebar (mobile only) */}
       <div
-        className={`fixed inset-y-0 ${isRTL ? 'right-0' : 'left-0'
-          } z-50 w-64 bg-white dark:bg-slate-800 shadow-xl transform transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : isRTL ? 'translate-x-full' : '-translate-x-full'
+        className={`fixed inset-y-0 ${
+          isRTL ? "right-0" : "left-0"
+        } z-50 w-64 bg-white dark:bg-slate-800 shadow-xl transform transition-transform duration-300 ease-in-out
+          ${
+            sidebarOpen
+              ? "translate-x-0"
+              : isRTL
+              ? "translate-x-full"
+              : "-translate-x-full"
           } lg:hidden`}
       >
         <div className="flex items-center justify-between h-16 px-6 border-b border-slate-200 dark:border-slate-700">
@@ -119,8 +125,12 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-900 dark:text-white">RestaurantQR</h1>
-              <p className="text-xs text-slate-600 dark:text-slate-400">Management System</p>
+              <h1 className="text-lg font-bold text-slate-900 dark:text-white">
+                RestaurantQR
+              </h1>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Management System
+              </p>
             </div>
           </div>
 
@@ -144,17 +154,18 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                 onClick={() => {
                   handleTabChange(item.id);
                 }}
-
-                className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${isRTL ? 'text-right' : 'text-left'
-                  } px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                    ? 'text-white shadow-lg transform scale-[1.02]'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${
+                  isRTL ? "text-right" : "text-left"
+                } px-4 py-3 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "text-white shadow-lg transform scale-[1.02]"
+                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
+                }`}
                 style={
                   isActive
                     ? {
-                      background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                    }
+                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                      }
                     : {}
                 }
               >
@@ -184,10 +195,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             {onSignOut && (
               <button
                 onClick={onSignOut}
-                className={`w-full mt-3 px-4 py-2 text-sm text-red-600 hover:text-red-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors duration-200 ${isRTL ? 'text-right' : 'text-left'
-                  }`}
+                className={`w-full mt-3 px-4 py-2 text-sm text-red-600 hover:text-red-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors duration-200 ${
+                  isRTL ? "text-right" : "text-left"
+                }`}
               >
-                {t('auth.signOut')}
+                {t("auth.signOut")}
               </button>
             )}
           </div>
@@ -216,13 +228,21 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                     background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                   }}
                 >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
                   </svg>
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-slate-900 dark:text-white">RestaurantQR</h1>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">Management System</p>
+                  <h1 className="text-lg font-bold text-slate-900 dark:text-white">
+                    RestaurantQR
+                  </h1>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    Management System
+                  </p>
                 </div>
               </div>
 
@@ -237,15 +257,16 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                       onClick={() => {
                         handleTabChange(item.id);
                       }}
-                      className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${isActive
-                        ? 'text-white shadow-sm'
-                        : 'text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white'
-                        }`}
+                      className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${
+                        isActive
+                          ? "text-white shadow-sm"
+                          : "text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white"
+                      }`}
                       style={
                         isActive
                           ? {
-                            background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                          }
+                              background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                            }
                           : {}
                       }
                     >
@@ -261,7 +282,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                 <Search className="absolute ltr:left-3 rtl:right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder={t('common.search')}
+                  placeholder={t("common.search")}
                   className="w-full py-2 pl-10 pr-4 rtl:pr-10 rtl:pl-4 bg-slate-100 dark:bg-slate-700 border-0 rounded-lg text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 transition-all duration-200"
                   style={{ outlineColor: colors.primary }}
                 />
@@ -270,7 +291,6 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
             {/* Right side: language, bell, user info */}
             <div className="flex items-center space-x-4 rtl:space-x-reverse">
-
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">
@@ -292,7 +312,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                     leaveFrom="transform opacity-100 scale-100"
                     leaveTo="transform opacity-0 scale-95"
                   >
-                    <DropdownMenu.Items className="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                    <DropdownMenu.Items
+                      className={`absolute z-50 mt-2 w-72 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${
+                        isRTL ? "left-0" : "right-0"
+                      }  `}
+                    >
                       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
                         <p className="text-sm font-medium text-slate-900 dark:text-white">
                           {userInfo.name}
@@ -311,12 +335,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                           {({ active }) => (
                             <button
                               onClick={onSignOut}
-                              className={`${active
-                                  ? 'bg-slate-100 dark:bg-slate-700'
-                                  : ''
-                                } w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400`}
+                              className={`${
+                                active ? "bg-slate-100 dark:bg-slate-700" : ""
+                              } w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400`}
                             >
-                              {t('auth.signOut')}
+                              {t("auth.signOut")}
                             </button>
                           )}
                         </DropdownMenu.Item>

@@ -146,7 +146,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
             <div className="flex space-x-2">
               <button
                 onClick={() => downloadQRCode(table.number)}
-                className="flex-1 btn-primary"
+                className="flex rounded-md items-center gap-5 justify-center flex-1 btn-primary"
               >
                 <Download className="w-4 h-4" />
                 <span className="text-sm font-medium">Download</span>
