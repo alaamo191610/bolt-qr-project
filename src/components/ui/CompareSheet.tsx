@@ -207,9 +207,7 @@ function MiniCard({
               onClick={() => add(item)}
               aria-label={t('menu.addToCart') || 'Add to cart'}
               className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-full text-sm font-semibold text-white shadow-sm active:scale-[.99] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-300"
-              style={{
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-              }}
+              style={{ backgroundColor: side === 'left' ? colors.primary : colors.secondary, }}
             >
               <span className="text-base leading-none">＋</span>
               {t('menu.addToCart') || 'Add to cart'}
