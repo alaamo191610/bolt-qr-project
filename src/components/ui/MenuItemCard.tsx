@@ -1,9 +1,12 @@
+'use client';
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Minus,ArrowLeft, X, RefreshCw, Star, Scale } from 'lucide-react';
+import { Plus, Minus, ArrowLeft, X, RefreshCw, Star } from 'lucide-react'; // ⬅️ removed Scale
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import CompareChip from './CompareChip';
 
 /* ---------- Types ---------- */
 interface Ingredient { id: string; name_en: string; name_ar: string; extra_price?: number }
@@ -47,14 +50,14 @@ interface Props {
   showCompareChip?: boolean;
 }
 
-/* ---------- helpers ---------- */
+/* ---------- analytics helper ---------- */
 function track(name: string, props?: Record<string, unknown>) {
   if (typeof window === 'undefined') return;
   try { (window as any).dataLayer?.push({ event: name, ...props }); } catch { }
   try { window.dispatchEvent(new CustomEvent('analytics:event', { detail: { name, props } })); } catch { }
 }
 
-
+/* ---------- small motion helpers ---------- */
 function onAnimationFinish(a: Animation) {
   const f = (a as any).finished as Promise<Animation> | undefined;
   return f?.then(() => { }) ?? new Promise<void>(r => a.addEventListener('finish', () => r(), { once: true }));
@@ -113,7 +116,7 @@ async function flyToHeaderFromRect(
   const bubble = document.createElement('div');
   const viewport = { w: window.innerWidth, h: window.innerHeight };
   const inView = endRect.top >= 0 && endRect.left >= 0 && endRect.left <= viewport.w && endRect.top <= viewport.h;
-  if (!inView) return; // or fallback to pulse only
+  if (!inView) return;
 
   bubble.textContent = emoji;
   bubble.style.position = 'fixed';
@@ -137,6 +140,24 @@ async function flyToHeaderFromRect(
   if (isTemp) anchor.remove();
 }
 
+/* ---------- NEW: “VS” compare icon (two squares + VS badge) ---------- */
+const CompareIconVS: React.FC<{ className?: string; active?: boolean }> = ({ className, active }) => (
+  <span className={['relative inline-flex items-center justify-center', className || ''].join(' ')}>
+    <span className="flex gap-0.5">
+      <span className={`w-3.5 h-3.5 rounded-[3px] ${active ? 'bg-white/90' : 'bg-slate-500/80 dark:bg-slate-400/80'}`} />
+      <span className={`w-3.5 h-3.5 rounded-[3px] ${active ? 'bg-white/70' : 'bg-slate-400/70 dark:bg-slate-500/70'}`} />
+    </span>
+    <span
+      aria-hidden="true"
+      className={`absolute -bottom-1 -right-2 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-extrabold ${active ? 'bg-white text-emerald-600' : 'bg-emerald-600 text-white dark:bg-emerald-500'
+        }`}
+      style={{ lineHeight: 1 }}
+    >
+      VS
+    </span>
+  </span>
+);
+
 /* ---------- component ---------- */
 const MenuItemCard: React.FC<Props> = ({
   item,
@@ -150,23 +171,30 @@ const MenuItemCard: React.FC<Props> = ({
   showCompareChip = false,
 }) => {
   const { t, isRTL } = useLanguage();
+  const { colors } = useTheme();
+
+  // Fixed compare limit, per your requirement
+  const COMPARE_LIMIT = 2;
+
+  // Safe i18n → always a string (prevents TS2322 on aria/title)
+  const tt = (key: string, fallback: string, values?: any): string => {
+    const v = t?.(key as any, values) as unknown;
+    return typeof v === 'string' ? v : v == null ? fallback : String(v);
+  };
 
   // Full-screen “page”
   const [openPage, setOpenPage] = useState(false);
   const lastTriggerRef = useRef<HTMLElement | null>(null);
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
   const panelScrollRef = React.useRef<HTMLDivElement | null>(null);
-  // Tiny cache to avoid repeated confetti per item
   const addedOnceRef = React.useRef<Set<string>>(new Set());
   const FALLBACK_400 = "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400"
 
-  // Prefer-reduced-motion flag (read once)
+  // reduced-motion
   const prefersReducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-
 
   // Ingredients & notes
   const ingList: Ingredient[] = useMemo(
@@ -192,16 +220,16 @@ const MenuItemCard: React.FC<Props> = ({
   });
   const [notes, setNotes] = useState<string>(item.notes || '');
   const [activeTab, setActiveTab] = useState<'ingredients' | 'notes'>('ingredients');
-  const [openIngNames, setOpenIngNames] = useState(false);
   const lastPlusRef = useRef(0);
+
   const onPlus = (e: React.MouseEvent<HTMLButtonElement>) => {
     const now = performance.now();
-    if (now - lastPlusRef.current < 140) return; // ignore jitter
+    if (now - lastPlusRef.current < 140) return;
     lastPlusRef.current = now;
     if (!isAvailable) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     onAdd(item);
-    announceToSR?.(t('cart.itemAdded'));
+    announceToSR?.(tt('cart.itemAdded', 'Added to cart'));
     tinyPulseCartIcon?.();
     confettiOnceForItem?.(item.id);
     requestAnimationFrame(() => flyToHeaderFromRect(r, isRTL));
@@ -215,7 +243,7 @@ const MenuItemCard: React.FC<Props> = ({
     setIngChoice(init);
     setNotes(item.notes || '');
     setActiveTab('ingredients');
-    setOpenIngNames(false);
+    // removed unused openIngNames to avoid TS6133
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
@@ -229,7 +257,6 @@ const MenuItemCard: React.FC<Props> = ({
     isRTL
       ? (item.description_ar || item.description_en || '')
       : (item.description_en || item.description_ar || '');
-
 
   const extrasTotal = useMemo(
     () => ingList.reduce((sum, i) => sum + (ingChoice[i.id] === 'extra' ? (i.extra_price ?? 0) : 0), 0),
@@ -257,25 +284,17 @@ const MenuItemCard: React.FC<Props> = ({
     if (rect) requestAnimationFrame(() => flyToHeaderFromRect(rect, isRTL));
     setOpenPage(false);
   };
-  const { colors } = useTheme();
 
-  // page behavior (lock + focus + ESC)
-  // Lock body scroll, close on Escape, trap focus
-  // ==== Focus trap + Escape + body scroll lock for the panel ====
+  // Focus trap + Escape + body scroll lock
   React.useEffect(() => {
     if (!openPage) return;
 
-    // Lock body scroll
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Close on Escape
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenPage(false);
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenPage(false); };
     window.addEventListener('keydown', onKey);
 
-    // Basic focus trap within [role="dialog"]
     const root = document.body;
     const queryFocusable = () =>
       Array.from(
@@ -294,31 +313,26 @@ const MenuItemCard: React.FC<Props> = ({
     };
     root.addEventListener('focusin', keepFocusInDialog);
 
-    // Set initial focus (Back button)
     firstFocusRef.current?.focus();
-
     const lastTrigger = lastTriggerRef.current;
 
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', onKey);
       root.removeEventListener('focusin', keepFocusInDialog);
-      // Restore focus to the element that opened the panel
       lastTrigger?.focus?.();
     };
   }, [openPage, setOpenPage]);
 
-  // ==== SR live announcer (pairs with <div id="cart-live-region" ... />) ====
+  // SR live announcer
   function announceToSR(message: string) {
     const live = document.getElementById('cart-live-region');
     if (!live) return;
-    // Clear then set (ensures screen readers announce updates)
     live.textContent = '';
     setTimeout(() => (live.textContent = message), 10);
   }
 
-  // ==== Cart icon micro-pulse (250–300ms) ====
-  // Add data-cart-icon to your header cart button:  <button data-cart-icon ...>
+  // Cart icon pulse
   function tinyPulseCartIcon() {
     if (prefersReducedMotion) return;
     const el = document.querySelector('[data-cart-icon]') as HTMLElement | null;
@@ -329,7 +343,7 @@ const MenuItemCard: React.FC<Props> = ({
     );
   }
 
-  // ==== One-time confetti per item (lightweight, GC-friendly) ====
+  // One-time confetti
   function confettiOnceForItem(itemId: string) {
     if (prefersReducedMotion) return;
     const set = addedOnceRef.current;
@@ -343,11 +357,11 @@ const MenuItemCard: React.FC<Props> = ({
       Object.assign(dot.style, {
         position: 'fixed',
         top: '12px',
-        right: '16px', // adjust if your cart is on the left in RTL
+        right: '16px',
         width: '6px',
         height: '6px',
         background: 'currentColor',
-        color: 'rgb(16,185,129)', // emerald-ish
+        color: 'rgb(16,185,129)',
         borderRadius: '9999px',
         pointerEvents: 'none',
         zIndex: '10000',
@@ -368,88 +382,40 @@ const MenuItemCard: React.FC<Props> = ({
     }
   }
 
-  /* ---------- UI: Card (image left, content right) ---------- */
+  /* ---------- UI: Card ---------- */
   return (
     <>
       <div
         className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-md hover:shadow-lg transition overflow-hidden"
         role="group"
       >
-        {/* Compare top-right on the CARD */}
-{isAvailable && showCompareChip && onToggleCompare && (
-  <>
-    {/* SR-only live region for limit announcements */}
-    <span className="sr-only" aria-live="polite">
-      {compareDisabled && !compareSelected ? (t('compare.limit') || '') : ''}
-    </span>
+        {/* Compare chip (top corner) */}
+        {isAvailable && showCompareChip && onToggleCompare && (
+          <CompareChip
+            selected={!!compareSelected}
+            disabled={!!(!compareSelected && compareDisabled)}
+            onToggle={() => {
+              if (!compareSelected && compareDisabled) {
+                // Optional: toast using your i18n
+                toast.error(t('menu.compareLimit') ?? 'You can compare up to 2 items', {
+                  position: 'bottom-center',
+                  duration: 2000,
+                });
+                return;
+              }
+              onToggleCompare(item.id);
+            }}
+            isRTL={isRTL}
+          />
+        )}
 
-    <button
-      type="button"
-      onClick={(ev) => {
-        ev.stopPropagation();
 
-        // if limit reached and this item isn't already selected → toast + block
-        if (compareDisabled && !compareSelected) {
-          toast.error(t('compare.limit') || 'You can compare up to 2 items', {
-            position: 'bottom-center',
-            duration: 2200,
-          });
-          track('compare_toggle_blocked', { id: item.id, reason: 'limit_reached' });
-          return;
-        }
 
-        onToggleCompare(item.id);
-        track('compare_toggle', { id: item.id, selected: !compareSelected });
-
-        // subtle pulse only when selecting (skip on reduced motion)
-        if (!compareSelected && !prefersReducedMotion) {
-          const el = ev.currentTarget;
-          el.animate(
-            [
-              { transform: 'scale(1)', offset: 0 },
-              { transform: 'scale(1.06)', offset: 0.45 },
-              { transform: 'scale(1)', offset: 1 },
-            ],
-            { duration: 180, easing: 'cubic-bezier(.2,.8,.3,1)' }
-          );
-        }
-      }}
-      disabled={compareDisabled && !compareSelected}
-      aria-pressed={compareSelected}
-      aria-controls="compare-bar"                         // set this id on your compare tray/bar
-      aria-label={
-        compareDisabled && !compareSelected
-          ? (t('compare.limit') || 'Compare limit reached')
-          : compareSelected
-          ? (t('compare.comparing') || 'Comparing')
-          : (t('compare.compare') || 'Compare')
-      }
-      className={[
-        'absolute top-3 z-10 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm min-h-[32px]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400',
-        isRTL ? 'left-3' : 'right-3',
-        compareSelected
-          ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
-          : compareDisabled
-            ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 cursor-not-allowed'
-            : 'bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-800',
-      ].join(' ')}
-    >
-      <span className="inline-flex items-center gap-1">
-        <Scale className="w-3.5 h-3.5" aria-hidden="true" />
-        <span className="hidden sm:inline">
-          {t(compareSelected ? 'compare.comparing' : 'compare.compare')}
-        </span>
-      </span>
-    </button>
-  </>
-)}
-
-        {/* Clickable row opens the page (not the qty/buttons) */}
+        {/* Clickable row opens the page */}
         <div
           role="button"
-          tabIndex={isAvailable ? 0 : -1}              // not focusable when unavailable
-          aria-disabled={!isAvailable || undefined}    // announces state to SRs
+          tabIndex={isAvailable ? 0 : -1}
+          aria-disabled={!isAvailable || undefined}
           dir={isRTL ? 'rtl' : 'ltr'}
           className="w-full outline-none text-start"
           onClick={(e) => {
@@ -469,7 +435,7 @@ const MenuItemCard: React.FC<Props> = ({
           }}
         >
           <div className="flex items-stretch gap-4 p-4">
-            {/* Image with fixed aspect + skeleton fade-in */}
+            {/* Image */}
             <div className="shrink-0 w-[128px] h-[128px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative">
               <img
                 src={item.image_url || FALLBACK_400}
@@ -500,7 +466,7 @@ const MenuItemCard: React.FC<Props> = ({
                 >
                   {displayName}
                 </h3>
-                {/* Short “description”: first few ingredients if available */}
+
                 {displayDesc ? (
                   <p className="mt-1 text-slate-500 dark:text-slate-400 text-[12px] leading-snug line-clamp-2">
                     {displayDesc}
@@ -514,10 +480,9 @@ const MenuItemCard: React.FC<Props> = ({
                       .join(isRTL ? '، ' : ', ')}
                   </p>
                 )}
-
               </div>
 
-              {/* Footer row: price left — controls right */}
+              {/* Footer row */}
               <div className={`mt-auto pt-2 flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
                 <div className="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums">
                   {priceFmt.format(item.price ?? 0)}
@@ -530,14 +495,11 @@ const MenuItemCard: React.FC<Props> = ({
                   >
                     <button
                       onClick={() => { onRemove(item.id); track('remove_from_cart', { item_id: item.id }); }}
-                      className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition "
-                      style={{
-                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                      }}
-                      aria-label={t('common.decrease')}
-                      
+                      className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
+                      style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})` }}
+                      aria-label={tt('common.decrease', 'Decrease')}
                     >
-                      <Minus className="w-4 h-4 " />
+                      <Minus className="w-4 h-4" />
                     </button>
                     <span className="min-w-[2ch] text-center font-bold text-slate-900 dark:text-white">{quantity}</span>
                     <button
@@ -547,10 +509,8 @@ const MenuItemCard: React.FC<Props> = ({
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                         }`}
-                        style={{
-                          background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                        }}
-                      aria-label={t('common.increase')}
+                      style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})` }}
+                      aria-label={tt('common.increase', 'Increase')}
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -564,11 +524,9 @@ const MenuItemCard: React.FC<Props> = ({
                         ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-95'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                         }`}
-                        style={{
-                          background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                        }}
-                      aria-label={t('menu.addToCart')}
-                      title={t('menu.addToCart')}
+                      style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})` }}
+                      aria-label={tt('menu.addToCart', 'Add to cart')}
+                      title={tt('menu.addToCart', 'Add to cart')}
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -578,7 +536,8 @@ const MenuItemCard: React.FC<Props> = ({
             </div>
           </div>
         </div>
-        {/* Overlay when unavailable — put this INSIDE the outer "relative" card, after the clickable row */}
+
+        {/* Unavailable overlay */}
         {!isAvailable && (
           <div
             className="absolute inset-0 bg-white/60 dark:bg-slate-900/50 backdrop-blur-[2px] grid place-items-center z-20"
@@ -591,36 +550,31 @@ const MenuItemCard: React.FC<Props> = ({
         )}
       </div>
 
-      {/* ======= FULLSCREEN PAGE======= */}
+      {/* ======= FULLSCREEN PAGE ======= */}
       {openPage && createPortal(
         <div className="fixed inset-0 z-[9999]">
-          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/40" />
-
-          {/* Panel: bottom sheet (mobile) / right panel (desktop) */}
           <div
             className={[
-              // height not fullscreen
               'absolute inset-x-0 bottom-0 h-[86dvh]',
               'sm:inset-auto sm:top-4 sm:bottom-4 sm:right-4 sm:left-auto sm:w-[520px] sm:h-[92dvh]',
               'bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl',
-              // 🔥 grid layout: header | hero | controls | LIST(1fr) | footer
               'overflow-hidden grid grid-rows-[auto_auto_auto_1fr_auto]'
             ].join(' ')}
             role="dialog"
             aria-modal="true"
             aria-labelledby="item-panel-title"
           >
-            {/* row 1: Header (fixed) */}
+            {/* Header */}
             <div className="row-start-1 row-end-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between z-[90]">
               <button
                 ref={firstFocusRef}
                 onClick={() => setOpenPage(false)}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                aria-label={t('common.back')}
+                aria-label={tt('common.back', 'Back')}
               >
                 <ArrowLeft className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
-                <span className="text-sm">{t('common.back')}</span>
+                <span className="text-sm">{tt('common.back', 'Back')}</span>
               </button>
               <h4 id="item-panel-title" className="font-bold text-slate-900 dark:text-white truncate max-w-[60%]">
                 {displayName}
@@ -628,13 +582,13 @@ const MenuItemCard: React.FC<Props> = ({
               <button
                 onClick={() => setOpenPage(false)}
                 className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
-                aria-label={t('common.close')}
+                aria-label={tt('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* row 2: Hero (fixed) */}
+            {/* Hero */}
             <div className="row-start-2 row-end-3 px-4 pt-4">
               <img
                 src={item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=800'}
@@ -669,31 +623,29 @@ const MenuItemCard: React.FC<Props> = ({
               )}
             </div>
 
-            {/* row 3: Controls (fixed): tabs + quick actions */}
+            {/* Tabs + quick actions */}
             <div className="row-start-3 row-end-4 border-t border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-800 z-[85]">
-              {/* Tabs */}
               <div className={`px-4 pt-3 pb-2 flex ${isRTL ? 'flex-row-reverse' : ''} items-center gap-2`}>
                 {(['ingredients', 'notes'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${activeTab === tab
-                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
-                        : 'text-slate-600 dark:text-slate-300'
+                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
+                      : 'text-slate-600 dark:text-slate-300'
                       }`}
                     aria-pressed={activeTab === tab}
                   >
-                    {tab === 'ingredients' ? t('menu.customize') : t('common.notes')}
+                    {tab === 'ingredients' ? tt('menu.customize', 'Customize') : tt('common.notes', 'Notes')}
                   </button>
                 ))}
                 {activeTab === 'ingredients' && (
                   <span className={`${isRTL ? 'mr-auto' : 'ml-auto'} text-xs text-slate-500`}>
-                    {t('pricing.extras')}: <strong className="tabular-nums">{priceFmt.format(extrasTotal)}</strong>
+                    {tt('pricing.extras', 'Extras')}: <strong className="tabular-nums">{priceFmt.format(extrasTotal)}</strong>
                   </span>
                 )}
               </div>
 
-              {/* Quick actions (only for ingredients) */}
               {activeTab === 'ingredients' && (
                 <div className={`px-4 pb-3 flex flex-nowrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''} overflow-x-auto whitespace-nowrap`}>
                   <button
@@ -705,7 +657,7 @@ const MenuItemCard: React.FC<Props> = ({
                     }}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> {t('custom.reset')}
+                    <RefreshCw className="w-3.5 h-3.5" /> {tt('custom.reset', 'Reset')}
                   </button>
 
                   <button
@@ -717,7 +669,7 @@ const MenuItemCard: React.FC<Props> = ({
                     }}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200"
                   >
-                    <X className="w-3.5 h-3.5" /> {t('custom.removeAll')}
+                    <X className="w-3.5 h-3.5" /> {tt('custom.removeAll', 'Remove all')}
                   </button>
 
                   <button
@@ -730,17 +682,17 @@ const MenuItemCard: React.FC<Props> = ({
                     }}
                     disabled={!anyPaidExtra}
                     className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs ${anyPaidExtra
-                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                       }`}
                   >
-                    <Star className="w-3.5 h-3.5" /> {t(anyPaidExtra ? 'custom.extraAllPaid' : 'custom.extraAll')}
+                    <Star className="w-3.5 h-3.5" /> {tt(anyPaidExtra ? 'custom.extraAllPaid' : 'custom.extraAll', anyPaidExtra ? 'Extra all (paid)' : 'Extra all')}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* row 4: SCROLLER — ONLY this scrolls */}
+            {/* Scroller */}
             <div ref={panelScrollRef} className="row-start-4 row-end-5 overflow-y-auto min-h-0 px-4 py-4">
               {activeTab === 'ingredients' ? (
                 ingList.length ? (
@@ -773,7 +725,7 @@ const MenuItemCard: React.FC<Props> = ({
                                 className="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-emerald-600 focus:ring-emerald-500"
                                 checked={checked}
                                 onChange={toggleCheck}
-                                aria-label={t('custom.include')}
+                                aria-label={tt('custom.include', 'Include')}
                               />
                               <span className="text-sm font-medium text-slate-800 dark:text-slate-100" dir="auto" lang={isRTL ? 'ar' : 'en'}>
                                 {(isRTL ? ing.name_ar : ing.name_en) || ''}
@@ -795,7 +747,7 @@ const MenuItemCard: React.FC<Props> = ({
                                 ].join(' ')}
                                 aria-pressed={checked && choice === 'extra'}
                               >
-                                {t('custom.extra')} + {priceFmt.format(ing.extra_price!)}
+                                {tt('custom.extra', 'Extra')} + {priceFmt.format(ing.extra_price!)}
                               </button>
                             )}
                           </div>
@@ -804,56 +756,54 @@ const MenuItemCard: React.FC<Props> = ({
                     })}
                   </div>
                 ) : (
-                  <div className="py-10 text-center text-slate-500 text-sm">{t('menu.noCustomizations') || 'No customizations for this item.'}</div>
+                  <div className="py-10 text-center text-slate-500 text-sm">{tt('menu.noCustomizations', 'No customizations for this item.')}</div>
                 )
               ) : (
                 <div>
-                  <label className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-1 block">{t('common.notes')}</label>
+                  <label className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-1 block">{tt('common.notes', 'Notes')}</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     maxLength={140}
                     className="w-full min-h-[120px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-3 outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder={t('common.notesPlaceholder')}
+                    placeholder={tt('common.notesPlaceholder', 'Add any special requests (140 chars)')}
                   />
                   <div className="mt-1 text-xs text-slate-500">{notes.length}/140</div>
                 </div>
               )}
             </div>
 
-            {/* row 5: Footer (fixed) */}
+            {/* Footer */}
             <div className="row-start-5 row-end-6 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-4 py-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-slate-600 dark:text-slate-300">
-                  {t('pricing.total')}: <strong>{priceFmt.format((item.price ?? 0) + extrasTotal)}</strong>
+                  {tt('pricing.total', 'Total')}: <strong>{priceFmt.format((item.price ?? 0) + extrasTotal)}</strong>
                 </div>
                 <button
                   onClick={(e) => addWithOptions((e.currentTarget as HTMLElement).getBoundingClientRect())}
                   className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-6 font-semibold shadow-lg active:scale-[.99] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"
                 >
-                  {t('menu.addToOrder')}
+                  {tt('menu.addToOrder', 'Add to order')}
                 </button>
               </div>
               <div className="sr-only" aria-live="polite" aria-atomic="true" id="cart-live-region" />
             </div>
           </div>
 
-          {/* small helpers */}
           <style>{`
-      .animate-page-in { animation: pageIn .32s cubic-bezier(.22,1,.36,1) forwards; }
-      @keyframes pageIn { from { transform: translateY(100%) } to { transform: translateY(0) } }
-      @media (min-width: 640px) {
-        .animate-panel-in { animation: panelIn .30s cubic-bezier(.22,1,.36,1) forwards; }
-        @keyframes panelIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
-      }
-      .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    `}</style>
+            .animate-page-in { animation: pageIn .32s cubic-bezier(.22,1,.36,1) forwards; }
+            @keyframes pageIn { from { transform: translateY(100%) } to { transform: translateY(0) } }
+            @media (min-width: 640px) {
+              .animate-panel-in { animation: panelIn .30s cubic-bezier(.22,1,.36,1) forwards; }
+              @keyframes panelIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
+            }
+            .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+          `}</style>
         </div>,
         document.body
       )}
     </>
   );
-
 };
 
 export default MenuItemCard;

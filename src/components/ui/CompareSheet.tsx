@@ -4,389 +4,201 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { MenuItem } from './MenuItemCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 
-/** Optional, adjust to your real schema if exported elsewhere */
-type IngredientDetail = {
-  ingredient?: {
-    id?: string;
-    name_en?: string;
-    name_ar?: string;
-  };
-};
+/* ===================== Types ===================== */
+type IngredientDetail = { ingredient?: { id?: string; name_en?: string; name_ar?: string } };
+type Chip = { text: string; kind: 'common' | 'unique' };
+type FilterMode = 'all' | 'unique' | 'common';
 
 interface Props {
-  items: MenuItem[]; // usually 2; handles 0/1 gracefully
+  items: MenuItem[];
   isRTL: boolean;
   currency: Intl.NumberFormat;
   onClose: () => void;
-  onAddToCart: (item: MenuItem) => void;
 
-  // optional cart controls
+  // تحكم السلة داخل البطاقة
+  onAddToCart: (item: MenuItem) => void;
   onRemoveFromCart?: (id: string) => void;
   quantityMap?: Record<string, number>;
 }
 
-type Chip = { text: string; kind: 'common' | 'unique' };
+/* ===================== Sheet layout ===================== */
+/** مقدار المساحة من أعلى الشاشة (بالـ vh) — اللوحة تملأ الباقي */
+const SHEET_TOP_VH = 9; // مثال: 9vh من أعلى، والباقي كله مغطّى من الأسفل والجوانب
 
-// ----------------------- Utilities -----------------------
-const ARABIC_SEPARATORS = /،|؛/g; // Arabic comma/semicolon
-const GENERIC_SEPARATORS = /•|,|\/|;|\||·/g;
-
-const splitIngredients = (s: string) =>
-  s
-    ? s
-        .replace(ARABIC_SEPARATORS, ',')
-        .split(GENERIC_SEPARATORS)
-        .map(x => x.trim())
-        .filter(Boolean)
-    : [];
-
+/* ===================== Utils ===================== */
 const normalizeToken = (s: string) =>
-  s
-    .toLowerCase()
-    // keep Arabic letters; remove common punctuation & extra spaces
-    .replace(/[./#!$%^&*;:{}=\-_`~()،؛]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  (s || '').toLowerCase().replace(/[./#!$%^&*;:{}=\-_`~()،؛]/g, '').replace(/\s+/g, ' ').trim();
 
-function prefersReducedMotion() {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-/** Simple particle budget to avoid jank on low-end devices */
-const particleBudget = (() => {
-  let active = 0;
-  const limit = 40;
-  return {
-    canSpawn() {
-      return active < limit;
-    },
-    inc() {
-      active++;
-    },
-    dec() {
-      active = Math.max(0, active - 1);
-    },
-  };
-})();
-
-/** Subtle emoji confetti with budget & reduced-motion guard */
-function burstConfettiSoft(x: number, y: number, count = 10) {
-  if (prefersReducedMotion() || !particleBudget.canSpawn()) return;
-  const EMOJIS = ['🍔', '🍕', '🍟', '🌯', '🥙', '🥗', '🍤', '🍣', '🍩', '🥤', '🧄', '🧀', '🥑', '🌶️', '🍪'];
-  for (let i = 0; i < count; i++) {
-    particleBudget.inc();
-    const el = document.createElement('div');
-    el.textContent = EMOJIS[(Math.random() * EMOJIS.length) | 0];
-    el.style.position = 'fixed';
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.fontSize = `${14 + Math.random() * 10}px`;
-    el.style.zIndex = '9999';
-    el.style.pointerEvents = 'none';
-    document.body.appendChild(el);
-
-    const dx = (Math.random() - 0.5) * 160;
-    const dy = -(40 + Math.random() * 90);
-    const rot = (Math.random() - 0.5) * 180;
-
-    el
-      .animate(
-        [
-          { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
-          { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 },
-        ],
-        { duration: 900 + Math.random() * 300, easing: 'cubic-bezier(.2,.95,.4,1)' }
-      )
-      .addEventListener('finish', () => {
-        el.remove();
-        particleBudget.dec();
-      });
-  }
-}
-
-/** Tiny floating "+N" pulse near a point */
-function pulsePlus(x: number, y: number, text = '+2') {
-  if (prefersReducedMotion()) return;
-  const el = document.createElement('div');
-  el.textContent = text;
-  el.style.position = 'fixed';
-  el.style.left = `${x}px`;
-  el.style.top = `${y}px`;
-  el.style.transform = 'translate(-50%, -50%)';
-  el.style.padding = '2px 6px';
-  el.style.fontSize = '12px';
-  el.style.fontWeight = '800';
-  el.style.lineHeight = '1';
-  el.style.color = 'white';
-  el.style.background = 'rgba(16,185,129,.95)'; // emerald-ish
-  el.style.borderRadius = '999px';
-  el.style.boxShadow = '0 4px 10px rgba(0,0,0,.15)';
-  el.style.zIndex = '10000';
-  el.style.pointerEvents = 'none';
-  document.body.appendChild(el);
-
-  el
-    .animate(
-      [
-        { transform: 'translate(-50%, -50%) scale(.9)', opacity: 0 },
-        { transform: 'translate(-50%, -70%) scale(1.05)', opacity: 1, offset: 0.35 },
-        { transform: 'translate(-50%, -95%) scale(.98)', opacity: 0 },
-      ],
-      { duration: 700, easing: 'cubic-bezier(.2,.8,.3,1)' }
-    )
-    .addEventListener('finish', () => el.remove());
-}
-
-/** Compare ingredients via IDs when possible; fallback to text match */
 function diffIngredientTokensFromDetails(
   aDetails?: IngredientDetail[],
   bDetails?: IngredientDetail[],
   isRTL?: boolean
 ): { A: Chip[]; B: Chip[] } {
-  const a = (aDetails ?? []).map(x => ({
-    id: x.ingredient?.id,
-    text: (isRTL ? x.ingredient?.name_ar : x.ingredient?.name_en) ?? '',
-  }));
-  const b = (bDetails ?? []).map(x => ({
-    id: x.ingredient?.id,
-    text: (isRTL ? x.ingredient?.name_ar : x.ingredient?.name_en) ?? '',
-  }));
+  const a = (aDetails ?? []).map(x => ({ id: x.ingredient?.id, text: (isRTL ? x.ingredient?.name_ar : x.ingredient?.name_en) ?? '' }));
+  const b = (bDetails ?? []).map(x => ({ id: x.ingredient?.id, text: (isRTL ? x.ingredient?.name_ar : x.ingredient?.name_en) ?? '' }));
 
-  // Prefer structural diff by id; fallback to normalized text
   const aIds = new Set(a.map(x => x.id).filter(Boolean) as string[]);
   const bIds = new Set(b.map(x => x.id).filter(Boolean) as string[]);
   const hasIds = aIds.size > 0 || bIds.size > 0;
 
-  const bTextSet = new Set(b.map(x => normalizeToken(x.text)));
-  const aTextSet = new Set(a.map(x => normalizeToken(x.text)));
+  const bText = new Set(b.map(x => normalizeToken(x.text)));
+  const aText = new Set(a.map(x => normalizeToken(x.text)));
 
-  const A: Chip[] = a.map(x => {
-    const common = hasIds
-      ? x.id
-        ? bIds.has(x.id)
-        : bTextSet.has(normalizeToken(x.text))
-      : bTextSet.has(normalizeToken(x.text));
-    return { text: x.text, kind: common ? 'common' : 'unique' };
-  });
-
-  const B: Chip[] = b.map(x => {
-    const common = hasIds
-      ? x.id
-        ? aIds.has(x.id)
-        : aTextSet.has(normalizeToken(x.text))
-      : aTextSet.has(normalizeToken(x.text));
-    return { text: x.text, kind: common ? 'common' : 'unique' };
-  });
+  const A: Chip[] = a.map(x => ({
+    text: x.text,
+    kind: (hasIds ? (x.id ? bIds.has(x.id) : bText.has(normalizeToken(x.text))) : bText.has(normalizeToken(x.text))) ? 'common' : 'unique'
+  }));
+  const B: Chip[] = b.map(x => ({
+    text: x.text,
+    kind: (hasIds ? (x.id ? aIds.has(x.id) : aText.has(normalizeToken(x.text))) : aText.has(normalizeToken(x.text))) ? 'common' : 'unique'
+  }));
 
   return { A, B };
 }
 
-/** Price with potential modifiers like price_delta */
-const unitTotal = (it: MenuItem) =>
-  (it.price ?? 0) + (typeof (it as any).price_delta === 'number' ? (it as any).price_delta : 0);
+const unitTotal = (it?: MenuItem | null) =>
+  it ? (it.price ?? 0) + (typeof (it as any).price_delta === 'number' ? (it as any).price_delta : 0) : null;
 
-// ----------------------- UI bits -----------------------
+/* ===================== UI atoms ===================== */
 function ChipBadge({ chip }: { chip: Chip }) {
-  const base =
-    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-tight border whitespace-nowrap';
-  const common =
-    'border-slate-300 bg-slate-50/80 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300';
-  const unique =
-    'ring-2 ring-offset-1 ring-fuchsia-200 border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 dark:ring-fuchsia-800/40 dark:border-fuchsia-700/60 dark:bg-fuchsia-900/30 dark:text-fuchsia-200';
+  const base = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-tight border whitespace-nowrap';
+  const common = 'border-slate-300 bg-slate-50/80 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300';
+  const unique = 'ring-2 ring-offset-1 ring-fuchsia-200 border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800 dark:ring-fuchsia-800/40 dark:border-fuchsia-700/60 dark:bg-fuchsia-900/30 dark:text-fuchsia-200';
   return (
     <span className={`${base} ${chip.kind === 'unique' ? unique : common}`}>
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${
-          chip.kind === 'unique' ? 'bg-fuchsia-500' : 'bg-slate-400'
-        }`}
-      />
+      <span className={`w-1.5 h-1.5 rounded-full ${chip.kind === 'unique' ? 'bg-fuchsia-500' : 'bg-slate-400'}`} />
       {chip.text}
     </span>
   );
 }
 
+/* ===================== MiniCard ===================== */
 function MiniCard({
-  side,
-  item,
-  isRTL,
-  currency,
-  add,
-  remove,
-  qty = 0,
-  chips = [],
+  side, item, isRTL, currency,
+  qty = 0, add, remove, chips, filterMode
 }: {
   side: 'left' | 'right';
   item?: MenuItem;
   isRTL: boolean;
   currency: Intl.NumberFormat;
+  qty?: number;
   add: (m: MenuItem) => void;
   remove?: (id: string) => void;
-  qty?: number;
-  chips?: Chip[];
+  chips: Chip[];
+  filterMode: FilterMode;
 }) {
   const { t } = useLanguage();
-
   if (!item) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-4 sm:p-6 flex items-center justify-center text-slate-400 dark:text-slate-500">
-        <span className="text-sm">{t('menu.compareEmptyHint') || 'Pick another item to compare.'}</span>
+      <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center text-slate-400 dark:text-slate-500">
+        {t('menu.compareEmptyHint') || 'Pick another item to compare.'}
       </div>
     );
   }
 
   const name = isRTL ? item.name_ar || item.name_en : item.name_en;
+  const priceText = currency.format(unitTotal(item) || 0);
+
+  const uniques = chips.filter(c => c.kind === 'unique');
+  const commons = chips.filter(c => c.kind === 'common');
+  const showUnique = filterMode !== 'common' && uniques.length > 0;
+  const showCommon = filterMode !== 'unique' && commons.length > 0;
 
   return (
-    <div
-      className="bg-white/80 dark:bg-slate-900/70 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
-      dir={isRTL ? 'rtl' : 'ltr'}
-    >
-      <img
-        src={item.image_url || '/images/placeholder.png'}
-        className="w-full h-16 sm:h-40 object-cover"
-        alt={name || ''}
-        loading="lazy"
-      />
-
-      <div className="p-3 sm:p-5">
-        {/* title + price */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-[13px] sm:text-base font-semibold text-slate-900 dark:text-white truncate">
-              {name}
-            </div>
-            <div className="text-[11px] sm:text-sm text-slate-500 dark:text-slate-400">
-              {currency.format(unitTotal(item))}
-            </div>
-          </div>
-        </div>
-
-        {/* INGREDIENT CHIPS */}
-        <div className="mt-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
-            {t('common.ingredients') || 'Ingredients'}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {chips.length ? (
-              chips.map((c, i) => (
-                <span key={`${c.text}-${i}`}>
-                  <ChipBadge chip={c} />
-                </span>
-              ))
-            ) : (
-              <span className="text-xs text-slate-400">—</span>
-            )}
-          </div>
-        </div>
-
-        {/* DESKTOP: stepper if in cart, else CTA */}
-        {qty > 0 && remove ? (
-          <div className="hidden sm:flex items-center justify-between mt-3 sm:mt-4">
-            <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-3`}>
-              <button
-                className="w-9 h-9 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95"
-                onClick={() => remove(item.id)}
-                aria-label={t('common.decrease') || 'Decrease'}
-              >
-                −
-              </button>
-              <span className="min-w-[2rem] text-center font-bold">{qty}</span>
-              <button
-                className={`w-10 h-10 rounded-full text-white active:scale-95 ${
-                  side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-                onClick={() => add(item)}
-                aria-label={t('common.increase') || 'Increase'}
-              >
-                +
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            className={`hidden sm:block w-full mt-3 sm:mt-4 rounded-xl ${
-              side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
-            } text-white py-2.5 text-sm shadow`}
-            onClick={e => {
-              add(item);
-              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
-            }}
-            aria-label={t('menu.addToCart') || 'Add to cart'}
-          >
-            {isRTL ? '' : side === 'left' ? '✓ ' : '+ '}
-            {t('menu.addToCart') || 'Add to cart'}
-            {isRTL ? (side === 'left' ? ' ✓' : ' +') : ''}
-          </button>
-        )}
-
-        {/* MOBILE: stepper or add pill */}
-        <div className="mt-2 sm:mt-3">
-          <div className="flex sm:hidden items-center justify-between">
-            {qty > 0 && remove ? (
-              <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-1.5`}>
-                <button
-                  className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95"
-                  onClick={() => remove(item.id)}
-                  aria-label={t('common.decrease') || 'Decrease'}
-                >
-                  −
-                </button>
-                <span className="min-w-[1.75rem] text-center font-semibold text-sm">{qty}</span>
-                <button
-                  className={`w-8 h-8 rounded-full text-white active:scale-95 ${
-                    side === 'left' ? 'bg-emerald-600' : 'bg-blue-600'
-                  }`}
-                  onClick={() => add(item)}
-                  aria-label={t('common.increase') || 'Increase'}
-                >
-                  +
-                </button>
-              </div>
-            ) : (
-              <button
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs text-white active:scale-95 ${
-                  side === 'left' ? 'bg-emerald-600' : 'bg-blue-600'
-                }`}
-                onClick={e => {
-                  add(item);
-                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
-                }}
-                aria-label={t('menu.addToCart') || 'Add'}
-              >
-                + {t('menu.addToCart') || 'Add'}
-              </button>
-            )}
+    <article className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm" dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* صورة عريضة 16:9 مع شريط زجاجي لاسم/سعر */}
+      <div className="relative aspect-[16/9] w-full overflow-hidden">
+        <img
+          src={item.image_url || '/images/placeholder.png'}
+          alt={name || ''}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
+          <div className="rounded-2xl bg-black/35 backdrop-blur-[2px] px-3 py-2 text-white flex items-center justify-between gap-3">
+            <h3 className="font-semibold truncate">{name}</h3>
+            <div className="text-sm font-bold">{priceText}</div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* محتوى المكونات + التحكم بالسلة */}
+      <div className="p-4 sm:p-5">
+        {showUnique && (
+          <>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+              {t('menu.unique') || 'Unique'}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {uniques.map((c, i) => <span key={`u-${i}`}><ChipBadge chip={c} /></span>)}
+            </div>
+          </>
+        )}
+
+        {showCommon && (
+          <>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+              {t('menu.common') || 'Common'}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {commons.map((c, i) => <span key={`c-${i}`}><ChipBadge chip={c} /></span>)}
+            </div>
+          </>
+        )}
+
+        {/* إضافة للسلة بشكل مرتب داخل البطاقة */}
+        <div className={`mt-4 flex items-center ${isRTL ? 'flex-row-reverse' : ''} justify-between`}>
+          {qty > 0 && remove ? (
+            <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-2`}>
+              <button
+                onClick={() => remove(item.id)}
+                className="w-9 h-9 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95"
+                aria-label={t('common.decrease') || 'Decrease'}
+              >−</button>
+              <span className="min-w-[2ch] text-center font-bold">{qty}</span>
+              <button
+                onClick={() => add(item)}
+                className={`w-10 h-10 rounded-full text-white active:scale-95 ${side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                aria-label={t('common.increase') || 'Increase'}
+              >+</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => add(item)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white ${side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} shadow-sm active:scale-[.99]`}
+              aria-label={t('menu.addToCart') || 'Add to cart'}
+            >
+              <span className="text-base leading-none">＋</span>
+              {t('menu.addToCart') || 'Add to cart'}
+            </button>
+          )}
+          <div className="text-xs text-slate-400" />
+        </div>
+      </div>
+    </article>
   );
 }
 
-// ----------------------- Main component -----------------------
+/* ===================== CompareSheet (بدون صف الأسعار وبأسلوب Sheet من الأعلى بنسبة) ===================== */
 const CompareSheet: React.FC<Props> = ({
-  items,
-  isRTL,
-  currency,
-  onClose,
-  onAddToCart,
-  onRemoveFromCart,
-  quantityMap,
+  items, isRTL, currency, onClose, onAddToCart, onRemoveFromCart, quantityMap
 }) => {
   const { t } = useLanguage();
-  const [onlyDiffs, setOnlyDiffs] = useState(false);
+
+  const [filterMode, setFilterMode] = useState<FilterMode>(() => {
+    if (typeof window === 'undefined') return 'all';
+    try { return (localStorage.getItem('compare_filter_mode') as FilterMode) || 'all'; }
+    catch { return 'all'; }
+  });
 
   const a = items[0];
   const b = items[1];
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
-  // Lock body scroll, focus management & trap
+  // قفل تمرير الخلفية + اختصارات لوحة المفاتيح
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -395,24 +207,11 @@ const CompareSheet: React.FC<Props> = ({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'Tab' && panelRef.current) {
-        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        const active = document.activeElement;
-        if (e.shiftKey && active === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
+      const k = e.key.toLowerCase();
+      if (k === 'a') setFilterMode('all');
+      if (k === 'u') setFilterMode('unique');
+      if (k === 'c') setFilterMode('common');
     };
-
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
@@ -421,211 +220,182 @@ const CompareSheet: React.FC<Props> = ({
     };
   }, [onClose]);
 
-  // Ingredient chips (ID-aware, AR-aware)
+  useEffect(() => { try { localStorage.setItem('compare_filter_mode', filterMode); } catch { } }, [filterMode]);
+
+  // حساب الشرائح
   const { A: chipsAAll, B: chipsBAll } = useMemo(
     () => diffIngredientTokensFromDetails(a?.ingredients_details as any, b?.ingredients_details as any, isRTL),
     [a?.ingredients_details, b?.ingredients_details, isRTL]
   );
-  const chipsA = onlyDiffs ? chipsAAll.filter(c => c.kind === 'unique') : chipsAAll;
-  const chipsB = onlyDiffs ? chipsBAll.filter(c => c.kind === 'unique') : chipsBAll;
+
+  // === Counters for filters ===
+  const uniqueCount =
+    chipsAAll.filter(c => c.kind === 'unique').length +
+    chipsBAll.filter(c => c.kind === 'unique').length;
+
+  const commonCount = chipsAAll.filter(c => c.kind === 'common').length; // المجموعة المشتركة مرة واحدة
+  const allCount = uniqueCount + commonCount;
+
+
+  const sortChips = (arr: Chip[]) => [...arr].sort((x, y) => (x.kind === y.kind ? 0 : x.kind === 'unique' ? -1 : 1));
+  const filterChips = (arr: Chip[], mode: FilterMode) => (mode === 'all' ? sortChips(arr) : arr.filter(c => c.kind === mode));
+  const chipsA = filterChips(chipsAAll, filterMode);
+  const chipsB = filterChips(chipsBAll, filterMode);
 
   const displayA = isRTL ? a?.name_ar || a?.name_en : a?.name_en;
   const displayB = isRTL ? b?.name_ar || b?.name_en : b?.name_en;
 
-  const qtyA = a ? quantityMap?.[a.id] ?? 0 : 0;
-  const qtyB = b ? quantityMap?.[b.id] ?? 0 : 0;
-
-  const handleAddBoth = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (a) onAddToCart(a);
-    if (b) onAddToCart(b);
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    burstConfettiSoft(cx, cy, 10);
-    pulsePlus(cx, r.top - 6, '+2');
-  };
-
   return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 z-[70]"
-      role="presentation"
-      aria-hidden="false"
-      dir={isRTL ? 'rtl' : 'ltr'}
-    >
-      {/* backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60"
-        onClick={onClose}
-        aria-label={t('common.close') || 'Close'}
-      />
+    <div className="fixed inset-0 z-[70]" role="presentation" dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* خلفية معتمة خفيفة */}
+      <div className="absolute inset-0 bg-black/55" onClick={onClose} aria-label={t('common.close') || 'Close'} />
 
-      {/* panel */}
+      {/* Sheet يملأ من الأسفل والجوانب، ويبدأ من أعلى بنسبة محددة */}
       <div
         ref={panelRef}
-        className="absolute bottom-0 left-0 right-0 sm:inset-0 sm:m-auto sm:h-[86vh] sm:w-[min(1000px,95vw)] bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 outline-none"
+        id="compare-bar"
+        className="absolute left-0 right-0 bottom-0
+             rounded-t-[36px] shadow-2xl
+             border border-slate-200 dark:border-slate-800
+             bg-white dark:bg-slate-900 outline-none
+             flex flex-col overflow-hidden"   // مهم لإظهار الانحناء
         role="dialog"
         aria-modal="true"
         aria-labelledby="compare-title"
         tabIndex={-1}
+        style={{ top: `${SHEET_TOP_VH}vh` }}       // نسبة الفراغ من أعلى
       >
-        {/* header */}
-        <div className="sticky top-0 z-10 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="flex -space-x-3 rtl:space-x-reverse">
-                <img
-                  src={a?.image_url || '/images/placeholder.png'}
-                  alt={displayA || ''}
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900"
-                  loading="lazy"
-                />
-                <img
-                  src={b?.image_url || '/images/placeholder.png'}
-                  alt={displayB || ''}
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900"
-                  loading="lazy"
-                />
+        {/* ===== Header (سطر للعنوان، سطر للفلاتر) ===== */}
+        <header className="px-4 sm:px-6 pt-4 pb-2 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/92 dark:bg-slate-900/92 backdrop-blur">
+          {/* الصف 1: Comparing + صور + إغلاق */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-3 rtl:space-x-reverse">
+                  <img src={a?.image_url || '/images/placeholder.png'} alt={displayA || ''} className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900" />
+                  <img src={b?.image_url || '/images/placeholder.png'} alt={displayB || ''} className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover ring-2 ring-white dark:ring-slate-900" />
+                </div>
+                <h2 id="compare-title" className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                  {t('menu.comparing') || 'Comparing'}
+                </h2>
               </div>
-              <div className="min-w-0">
-                <div
-                  id="compare-title"
-                  className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate"
-                >
-                  {(t('menu.comparing') || 'Comparing')}
-                  {displayA ? `: ${displayA}` : ''}
-                  {displayB ? ` ${isRTL ? 'و' : '&'} ${displayB}` : ''}
-                </div>
-                <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                  {t('menu.compare') || 'Compare'}
-                </div>
+
+              {/* الصف 2: أسماء الأصناف فقط */}
+              <div className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 truncate" dir={isRTL ? 'rtl' : 'ltr'}>
+                {(displayA || t('menu.itemA') || 'Item A')}
+                {displayB ? (isRTL ? ' و ' : ' & ') + displayB : ''}
               </div>
             </div>
 
-            {/* header controls: Only differences + close */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <label className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs sm:text-sm cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                <input
-                  type="checkbox"
-                  className="accent-emerald-600"
-                  checked={onlyDiffs}
-                  onChange={e => setOnlyDiffs(e.target.checked)}
-                  aria-label={t('menu.onlyDifferences') || 'Only differences'}
-                />
-                {t('menu.onlyDifferences') || 'Only differences'}
-              </label>
+            <button
+              onClick={onClose}
+              className="grid place-items-center w-9 h-9 rounded-full bg-slate-900 text-white text-sm hover:opacity-90 shrink-0"
+              aria-label={t('common.close') || 'Close'}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* الصف 3: الفلاتر الملوّنة + الأرقام */}
+          <div className="mt-3 flex items-center justify-center">
+            <div className="inline-flex items-center gap-2">
+              {/* All */}
               <button
-                onClick={onClose}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs sm:text-sm hover:opacity-90"
-                aria-label={t('common.close') || 'Close'}
+                onClick={() => setFilterMode('all')}
+                aria-pressed={filterMode === 'all'}
+                className={[
+                  'px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold border transition',
+                  filterMode === 'all'
+                    ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
+                    : 'bg-white text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
+                ].join(' ')}
               >
-                ✕
+                {(t('menu.all') || 'All')} <span className="opacity-70">({allCount})</span>
+              </button>
+
+              {/* Unique — بنفس ألوان كبسولات Unique */}
+              <button
+                onClick={() => setFilterMode('unique')}
+                aria-pressed={filterMode === 'unique'}
+                className={[
+                  'px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold border transition',
+                  filterMode === 'unique'
+                    ? 'bg-fuchsia-600 text-white border-fuchsia-600'
+                    : 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/30 dark:text-fuchsia-200 dark:border-fuchsia-700/60'
+                ].join(' ')}
+              >
+                {(t('menu.unique') || 'Unique')} <span className="opacity-80">({uniqueCount})</span>
+              </button>
+
+              {/* Common — بنفس ألوان كبسولات Common */}
+              <button
+                onClick={() => setFilterMode('common')}
+                aria-pressed={filterMode === 'common'}
+                className={[
+                  'px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold border transition',
+                  filterMode === 'common'
+                    ? 'bg-slate-700 text-white border-slate-700 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
+                    : 'bg-slate-50 text-slate-700 border-slate-300 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-700'
+                ].join(' ')}
+              >
+                {(t('menu.common') || 'Common')} <span className="opacity-80">({commonCount})</span>
               </button>
             </div>
           </div>
 
-          {/* optional legend */}
-          {!onlyDiffs && (
-            <div className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3">
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-slate-400" /> {t('menu.common') || 'Common'}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-fuchsia-500" /> {t('menu.unique') || 'Unique'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* body */}
-        <div className="p-4 sm:p-6 space-y-4">
-          {/* CTA row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-sm text-slate-600 dark:text-slate-300">
-              {a && b
-                ? t('menu.compareTagline') || 'Spot the differences and pick your favorite.'
-                : t('menu.compareEmptyHint') || 'Pick another item to compare side by side.'}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {a && (
-                <button
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
-                  onClick={e => {
-                    onAddToCart(a);
-                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
-                  }}
-                  aria-label={(t('menu.addToCart') || 'Add to cart') + (isRTL ? ` • ${a.name_ar || a.name_en || ''}` : ` • ${a.name_en || ''}`)}
-                >
-                  {t('menu.addToCart') || 'Add to cart'}{' '}
-                  {isRTL
-                    ? a.name_ar || a.name_en
-                      ? `• ${a.name_ar || a.name_en}`
-                      : ''
-                    : a.name_en
-                    ? `• ${a.name_en}`
-                    : ''}
-                </button>
-              )}
-              {b && (
-                <button
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
-                  onClick={e => {
-                    onAddToCart(b);
-                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    burstConfettiSoft(r.left + r.width / 2, r.top + r.height / 2, 6);
-                  }}
-                  aria-label={(t('menu.addToCart') || 'Add to cart') + (isRTL ? ` • ${b.name_ar || b.name_en || ''}` : ` • ${b.name_en || ''}`)}
-                >
-                  {t('menu.addToCart') || 'Add to cart'}{' '}
-                  {isRTL
-                    ? b.name_ar || b.name_en
-                      ? `• ${b.name_ar || b.name_en}`
-                      : ''
-                    : b.name_en
-                    ? `• ${b.name_en}`
-                    : ''}
-                </button>
-              )}
-              {a && b && (
-                <button
-                  className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold text-sm relative overflow-visible"
-                  onClick={handleAddBoth}
-                  aria-label={t('menu.addBoth') || 'Add both'}
-                >
-                  {t('menu.addBoth') || 'Add both'}
-                </button>
-              )}
-            </div>
+          {/* الصف 4: التاغلاين ثابت داخل الهيدر */}
+          <div className="mt-3 text-sm text-slate-600 dark:text-slate-300 text-center">
+            {t('menu.compareTagline') || 'Spot the differences and pick your favorite.'} <span className="align-middle">❤️</span>
           </div>
+        </header>
 
-          {/* layout: TWO CARDS */}
+
+        {/* ===== Body (scrollable) ===== */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28">
+
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <MiniCard
               side="left"
               item={a}
               isRTL={isRTL}
               currency={currency}
-              qty={qtyA}
+              qty={a ? quantityMap?.[a.id] ?? 0 : 0}
               add={onAddToCart}
               remove={onRemoveFromCart}
               chips={chipsA}
+              filterMode={filterMode}
             />
             <MiniCard
               side="right"
               item={b}
               isRTL={isRTL}
               currency={currency}
-              qty={qtyB}
+              qty={b ? quantityMap?.[b.id] ?? 0 : 0}
               add={onAddToCart}
               remove={onRemoveFromCart}
               chips={chipsB}
+              filterMode={filterMode}
             />
           </div>
         </div>
-      </div>
 
-      <style>{`.rtl { direction: rtl; } .ltr { direction: ltr; }`}</style>
+        {/* ===== Footer: زر Take both (شكل أفضل) ===== */}
+        {a && b && (
+          <footer className="sticky bottom-0 px-4 sm:px-6 py-3 bg-white/92 dark:bg-slate-900/92 backdrop-blur border-t border-slate-200 dark:border-slate-800">
+            <div className="max-w-[680px] mx-auto">
+              <button
+                onClick={() => { onAddToCart(a); onAddToCart(b); }}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-base font-extrabold text-slate-900 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 shadow-[0_10px_22px_rgba(245,158,11,.35)] active:scale-[.99]"
+                aria-label={t('menu.addBoth') || 'Add both'}
+              >
+                <span className="text-lg">🛒</span>
+                {t('menu.addBoth') || 'Take both'}
+              </button>
+            </div>
+          </footer>
+        )}
+      </div>
     </div>
   );
 };
