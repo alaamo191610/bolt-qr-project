@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { MenuItem } from './MenuItemCard';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useTheme } from "../../contexts/ThemeContext";
+
 
 /* ===================== Types ===================== */
 type IngredientDetail = { ingredient?: { id?: string; name_en?: string; name_ar?: string } };
@@ -103,6 +105,7 @@ function MiniCard({
   const commons = chips.filter(c => c.kind === 'common');
   const showUnique = filterMode !== 'common' && uniques.length > 0;
   const showCommon = filterMode !== 'unique' && commons.length > 0;
+  const { colors } = useTheme();
 
   return (
     <article className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm" dir={isRTL ? 'rtl' : 'ltr'}>
@@ -147,27 +150,67 @@ function MiniCard({
           </>
         )}
 
-        {/* إضافة للسلة بشكل مرتب داخل البطاقة */}
         <div className={`mt-4 flex items-center ${isRTL ? 'flex-row-reverse' : ''} justify-between`}>
           {qty > 0 && remove ? (
             <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''} gap-2`}>
+              {/* − button */}
               <button
                 onClick={() => remove(item.id)}
-                className="w-9 h-9 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 active:scale-95"
                 aria-label={t('common.decrease') || 'Decrease'}
-              >−</button>
-              <span className="min-w-[2ch] text-center font-bold">{qty}</span>
+                className="inline-grid place-items-center w-9 h-9 rounded-full border active:scale-95"
+                style={{ color: colors.primary, borderColor: colors.primary, background: 'white' }}
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+
+              {/* SINGLE source of truth for the number */}
+              <output
+                className="min-w-[2ch] text-center font-bold tabular-nums font-mono leading-none"
+                aria-live="off"
+                aria-atomic="true"
+              >
+                {qty}
+              </output>
+
+              {/* + button (SVG plus) */}
               <button
                 onClick={() => add(item)}
-                className={`w-10 h-10 rounded-full text-white active:scale-95 ${side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                 aria-label={t('common.increase') || 'Increase'}
-              >+</button>
+                className="inline-grid place-items-center w-10 h-10 rounded-full text-white active:scale-95 shadow-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-300"
+                style={{
+                  background: `linear-gradient(135deg, ${side === 'left' ? colors.primary : colors.secondary
+                    }, ${side === 'left' ? colors.secondary : colors.primary
+                    })`,
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => add(item)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white ${side === 'left' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} shadow-sm active:scale-[.99]`}
               aria-label={t('menu.addToCart') || 'Add to cart'}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white shadow-sm active:scale-[.99] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-300"
+              style={{
+                backgroundColor: side === 'left' ? colors.primary : colors.secondary,
+              }}
             >
               <span className="text-base leading-none">＋</span>
               {t('menu.addToCart') || 'Add to cart'}
@@ -244,7 +287,7 @@ const CompareSheet: React.FC<Props> = ({
 
   const displayA = isRTL ? a?.name_ar || a?.name_en : a?.name_en;
   const displayB = isRTL ? b?.name_ar || b?.name_en : b?.name_en;
-
+  const { colors } = useTheme();
   return (
     <div className="fixed inset-0 z-[70]" role="presentation" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* خلفية معتمة خفيفة */}
@@ -386,12 +429,18 @@ const CompareSheet: React.FC<Props> = ({
             <div className="max-w-[680px] mx-auto">
               <button
                 onClick={() => { onAddToCart(a); onAddToCart(b); }}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-base font-extrabold text-slate-900 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 shadow-[0_10px_22px_rgba(245,158,11,.35)] active:scale-[.99]"
                 aria-label={t('menu.addBoth') || 'Add both'}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-base font-extrabold text-white
+             shadow-[0_10px_22px_rgba(0,0,0,.15)] hover:opacity-90 active:scale-[.99]
+             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-300"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                }}
               >
                 <span className="text-lg">🛒</span>
-                {t('menu.addBoth') || 'Take both'}
+                {t('menu.addBoth') || 'Add both'}
               </button>
+
             </div>
           </footer>
         )}
