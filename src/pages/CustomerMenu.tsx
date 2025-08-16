@@ -1,32 +1,40 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ShoppingCart, Search, MapPin, Check } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
-import { menuService } from '../services/menuService';
-import { orderService } from '../services/orderService';
-import { tableService } from '../services/tableService';
-import { trackMenuEvents } from '../lib/firebase';
-import LanguageToggle from '../components/LanguageToggle';
-import CartDrawer from '../components/ui/CartDrawer';
-import CategoryFilter from '../components/ui/CategoryFilter';
-import MenuGrid from '../components/ui/MenuGrid';
-import OrderConfirmation from '../components/ui/OrderConfirmation';
-import FloatingCartButton from '../components/ui/FloatingCartButton';
-import CompareSheet from '../components/ui/CompareSheet'; // 🆕 compare modal
-import { useTheme } from '../contexts/ThemeContext';
-import toast from 'react-hot-toast';
-import clsx from 'clsx';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { ShoppingCart, Search, MapPin, Check } from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext";
+import { menuService } from "../services/menuService";
+import { orderService } from "../services/orderService";
+import { tableService } from "../services/tableService";
+import { trackMenuEvents } from "../lib/firebase";
+import LanguageToggle from "../components/LanguageToggle";
+import CartDrawer from "../components/ui/CartDrawer";
+import CategoryFilter from "../components/ui/CategoryFilter";
+import MenuGrid from "../components/ui/MenuGrid";
+import OrderConfirmation from "../components/ui/OrderConfirmation";
+import FloatingCartButton from "../components/ui/FloatingCartButton";
+import CompareSheet from "../components/ui/CompareSheet"; // 🆕 compare modal
+import { useTheme } from "../contexts/ThemeContext";
+import toast from "react-hot-toast";
+import clsx from "clsx";
 
-interface Ingredient { id: string; name_en: string; name_ar: string; }
-interface Category { id: string; name_en: string; name_ar: string; }
+interface Ingredient {
+  id: string;
+  name_en: string;
+  name_ar: string;
+}
+interface Category {
+  id: string;
+  name_en: string;
+  name_ar: string;
+}
 
 export interface MenuItem {
   id: string;
   name_en: string;
   name_ar?: string;
-  description_en?: string
-  description_ar?: string
+  description_en?: string;
+  description_ar?: string;
   price: number;
   image_url?: string;
   available?: boolean;
@@ -35,12 +43,14 @@ export interface MenuItem {
   ingredients_details?: { ingredient: Ingredient }[];
   categories?: { id: string; name_en: string; name_ar: string };
 }
-interface CartItem extends MenuItem { quantity: number; }
+interface CartItem extends MenuItem {
+  quantity: number;
+}
 
 type OverlayPos = { top: number; left?: number; right?: number };
 
 // scoped cart key per table
-const cartKeyFor = (table: string) => `qr-cart-v1:${table || 'unknown'}`;
+const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
@@ -49,39 +59,45 @@ const CustomerMenu: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [tableNumber, setTableNumber] = useState('');
+  const [tableNumber, setTableNumber] = useState("");
 
   // ui
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
   const [showCart, setShowCart] = useState(false);
   const [showCartOverlay, setShowCartOverlay] = useState(false);
-  const [overlayPos, setOverlayPos] = useState<OverlayPos>({ top: 0, right: 16 });
+  const [overlayPos, setOverlayPos] = useState<OverlayPos>({
+    top: 0,
+    right: 16,
+  });
 
   // state
   const [loading, setLoading] = useState(true);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
-  const [error, setError] = useState<{ code: string; params?: Record<string, any> } | null>(null);
+  const [error, setError] = useState<{
+    code: string;
+    params?: Record<string, any>;
+  } | null>(null);
 
   // 🆕 compare
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
 
   const toggleCompare = useCallback((id: string) => {
-    setCompareIds(prev => {
-      if (prev.includes(id)) return prev.filter(x => x !== id);
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
 
       if (prev.length >= 2) {
-        toast.error('You can compare up to 2 items', {
-          position: 'bottom-center',
+        toast.error("You can compare up to 2 items", {
+          position: "bottom-center",
           duration: 2500,
           style: {
-            background: '#ef4444', // Tailwind red-500
-            color: '#fff',
+            background: "#ef4444", // Tailwind red-500
+            color: "#fff",
             fontWeight: 600,
-            borderRadius: '8px',
-            padding: '8px 16px',
+            borderRadius: "8px",
+            padding: "8px 16px",
           },
         });
         return prev;
@@ -94,21 +110,26 @@ const CustomerMenu: React.FC = () => {
   const clearCompare = useCallback(() => setCompareIds([]), []);
 
   const comparedItems = useMemo(
-    () => menuItems.filter(m => compareIds.includes(m.id)),
+    () => menuItems.filter((m) => compareIds.includes(m.id)),
     [menuItems, compareIds]
   );
-  const isDesktop = () => typeof window !== 'undefined' && window.innerWidth >= 640; // tailwind sm
+  const isDesktop = () =>
+    typeof window !== "undefined" && window.innerWidth >= 640; // tailwind sm
 
   // currency (default QAR; change as needed)
   const currency = useMemo(
-    () => new Intl.NumberFormat(isRTL ? 'ar-QA' : 'en-QA', { style: 'currency', currency: 'QAR' }),
+    () =>
+      new Intl.NumberFormat(isRTL ? "ar-QA" : "en-QA", {
+        style: "currency",
+        currency: "QAR",
+      }),
     [isRTL]
   );
 
   // bootstrap
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const table = (urlParams.get('table') || 'T01').trim();
+    const table = (urlParams.get("table") || "T01").trim();
     setTableNumber(table);
     loadMenuItems(table);
 
@@ -120,12 +141,15 @@ const CustomerMenu: React.FC = () => {
   useEffect(() => {
     if (!tableNumber) return;
     const saved = sessionStorage.getItem(`qr-selected-category:${tableNumber}`);
-    setSelectedCategory(saved || 'All');
+    setSelectedCategory(saved || "All");
   }, [tableNumber]);
 
   useEffect(() => {
     if (!tableNumber) return;
-    sessionStorage.setItem(`qr-selected-category:${tableNumber}`, selectedCategory);
+    sessionStorage.setItem(
+      `qr-selected-category:${tableNumber}`,
+      selectedCategory
+    );
   }, [selectedCategory, tableNumber]);
 
   // cart persistence (per table)
@@ -134,52 +158,70 @@ const CustomerMenu: React.FC = () => {
     try {
       const saved = sessionStorage.getItem(cartKeyFor(tableNumber));
       if (saved) setCart(JSON.parse(saved));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [tableNumber]);
 
   useEffect(() => {
     if (!tableNumber) return;
     try {
       sessionStorage.setItem(cartKeyFor(tableNumber), JSON.stringify(cart));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [cart, tableNumber]);
 
   const prefersReducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   useEffect(() => {
     // Briefly highlight the bar when the user reaches 2 selections
     if (compareIds.length === 2) {
-      const el = document.getElementById('compare-bar');
+      const el = document.getElementById("compare-bar");
       if (el && !prefersReducedMotion && el.animate) {
         el.animate(
           [
-            { boxShadow: '0 0 0 0 rgba(16,185,129,0.0)' },
-            { boxShadow: '0 0 0 6px rgba(16,185,129,0.35)' },
-            { boxShadow: '0 0 0 0 rgba(16,185,129,0.0)' },
+            { boxShadow: "0 0 0 0 rgba(16,185,129,0.0)" },
+            { boxShadow: "0 0 0 6px rgba(16,185,129,0.35)" },
+            { boxShadow: "0 0 0 0 rgba(16,185,129,0.0)" },
           ],
-          { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)' }
+          { duration: 700, easing: "cubic-bezier(.2,.8,.2,1)" }
         );
       }
     }
   }, [compareIds.length, prefersReducedMotion]);
   // fetch menu
   const loadMenuItems = async (tableCode: string) => {
-    if (!tableCode) { setError({ code: 'status.tableNotFound' }); return; }
+    if (!tableCode) {
+      setError({ code: "status.tableNotFound" });
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
 
       const table = await tableService.getTableByCode(tableCode);
-      if (!table) { setError({ code: 'status.tableNotFound', params: { table: tableCode } }); return; }
+      if (!table) {
+        setError({
+          code: "status.tableNotFound",
+          params: { table: tableCode },
+        });
+        return;
+      }
 
       const items = await menuService.getMenuItems(table.admin_id);
-      if (!items || items.length === 0) { setError({ code: 'status.noMenuItems' }); return; }
+      if (!items || items.length === 0) {
+        setError({ code: "status.noMenuItems" });
+        return;
+      }
 
       const transformed = items.map((item: any) => {
         const normalizedPrice =
-          typeof item.price === 'number' ? item.price : parseFloat(item.price ?? '');
+          typeof item.price === "number"
+            ? item.price
+            : parseFloat(item.price ?? "");
         return {
           id: item.id,
           name_en: item.name_en,
@@ -187,7 +229,7 @@ const CustomerMenu: React.FC = () => {
           description_en: item.description_en ?? null,
           description_ar: item.description_ar ?? null,
           price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
-          image_url: item.image_url || '/images/placeholder.png',
+          image_url: item.image_url || "/images/placeholder.png",
           available: item.available,
           created_at: item.created_at,
           category_id: item.category_id,
@@ -206,8 +248,8 @@ const CustomerMenu: React.FC = () => {
       });
       setCategories(Array.from(categoryMap.values()));
     } catch (err) {
-      setError({ code: 'status.failedToLoadMenu' });
-      console.error('Error loading menu:', err);
+      setError({ code: "status.failedToLoadMenu" });
+      console.error("Error loading menu:", err);
     } finally {
       setLoading(false);
     }
@@ -216,16 +258,21 @@ const CustomerMenu: React.FC = () => {
   // derived: filtered items
   const filteredItems = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    const filtered = menuItems.filter(item => {
-      const matchesCategory = selectedCategory === 'All' || item.category_id === selectedCategory;
+    const filtered = menuItems.filter((item) => {
+      const matchesCategory =
+        selectedCategory === "All" || item.category_id === selectedCategory;
 
-      const baseName = isRTL ? (item.name_ar || item.name_en) : item.name_en;
+      const baseName = isRTL ? item.name_ar || item.name_en : item.name_en;
       const desc = isRTL
-        ? (item.description_ar || item.description_en || '')
-        : (item.description_en || item.description_ar || '');
+        ? item.description_ar || item.description_en || ""
+        : item.description_en || item.description_ar || "";
 
-      const nameMatch = term ? (baseName || '').toLowerCase().includes(term) : true;
-      const descMatch = term ? (desc || '').toLowerCase().includes(term) : false;
+      const nameMatch = term
+        ? (baseName || "").toLowerCase().includes(term)
+        : true;
+      const descMatch = term
+        ? (desc || "").toLowerCase().includes(term)
+        : false;
 
       return matchesCategory && (nameMatch || descMatch);
     });
@@ -247,7 +294,7 @@ const CustomerMenu: React.FC = () => {
 
   // derived: quantity map / totals
   const quantityMap = useMemo(
-    () => Object.fromEntries(cart.map(i => [i.id, i.quantity])),
+    () => Object.fromEntries(cart.map((i) => [i.id, i.quantity])),
     [cart]
   );
 
@@ -263,12 +310,14 @@ const CustomerMenu: React.FC = () => {
 
   // cart ops
   const addToCart = useCallback((item: MenuItem) => {
-    setCart(prev => {
-      const found = prev.find(c => c.id === item.id);
+    setCart((prev) => {
+      const found = prev.find((c) => c.id === item.id);
       if (found) {
         const newQuantity = found.quantity + 1;
         trackMenuEvents.itemAddedToCart(item.id, item.name_en, item.price, 1);
-        return prev.map(c => (c.id === item.id ? { ...c, quantity: newQuantity } : c));
+        return prev.map((c) =>
+          c.id === item.id ? { ...c, quantity: newQuantity } : c
+        );
       }
       trackMenuEvents.itemAddedToCart(item.id, item.name_en, item.price, 1);
       return [...prev, { ...item, quantity: 1 }];
@@ -276,16 +325,28 @@ const CustomerMenu: React.FC = () => {
   }, []);
 
   const removeFromCart = useCallback((itemId: string) => {
-    setCart(prev => {
-      const found = prev.find(c => c.id === itemId);
+    setCart((prev) => {
+      const found = prev.find((c) => c.id === itemId);
       if (found && found.quantity > 1) {
-        trackMenuEvents.itemRemovedFromCart(itemId, found.name_en, found.price, 1);
-        return prev.map(c => (c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c));
+        trackMenuEvents.itemRemovedFromCart(
+          itemId,
+          found.name_en,
+          found.price,
+          1
+        );
+        return prev.map((c) =>
+          c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c
+        );
       }
       if (found) {
-        trackMenuEvents.itemRemovedFromCart(itemId, found.name_en, found.price, found.quantity);
+        trackMenuEvents.itemRemovedFromCart(
+          itemId,
+          found.name_en,
+          found.price,
+          found.quantity
+        );
       }
-      return prev.filter(c => c.id !== itemId);
+      return prev.filter((c) => c.id !== itemId);
     });
   }, []);
 
@@ -296,12 +357,15 @@ const CustomerMenu: React.FC = () => {
     trackMenuEvents.orderStarted(tableNumber, totalItems, totalPrice);
 
     try {
-      const orderItems = cart.map(item => ({
+      const orderItems = cart.map((item) => ({
         menu_item_id: item.id,
         quantity: item.quantity,
         price_at_order: item.price,
       }));
-      await orderService.createOrder({ table_code: tableNumber, items: orderItems });
+      await orderService.createOrder({
+        table_code: tableNumber,
+        items: orderItems,
+      });
 
       // Track successful order
       trackMenuEvents.orderCompleted(tableNumber, cart, totalPrice);
@@ -311,8 +375,8 @@ const CustomerMenu: React.FC = () => {
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber)); // clear persisted cart
     } catch (err) {
-      setError({ code: 'status.failedToPlaceOrder' });
-      console.error('Error placing order:', err);
+      setError({ code: "status.failedToPlaceOrder" });
+      console.error("Error placing order:", err);
     } finally {
       setIsOrdering(false);
     }
@@ -327,7 +391,7 @@ const CustomerMenu: React.FC = () => {
 
   // overlay positioning
   const getAnchorPosition = (offsetY = 8): OverlayPos | null => {
-    const anchor = document.getElementById('header-cart-anchor');
+    const anchor = document.getElementById("header-cart-anchor");
     if (!anchor) return null;
     const r = anchor.getBoundingClientRect();
     const top = r.bottom + offsetY + window.scrollY;
@@ -338,25 +402,30 @@ const CustomerMenu: React.FC = () => {
     if (prefersReducedMotion || !btn?.animate) return;
     btn.animate(
       [
-        { transform: 'translateX(0)' },
-        { transform: 'translateX(-4px)' },
-        { transform: 'translateX(4px)' },
-        { transform: 'translateX(0)' },
+        { transform: "translateX(0)" },
+        { transform: "translateX(-4px)" },
+        { transform: "translateX(4px)" },
+        { transform: "translateX(0)" },
       ],
-      { duration: 180, easing: 'ease-out' }
+      { duration: 180, easing: "ease-out" }
     );
   };
   useEffect(() => {
     if (!showCartOverlay) return;
     const update = () => {
-      setOverlayPos(getAnchorPosition(10) || { top: 80, ...(isRTL ? { left: 16 } : { right: 16 }) });
+      setOverlayPos(
+        getAnchorPosition(10) || {
+          top: 80,
+          ...(isRTL ? { left: 16 } : { right: 16 }),
+        }
+      );
     };
     update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
     return () => {
-      window.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
     };
   }, [showCartOverlay, isRTL]);
 
@@ -365,23 +434,28 @@ const CustomerMenu: React.FC = () => {
     if (!showCartOverlay) return;
 
     const onDown = (e: MouseEvent) => {
-      const anchor = document.getElementById('header-cart-anchor');
-      const pop = document.getElementById('header-cart-popover');
-      if (anchor?.contains(e.target as Node) || pop?.contains(e.target as Node)) return;
+      const anchor = document.getElementById("header-cart-anchor");
+      const pop = document.getElementById("header-cart-popover");
+      if (anchor?.contains(e.target as Node) || pop?.contains(e.target as Node))
+        return;
       setShowCartOverlay(false);
     };
 
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowCartOverlay(false); };
-    const onResize = () => { if (!isDesktop()) setShowCartOverlay(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCartOverlay(false);
+    };
+    const onResize = () => {
+      if (!isDesktop()) setShowCartOverlay(false);
+    };
 
-    document.addEventListener('pointerdown', onDown);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onResize);
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
 
     return () => {
-      document.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', onResize);
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
     };
   }, [showCartOverlay]);
 
@@ -391,7 +465,7 @@ const CustomerMenu: React.FC = () => {
     // Track cart view
     trackMenuEvents.cartViewed(totalItems, totalPrice);
 
-    if (isDesktop()) setShowCartOverlay(v => !v);
+    if (isDesktop()) setShowCartOverlay((v) => !v);
     else setShowCart(true);
   };
 
@@ -403,7 +477,9 @@ const CustomerMenu: React.FC = () => {
           <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center mx-auto mb-4 shadow-soft">
             <ShoppingCart className="w-8 h-8 text-white animate-pulse" />
           </div>
-          <p className="text-slate-600 dark:text-slate-300">{t('common.loading')}</p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {t("common.loading")}
+          </p>
         </div>
       </div>
     );
@@ -414,14 +490,31 @@ const CustomerMenu: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-8 text-center max-w-md w-full animate-scale-in">
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-8 h-8 text-red-600 dark:text-red-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{t('status.errorLoadingMenu')}</h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-4">{t(error.code, error.params)}</p>
-          <button onClick={() => window.location.reload()} className="px-6 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition">
-            {t('status.tryAgain')}
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            {t("status.errorLoadingMenu")}
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">
+            {t(error.code, error.params)}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition"
+          >
+            {t("status.tryAgain")}
           </button>
         </div>
       </div>
@@ -431,18 +524,30 @@ const CustomerMenu: React.FC = () => {
   if (orderPlaced) return <OrderConfirmation tableNumber={tableNumber} />;
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${isRTL ? 'rtl' : 'ltr'}`}>
+    <div
+      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${
+        isRTL ? "rtl" : "ltr"
+      }`}
+    >
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* left: title & meta */}
             <div className="animate-fade-in">
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('restaurant.name')}</h1>
-              <div className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                {t("restaurant.name")}
+              </h1>
+              <div
+                className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${
+                  isRTL ? "flex-row-reverse" : ""
+                }`}
+              >
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
-                  <span>{t('orders.table')} {tableNumber}</span>
+                  <span>
+                    {t("orders.table")} {tableNumber}
+                  </span>
                 </div>
               </div>
             </div>
@@ -461,12 +566,17 @@ const CustomerMenu: React.FC = () => {
                 style={{
                   background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                 }}
-
               >
                 <ShoppingCart className="w-5 h-5" />
-                <span className="font-medium hidden sm:inline">{currency.format(totalPrice)}</span>
+                <span className="font-medium hidden sm:inline">
+                  {currency.format(totalPrice)}
+                </span>
                 {totalItems > 0 && (
-                  <span className={`absolute -top-2 ${isRTL ? '-left-2' : '-right-2'} bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}>
+                  <span
+                    className={`absolute -top-2 ${
+                      isRTL ? "-left-2" : "-right-2"
+                    } bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}
+                  >
                     {totalItems}
                   </span>
                 )}
@@ -482,13 +592,19 @@ const CustomerMenu: React.FC = () => {
           <div className="flex flex-col gap-4">
             {/* Search */}
             <div className="relative">
-              <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-3 w-5 h-5 text-slate-400 dark:text-slate-500`} />
+              <Search
+                className={`absolute ${
+                  isRTL ? "right-3" : "left-3"
+                } top-3 w-5 h-5 text-slate-400 dark:text-slate-500`}
+              />
               <input
                 type="text"
-                placeholder={t('menu.searchPlaceholder')}
+                placeholder={t("menu.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+                className={`w-full ${
+                  isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
+                } py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
               />
             </div>
 
@@ -500,9 +616,12 @@ const CustomerMenu: React.FC = () => {
                 onSelectCategory={(categoryId) => {
                   setSelectedCategory(categoryId);
                   // Track category filtering
-                  const category = categories.find(c => c.id === categoryId);
+                  const category = categories.find((c) => c.id === categoryId);
                   if (category) {
-                    trackMenuEvents.categoryFiltered(categoryId, isRTL ? category.name_ar : category.name_en);
+                    trackMenuEvents.categoryFiltered(
+                      categoryId,
+                      isRTL ? category.name_ar : category.name_en
+                    );
                   }
                 }}
               />
@@ -516,9 +635,9 @@ const CustomerMenu: React.FC = () => {
           quantityMap={quantityMap}
           onAdd={addToCart}
           onRemove={removeFromCart}
-          compareIds={compareIds}            // 🆕 pass compare selection
+          compareIds={compareIds} // 🆕 pass compare selection
           onToggleCompare={(id) => {
-            const item = filteredItems.find(i => i.id === id);
+            const item = filteredItems.find((i) => i.id === id);
             const isSelected = compareIds.includes(id);
             if (item) {
               trackMenuEvents.itemCompareToggled(id, item.name_en, !isSelected);
@@ -532,8 +651,12 @@ const CustomerMenu: React.FC = () => {
             <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-slate-400 dark:text-slate-500" />
             </div>
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">{t('menu.noItemsFound')}</h3>
-            <p className="text-slate-600 dark:text-slate-400">{t('menu.noItemsDescription')}</p>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+              {t("menu.noItemsFound")}
+            </h3>
+            <p className="text-slate-600 dark:text-slate-400">
+              {t("menu.noItemsDescription")}
+            </p>
           </div>
         )}
       </div>
@@ -545,44 +668,58 @@ const CustomerMenu: React.FC = () => {
           className="fixed z-[60] animate-scale-in"
           style={overlayPos as React.CSSProperties}
           role="dialog"
-          aria-label={t('cart.miniCartAria')}
+          aria-label={t("cart.miniCartAria")}
         >
           <div className="relative">
             {/* arrow */}
             <span
               className={[
-                'absolute -top-2 block w-3 h-3 rotate-45',
-                'bg-white dark:bg-slate-800',
-                'border border-slate-200 dark:border-slate-700',
-                isRTL ? 'left-6 border-l-0 border-b-0' : 'right-6 border-r-0 border-b-0',
-              ].join(' ')}
+                "absolute -top-2 block w-3 h-3 rotate-45",
+                "bg-white dark:bg-slate-800",
+                "border border-slate-200 dark:border-slate-700",
+                isRTL
+                  ? "left-6 border-l-0 border-b-0"
+                  : "right-6 border-r-0 border-b-0",
+              ].join(" ")}
               aria-hidden
             />
             <div className="w-[340px] max-w-[calc(100vw-24px)] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden">
               <div className="p-3 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white">{t('menu.yourOrder')}</span>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{totalItems} {t('orders.items') || 'items'}</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {t("menu.yourOrder")}
+                  </span>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    {totalItems} {t("orders.items") || "items"}
+                  </span>
                 </div>
               </div>
 
               <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
                 {cart.length === 0 ? (
-                  <div className="p-6 text-center text-slate-500 dark:text-slate-400">{t('menu.cartEmpty')}</div>
+                  <div className="p-6 text-center text-slate-500 dark:text-slate-400">
+                    {t("menu.cartEmpty")}
+                  </div>
                 ) : (
                   cart.map((it) => (
                     <div key={it.id} className="p-3 flex items-center gap-3">
                       <img
-                        src={it.image_url || '/images/placeholder.png'}
-                        alt={isRTL ? (it.name_ar || it.name_en) : it.name_en}
+                        src={it.image_url || "/images/placeholder.png"}
+                        alt={isRTL ? it.name_ar || it.name_en : it.name_en}
                         className="w-10 h-10 rounded-md object-cover"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-slate-900 dark:text-white">{isRTL ? it.name_ar || it.name_en : it.name_en}</span>
-                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{currency.format(it.price * it.quantity)}</span>
+                          <span className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                            {isRTL ? it.name_ar || it.name_en : it.name_en}
+                          </span>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {currency.format(it.price * it.quantity)}
+                          </span>
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{it.quantity} × {currency.format(it.price)}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {it.quantity} × {currency.format(it.price)}
+                        </div>
                       </div>
                     </div>
                   ))
@@ -591,14 +728,21 @@ const CustomerMenu: React.FC = () => {
 
               <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-700/30">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-600 dark:text-slate-300">{t('common.total')}</span>
-                  <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">{currency.format(totalPrice)}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    {t("common.total")}
+                  </span>
+                  <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                    {currency.format(totalPrice)}
+                  </span>
                 </div>
                 <button
-                  onClick={() => { setShowCartOverlay(false); setShowCart(true); }}
+                  onClick={() => {
+                    setShowCartOverlay(false);
+                    setShowCart(true);
+                  }}
                   className="w-full rounded-lg bg-primary text-white py-2 font-semibold shadow hover:opacity-90 transition"
                 >
-                  {t('cart.viewOrder')}
+                  {t("cart.viewOrder")}
                 </button>
               </div>
             </div>
@@ -628,7 +772,7 @@ const CustomerMenu: React.FC = () => {
               id="compare-bar"
               role="region"
               aria-live="polite"
-              aria-label={t('menu.compareTray') || 'Compare tray'}
+              aria-label={t("menu.compareTray") || "Compare tray"}
               className="pointer-events-auto flex items-center justify-between gap-3 bg-slate-900 text-white rounded-xl shadow-xl px-3 sm:px-4 py-3"
             >
               {/* Left: selected thumbnails + count */}
@@ -637,14 +781,16 @@ const CustomerMenu: React.FC = () => {
                   {comparedItems.slice(0, 2).map((m) => (
                     <img
                       key={m.id}
-                      src={m.image_url || '/images/placeholder.png'}
-                      alt={(isRTL ? m.name_ar || m.name_en : m.name_en) || ''}
+                      src={m.image_url || "/images/placeholder.png"}
+                      alt={(isRTL ? m.name_ar || m.name_en : m.name_en) || ""}
                       className="w-8 h-8 rounded-full ring-2 ring-slate-900 object-cover"
                       loading="lazy"
                     />
                   ))}
                   {/* ghost slots to show capacity */}
-                  {Array.from({ length: Math.max(0, 2 - comparedItems.length) }).map((_, i) => (
+                  {Array.from({
+                    length: Math.max(0, 2 - comparedItems.length),
+                  }).map((_, i) => (
                     <div
                       key={`ghost-${i}`}
                       className="w-8 h-8 rounded-full ring-2 ring-slate-900 bg-white/10 grid place-items-center text-xs"
@@ -657,7 +803,7 @@ const CustomerMenu: React.FC = () => {
 
                 <div className="min-w-0">
                   <div className="text-xs sm:text-sm font-medium truncate">
-                    {t('menu.compareCount', { n: String(compareIds.length) })}{' '}
+                    {t("menu.compareCount", { n: String(compareIds.length) })}{" "}
                     <span className="opacity-90">{compareIds.length}/2</span>
                   </div>
 
@@ -665,7 +811,9 @@ const CustomerMenu: React.FC = () => {
                   <div className="mt-1 h-1.5 w-24 sm:w-32 bg-white/15 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-emerald-400 rounded-full transition-all"
-                      style={{ width: `${(Math.min(compareIds.length, 2) / 2) * 100}%` }}
+                      style={{
+                        width: `${(Math.min(compareIds.length, 2) / 2) * 100}%`,
+                      }}
                       aria-hidden="true"
                     />
                   </div>
@@ -673,7 +821,11 @@ const CustomerMenu: React.FC = () => {
               </div>
 
               {/* Right: actions */}
-              <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div
+                className={`flex items-center gap-2 ${
+                  isRTL ? "flex-row-reverse" : ""
+                }`}
+              >
                 <button
                   onClick={() => {
                     clearCompare();
@@ -681,7 +833,7 @@ const CustomerMenu: React.FC = () => {
                   }}
                   className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm"
                 >
-                  {t('common.clear') || 'Clear'}
+                  {t("common.clear") || "Clear"}
                 </button>
 
                 <button
@@ -691,10 +843,13 @@ const CustomerMenu: React.FC = () => {
                   disabled={compareIds.length < 2}
                   onClick={(e) => {
                     if (compareIds.length < 2) {
-                      toast.error(t('compare.needTwo') || 'Select two items to compare', {
-                        position: 'bottom-center',
-                        duration: 2000,
-                      });
+                      toast.error(
+                        t("compare.needTwo") || "Select two items to compare",
+                        {
+                          position: "bottom-center",
+                          duration: 2000,
+                        }
+                      );
                       nudgeIfDisabled(e.currentTarget);
                       return;
                     }
@@ -703,14 +858,14 @@ const CustomerMenu: React.FC = () => {
                   }}
                   aria-disabled={compareIds.length < 2 || undefined}
                   className={[
-                    'px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400',
+                    "px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400",
                     compareIds.length < 2
-                      ? 'bg-white/20 cursor-not-allowed'
-                      : 'bg-primary hover:opacity-90',
-                  ].join(' ')}
+                      ? "bg-white/20 cursor-not-allowed"
+                      : "bg-primary hover:opacity-90",
+                  ].join(" ")}
                 >
                   {/* Include the count for clarity */}
-                  {(t('menu.compare') || 'Compare')}
+                  {t("menu.compare") || "Compare"}
                 </button>
               </div>
             </div>
@@ -731,13 +886,16 @@ const CustomerMenu: React.FC = () => {
               style={{
                 background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
               }}
-
             >
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-5 h-5" />
-                <span className="font-semibold">{t('cart.viewOrder')}</span>
+                <span className="font-semibold">{t("cart.viewOrder")}</span>
               </div>
-              <div className={`flex items-center gap-2 text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div
+                className={`flex items-center gap-2 text-sm ${
+                  isRTL ? "flex-row-reverse" : ""
+                }`}
+              >
                 <span className="inline-flex items-center gap-1 bg-white/15 rounded-full px-2 py-1">
                   <Check className="w-4 h-4" /> {totalItems}
                 </span>
