@@ -290,7 +290,10 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             </div>
 
             {/* Right side: language, bell, user info */}
-            <div className="flex items-center space-x-4 rtl:space-x-reverse">
+            <div
+              className="flex relative float-right items-center space-x-4 rtl:space-x-reverse"
+              style={{ right: "5%" }}
+            >
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">
