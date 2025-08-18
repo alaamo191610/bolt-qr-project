@@ -292,7 +292,7 @@ const translations: Record<Language, any> = {
     },
     
     admin: {
-      title: "Admin dashboard",
+      title: "Admin Panel",
       subtitle: "Manage menu items and restaurant settings",
       tabs: {
         menu: "Menu management",
