@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { ShoppingCart, Search, MapPin, Check } from "lucide-react";
+import {Search, MapPin, Check } from "lucide-react";
+import { BsBagHeart, BsQrCode } from "react-icons/bs";
 import { useLanguage } from "../contexts/LanguageContext";
 import { menuService } from "../services/menuService";
 import { orderService } from "../services/orderService";
@@ -14,9 +15,7 @@ import MenuGrid from "../components/ui/MenuGrid";
 import OrderConfirmation from "../components/ui/OrderConfirmation";
 import FloatingCartButton from "../components/ui/FloatingCartButton";
 import CompareSheet from "../components/ui/CompareSheet"; // 🆕 compare modal
-import { useTheme } from "../contexts/ThemeContext";
 import toast from "react-hot-toast";
-import clsx from "clsx";
 
 interface Ingredient {
   id: string;
@@ -136,7 +135,6 @@ const CustomerMenu: React.FC = () => {
     if (table) trackMenuEvents.menuViewed(table, language);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
-  const { colors } = useTheme();
   // load selected category per table
   useEffect(() => {
     if (!tableNumber) return;
@@ -475,7 +473,7 @@ const CustomerMenu: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
         <div className="text-center animate-fade-in">
           <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center mx-auto mb-4 shadow-soft">
-            <ShoppingCart className="w-8 h-8 text-white animate-pulse" />
+            <BsQrCode className="w-8 h-8 text-white animate-pulse" />
           </div>
           <p className="text-slate-600 dark:text-slate-300">
             {t("common.loading")}
@@ -557,15 +555,12 @@ const CustomerMenu: React.FC = () => {
                 data-cart-anchor="header"
                 data-cart-icon
                 onClick={onHeaderCartClick}
-                className="relative px-3 py-2 rounded-lg bg-primary text-white flex items-center gap-2 hover:opacity-90 transition"
+                className="relative px-3 py-2 rounded-lg btn-primary text-white flex items-center gap-2 hover:opacity-90 transition"
                 aria-haspopup="dialog"
                 aria-expanded={showCartOverlay}
                 aria-controls="header-cart-popover"
-                style={{
-                  background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                }}
               >
-                <ShoppingCart className="w-5 h-5" />
+                <BsBagHeart className="w-5 h-5" />
                 <span className="font-medium hidden sm:inline">
                   {currency.format(totalPrice)}
                 </span>
@@ -762,38 +757,56 @@ const CustomerMenu: React.FC = () => {
       {/* 🆕 Sticky compare bar (above order bar) */}
       {compareIds.length > 0 && !showCart && (
         <div className="fixed inset-x-0 z-20 bottom-16 sm:bottom-20 pointer-events-none">
-          <div className="max-w-4xl mx-auto px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-4xl mx-auto px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-transparent">
             <div
               id="compare-bar"
               role="region"
               aria-live="polite"
               aria-label={t("menu.compareTray") || "Compare tray"}
-              className="pointer-events-auto flex items-center justify-between gap-3 bg-slate-900 text-white rounded-xl shadow-xl px-3 sm:px-4 py-3"
+              className={[
+                "relative pointer-events-auto flex items-center justify-between gap-3",
+                "rounded-2xl px-3 sm:px-4 py-3",
+                "backdrop-blur-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)]",
+                "text-slate-900 dark:text-white",
+                // base glass neutral
+                compareIds.length === 2
+                  ? "bg-emerald-500/15 border border-emerald-400/40 ring-1 ring-emerald-400/20"
+                  : "bg-white/10 border border-white/30 ring-1 ring-white/20"
+              ].join(" ")}
+              style={{
+                ["--tw-glass-sheen" as any]:
+                  "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.05))",
+              }}
             >
+              {/* sheen overlay */}
+              <span className="pointer-events-none absolute inset-0 rounded-2xl mix-blend-overlay opacity-80 [background:var(--tw-glass-sheen)]" />
+              {/* top edge highlight */}
+              <span className="pointer-events-none absolute inset-x-0 -top-px h-px rounded-t-2xl bg-white/60 dark:bg-white/20" />
+
               {/* Left: selected thumbnails + count */}
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="relative flex items-center gap-3 min-w-0">
                 <div className="flex -space-x-2 rtl:space-x-reverse">
                   {comparedItems.slice(0, 2).map((m) => (
                     <img
                       key={m.id}
                       src={m.image_url || "/images/placeholder.png"}
                       alt={(isRTL ? m.name_ar || m.name_en : m.name_en) || ""}
-                      className="w-8 h-8 rounded-full ring-2 ring-slate-900 object-cover"
+                      className="w-8 h-8 rounded-full ring-2 ring-white/30 object-cover"
                       loading="lazy"
                     />
                   ))}
-                  {/* ghost slots to show capacity */}
-                  {Array.from({
-                    length: Math.max(0, 2 - comparedItems.length),
-                  }).map((_, i) => (
-                    <div
-                      key={`ghost-${i}`}
-                      className="w-8 h-8 rounded-full ring-2 ring-slate-900 bg-white/10 grid place-items-center text-xs"
-                      aria-hidden="true"
-                    >
-                      +
-                    </div>
-                  ))}
+                  {/* ghost slots */}
+                  {Array.from({ length: Math.max(0, 2 - comparedItems.length) }).map(
+                    (_, i) => (
+                      <div
+                        key={`ghost-${i}`}
+                        className="w-8 h-8 rounded-full ring-2 ring-white/30 bg-white/10 grid place-items-center text-xs"
+                        aria-hidden="true"
+                      >
+                        +
+                      </div>
+                    )
+                  )}
                 </div>
 
                 <div className="min-w-0">
@@ -802,7 +815,7 @@ const CustomerMenu: React.FC = () => {
                     <span className="opacity-90">{compareIds.length}/2</span>
                   </div>
 
-                  {/* subtle progress bar */}
+                  {/* progress bar */}
                   <div className="mt-1 h-1.5 w-24 sm:w-32 bg-white/15 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-emerald-400 rounded-full transition-all"
@@ -823,26 +836,19 @@ const CustomerMenu: React.FC = () => {
                 <button
                   onClick={() => {
                     clearCompare();
-                    // trackMenuEvents?.compareCleared?.(compareIds);
                   }}
-                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm"
+                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm transition"
                 >
                   {t("common.clear") || "Clear"}
                 </button>
 
                 <button
-                  ref={(el) => {
-                    // no-op; we just want a ref for the nudge function if needed
-                  }}
                   disabled={compareIds.length < 2}
                   onClick={(e) => {
                     if (compareIds.length < 2) {
                       toast.error(
                         t("compare.needTwo") || "Select two items to compare",
-                        {
-                          position: "bottom-center",
-                          duration: 2000,
-                        }
+                        { position: "bottom-center", duration: 2000 }
                       );
                       nudgeIfDisabled(e.currentTarget);
                       return;
@@ -855,10 +861,9 @@ const CustomerMenu: React.FC = () => {
                     "px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400",
                     compareIds.length < 2
                       ? "bg-white/20 cursor-not-allowed"
-                      : "bg-primary hover:opacity-90",
+                      : "bg-emerald-500 text-white hover:opacity-90",
                   ].join(" ")}
                 >
-                  {/* Include the count for clarity */}
                   {t("menu.compare") || "Compare"}
                 </button>
               </div>
@@ -866,6 +871,7 @@ const CustomerMenu: React.FC = () => {
           </div>
         </div>
       )}
+
 
       {/* Sticky bottom order bar */}
       {!showCart && totalItems > 0 && (
@@ -876,28 +882,56 @@ const CustomerMenu: React.FC = () => {
                 trackMenuEvents.cartViewed(totalItems, totalPrice);
                 setShowCart(true);
               }}
-              className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-white px-4 py-3 shadow-soft hover:opacity-90 transition"
+              className={[
+                // layout
+                "group relative w-full flex items-center justify-between gap-3",
+                // shape
+                "rounded-[22px] px-4 py-3",
+                // glass base
+                "backdrop-blur bg-white/4 dark:bg-white/4",
+                // crisp glass edge & subtle depth
+                "border border-white/30 dark:border-white/10 ring-1 ring-white/20",
+                "shadow-[0_8px_30px_rgba(0,0,0,0.12)]",
+                // interaction
+                "transition duration-300 hover:bg-white/15 active:scale-[0.995]",
+                // text color adapts to theme
+                "text-slate-900 dark:text-white"
+              ].join(" ")}
               style={{
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                // gentle diagonal sheen blended over whatever sits behind
+                // (no hard colors—lets the page bleed through)
+                // You can tweak the from/to stops for more/less shine.
+                // Works across light/dark thanks to mix-blend overlay.
+                // @ts-ignore – Tailwind arbitrary props ok
+                ["--tw-glass-sheen" as any]: "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.05))",
               }}
             >
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" />
-                <span className="font-semibold">{t("cart.viewOrder")}</span>
+              {/* sheen overlay */}
+              <span className="pointer-events-none absolute inset-0 rounded-[22px] mix-blend-overlay opacity-80 [background:var(--tw-glass-sheen)]" />
+
+              {/* top edge highlight */}
+              <span className="pointer-events-none absolute inset-x-0 -top-px h-px rounded-t-[22px] bg-white/60 dark:bg-white/20" />
+
+              <div className="relative flex items-center gap-2">
+                <BsBagHeart className="w-5 h-5 opacity-90" />
+                <span className="font-semibold">{t('cart.viewOrder')}</span>
               </div>
-              <div
-                className={`flex items-center gap-2 text-sm ${isRTL ? "flex-row-reverse" : ""
-                  }`}
-              >
-                <span className="inline-flex items-center gap-1 bg-white/15 rounded-full px-2 py-1">
-                  <Check className="w-4 h-4" /> {totalItems}
+
+              <div className={`relative flex items-center gap-2 text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 border border-white/30 dark:border-white/10 bg-white/10 dark:bg-white/10 backdrop-blur-sm">
+                  <Check className="w-4 h-4" />
+                  {totalItems}
                 </span>
                 <span className="font-bold">{currency.format(totalPrice)}</span>
               </div>
+
+              {/* subtle focus ring for a11y */}
+              <span className="absolute inset-0 rounded-[22px] ring-2 ring-transparent group-focus-visible:ring-white/40" />
             </button>
           </div>
         </div>
       )}
+
 
       {/* Floating cart (when empty) */}
       {totalItems === 0 && (

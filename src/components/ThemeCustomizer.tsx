@@ -1,49 +1,36 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Palette, Sun, Moon, RotateCcw, Check, X, Copy } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { updateAdminTheme } from '../services/adminService';
 
 /** Utility: sanitize hex (#RRGGBB) */
 const normalizeHex = (v: string) => {
-  let s = v.trim().replace(/^#/,'');
-  if (/^[0-9a-fA-F]{3}$/.test(s)) {
-    // expand #abc -> #aabbcc
-    s = s.split('').map(ch => ch + ch).join('');
-  }
+  let s = v.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map(ch => ch + ch).join('');
   if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
   return `#${s.toUpperCase()}`;
 };
 
-/** Utility: pick readable text color over bg (simple YIQ) */
+/** Utility: readable text over bg (simple YIQ) */
 const textOn = (hex: string) => {
   const n = normalizeHex(hex);
   if (!n) return '#FFFFFF';
-  const r = parseInt(n.slice(1,3),16);
-  const g = parseInt(n.slice(3,5),16);
-  const b = parseInt(n.slice(5,7),16);
-  const yiq = (r*299 + g*587 + b*114)/1000;
-  return yiq >= 140 ? '#0F172A' : '#FFFFFF'; // slate-900 or white
+  const r = parseInt(n.slice(1, 3), 16);
+  const g = parseInt(n.slice(3, 5), 16);
+  const b = parseInt(n.slice(5, 7), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 140 ? '#0F172A' : '#FFFFFF';
 };
 
-type Colors = {
-  primary: string;
-  secondary: string;
-  accent: string;
-};
+type Colors = { primary: string; secondary: string; accent: string };
 
-const classyPresets: Array<{
-  name: string;
-  primary: string;
-  secondary: string;
-  accent: string;
-  note?: string;
-}> = [
+const classyPresets = [
   { name: 'Charcoal & Gold', primary: '#1F2937', secondary: '#A78BFA', accent: '#D4AF37', note: 'Understated luxury' },
-  { name: 'Navy & Sand',     primary: '#1E3A8A', secondary: '#64748B', accent: '#F5C973', note: 'Coastal, refined' },
-  { name: 'Forest & Clay',   primary: '#065F46', secondary: '#8B5E34', accent: '#E0A96D', note: 'Earthy, warm' },
-  { name: 'Plum & Champagne',primary: '#6D28D9', secondary: '#9D174D', accent: '#F3D9B1', note: 'Boutique, modern' },
-  { name: 'Teal & Copper',   primary: '#0F766E', secondary: '#7C3E2B', accent: '#D97706', note: 'Bold, premium' },
-  // Keep one of your originals for continuity
-  { name: 'Indigo',          primary: '#4F46E5', secondary: '#6366F1', accent: '#84CC16' },
+  { name: 'Navy & Sand', primary: '#1E3A8A', secondary: '#64748B', accent: '#F5C973', note: 'Coastal, refined' },
+  { name: 'Forest & Clay', primary: '#065F46', secondary: '#8B5E34', accent: '#E0A96D', note: 'Earthy, warm' },
+  { name: 'Plum & Champagne', primary: '#6D28D9', secondary: '#9D174D', accent: '#F3D9B1', note: 'Boutique, modern' },
+  { name: 'Teal & Copper', primary: '#0F766E', secondary: '#7C3E2B', accent: '#D97706', note: 'Bold, premium' },
+  { name: 'Indigo', primary: '#4F46E5', secondary: '#6366F1', accent: '#84CC16' },
 ];
 
 const Chip: React.FC<{ label: string; bg: string }> = ({ label, bg }) => (
@@ -61,26 +48,47 @@ const ThemeCustomizer: React.FC = () => {
   const [temp, setTemp] = useState<Colors>(colors);
   const [copied, setCopied] = useState(false);
 
+  // ✅ Resync the draft whenever the sheet opens (or global theme changed)
+  useEffect(() => {
+    if (isOpen) {
+      setTemp({
+        primary: colors.primary,
+        secondary: colors.secondary,
+        accent: colors.accent,
+      });
+    }
+  }, [isOpen, colors]);
+
   const handleChange = (key: keyof Colors, value: string) => {
-    // allow typing, but validate on blur or apply
     setTemp(prev => ({ ...prev, [key]: value }));
   };
-
   const handleBlur = (key: keyof Colors) => {
     const fixed = normalizeHex(temp[key]);
     if (fixed) setTemp(prev => ({ ...prev, [key]: fixed }));
   };
-
-  const applyPreset = (p: typeof classyPresets[number]) => {
-    setTemp(prev => ({ ...prev, primary: p.primary, secondary: p.secondary, accent: p.accent }));
+  const applyPreset = (p: (typeof classyPresets)[number]) => {
+    setTemp({ primary: p.primary, secondary: p.secondary, accent: p.accent });
   };
 
-  const applyChanges = () => {
-    const fixed: Partial<Colors> = {};
-    (Object.keys(temp) as (keyof Colors)[]).forEach(k => {
-      fixed[k] = normalizeHex(temp[k]) ?? colors[k];
-    });
-    updateColors(fixed as Colors);
+  const applyChanges = async () => {
+    // Build a sanitized palette from the current draft (temp)
+    const fixed: Colors = {
+      primary: normalizeHex(temp.primary) ?? colors.primary,
+      secondary: normalizeHex(temp.secondary) ?? colors.secondary,
+      accent: normalizeHex(temp.accent) ?? colors.accent,
+    };
+
+    // 1) Update global theme (ThemeProvider will write :root vars)
+    updateColors(fixed);
+
+    // 2) Persist full palette to DB (source of truth)
+    try {
+      await updateAdminTheme({ theme: fixed }); // theme jsonb: { primary, secondary, accent }
+    } catch (e) {
+      console.error('Failed to save theme', e);
+      // TODO: show a toast/snackbar if you have one
+    }
+
     setIsOpen(false);
   };
 
@@ -99,7 +107,7 @@ const ThemeCustomizer: React.FC = () => {
       await navigator.clipboard.writeText(css);
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
-    } catch {}
+    } catch { }
   };
 
   const preview = useMemo(() => ({
@@ -153,8 +161,15 @@ const ThemeCustomizer: React.FC = () => {
               </div>
             </div>
 
-            {/* Body */}
-            <div className="h-[calc(100%-168px)] overflow-y-auto p-6 space-y-8">
+            {/* Body — 🔒 Scoped preview vars here so edits don't touch global :root */}
+            <div
+              className="h-[calc(100%-168px)] overflow-y-auto p-6 space-y-8"
+              style={{
+                ['--color-primary' as any]: normalizeHex(temp.primary) ?? temp.primary,
+                ['--color-secondary' as any]: normalizeHex(temp.secondary) ?? temp.secondary,
+                ['--color-accent' as any]: normalizeHex(temp.accent) ?? temp.accent,
+              }}
+            >
               {/* Dark Mode */}
               <div className="flex items-center justify-between p-4 rounded-2xl border bg-slate-50/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-3">
@@ -202,7 +217,7 @@ const ThemeCustomizer: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">Custom Colors</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {(['primary','secondary','accent'] as (keyof Colors)[]).map(k => (
+                  {(['primary', 'secondary', 'accent'] as (keyof Colors)[]).map(k => (
                     <div key={k} className="space-y-2">
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">{k}</label>
                       <div className="flex items-center gap-3">
@@ -236,27 +251,19 @@ const ThemeCustomizer: React.FC = () => {
                 </div>
               </div>
 
-              {/* Live Preview */}
+              {/* Live Preview (uses scoped vars via bg/text-primary utilities & .btn classes) */}
               <div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">Live Preview</h3>
+
                 <div className="rounded-2xl border bg-white/60 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 overflow-hidden">
                   {/* Nav */}
-                  <div
-                    className="px-4 py-3 flex items-center justify-between"
-                    style={{ backgroundColor: preview.nav, color: textOn(preview.nav) }}
-                  >
+                  <div className="px-4 py-3 flex items-center justify-between bg-primary text-white">
                     <span className="font-semibold">Restaurant Brand</span>
                     <div className="flex items-center gap-2">
-                      <button
-                        className="text-xs px-3 py-1.5 rounded-lg border border-white/30 hover:bg-white/10 transition"
-                        style={{ color: textOn(preview.nav) }}
-                      >
+                      <button className="text-xs px-3 py-1.5 rounded-lg border border-white/30 hover:bg-white/10 transition">
                         Menu
                       </button>
-                      <button
-                        className="text-xs px-3 py-1.5 rounded-lg border border-white/30 hover:bg-white/10 transition"
-                        style={{ color: textOn(preview.nav) }}
-                      >
+                      <button className="text-xs px-3 py-1.5 rounded-lg border border-white/30 hover:bg-white/10 transition">
                         Reserve
                       </button>
                     </div>
@@ -281,12 +288,8 @@ const ThemeCustomizer: React.FC = () => {
                           </div>
                           <div className="mt-4 flex items-center justify-between">
                             <span className="font-semibold text-slate-900 dark:text-white">$18.00</span>
-                            <button
-                              className="px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow transition"
-                              style={{ backgroundColor: preview.cta, color: textOn(preview.cta) }}
-                            >
-                              Add to Cart
-                            </button>
+                            {/* uses .btn system; pulls accent via scoped vars */}
+                            <button className="btn btn-accent">Add to Cart</button>
                           </div>
                         </div>
                       </div>
@@ -294,24 +297,9 @@ const ThemeCustomizer: React.FC = () => {
 
                     {/* Buttons row */}
                     <div className="mt-4 flex items-center gap-3">
-                      <button
-                        className="px-3 py-2 rounded-lg text-sm"
-                        style={{ backgroundColor: temp.secondary, color: textOn(temp.secondary) }}
-                      >
-                        Secondary
-                      </button>
-                      <button
-                        className="px-3 py-2 rounded-lg text-sm"
-                        style={{ backgroundColor: temp.primary, color: textOn(temp.primary) }}
-                      >
-                        Primary
-                      </button>
-                      <button
-                        className="px-3 py-2 rounded-lg text-sm"
-                        style={{ backgroundColor: temp.accent, color: textOn(temp.accent) }}
-                      >
-                        Accent
-                      </button>
+                      <button className="btn btn-secondary btn-sm">Secondary</button>
+                      <button className="btn btn-primary btn-sm">Primary</button>
+                      <button className="btn btn-accent btn-sm">Accent</button>
                     </div>
                   </div>
                 </div>
@@ -336,9 +324,9 @@ const ThemeCustomizer: React.FC = () => {
                 </button>
                 <button
                   onClick={applyChanges}
-                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-white bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:from-indigo-700 hover:to-fuchsia-700 shadow-sm hover:shadow transition"
+                  className="btn btn-primary"
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className="w-4 h-4 mr-2" />
                   Apply
                 </button>
               </div>

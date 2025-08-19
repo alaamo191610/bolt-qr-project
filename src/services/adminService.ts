@@ -111,3 +111,52 @@ export const adminService = {
     }
   }
 }
+
+
+export type AdminThemeRow = {
+  theme: { primary: string | null; secondary: string | null; accent: string | null } | null;
+  theme_mode: 'light' | 'dark' | 'system' | null;
+  // keep for legacy fallback:
+  theme_color: string | null;
+};
+
+export async function fetchAdminTheme(): Promise<AdminThemeRow> {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) throw authErr;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('admins')
+    .select('theme, theme_mode, theme_color')  // ⬅️ include theme here
+    .eq('id', user.id)
+    .single();
+
+  if (error) throw error;
+
+  // ensure all keys exist for TS
+  return {
+    theme: (data as any)?.theme ?? null,
+    theme_mode: (data as any)?.theme_mode ?? null,
+    theme_color: (data as any)?.theme_color ?? null,
+  };
+}
+
+export async function updateAdminTheme(patch: {
+  theme?: { primary: string; secondary: string; accent: string };
+  theme_mode?: 'light' | 'dark' | 'system';
+}) {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) throw authErr;
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('admins')
+    .update(patch)
+    .eq('id', user.id)
+    .select('theme, theme_mode, theme_color')
+    .single();
+
+  if (error) throw error;
+
+  return data as AdminThemeRow;
+}
