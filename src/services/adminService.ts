@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import type { Admin } from '../lib/supabase'
-
+import type { OrderFlowRules, KDSPrefs } from '../order-admin/types'
+import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
 export const adminService = {
   // Get admin profile
   async getAdminProfile(adminId: string) {
@@ -109,7 +110,87 @@ export const adminService = {
       console.error('Error fetching analytics:', error)
       throw error
     }
-  }
+  },
+
+  async getAdminSettings(adminId: string) {
+    const { data, error } = await supabase
+      .from('admins')
+      .select('id, order_rules, kds_prefs')
+      .eq('id', adminId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as { id: string; order_rules: OrderFlowRules; kds_prefs: KDSPrefs } | null;
+  },
+
+  async saveOrderRules(adminId: string, order_rules: OrderFlowRules) {
+    const { error } = await supabase
+      .from('admins')
+      .update({ order_rules })
+      .eq('id', adminId);
+    if (error) throw error;
+  },
+
+  async saveKDSPrefs(adminId: string, kds_prefs: KDSPrefs) {
+    const { error } = await supabase
+      .from('admins')
+      .update({ kds_prefs })
+      .eq('id', adminId);
+    if (error) throw error;
+  },
+  async getAdminMonetarySettings(adminId: string) {
+    const { data, error } = await supabase
+    .from('admins')
+    .select('id, pricing_prefs, billing_settings')
+    .eq('id', adminId)
+    .maybeSingle();
+    if (error) throw error;
+    return data as { id: string; pricing_prefs: PricingPrefs | null; billing_settings: BillingSettings | null } | null;
+    },
+    
+    
+    async savePricingPrefs(adminId: string, pricing_prefs: PricingPrefs) {
+    const { error } = await supabase.from('admins').update({ pricing_prefs }).eq('id', adminId);
+    if (error) throw error;
+    },
+    
+    
+    async saveBillingSettings(adminId: string, billing_settings: BillingSettings) {
+    const { error } = await supabase.from('admins').update({ billing_settings }).eq('id', adminId);
+    if (error) throw error;
+    },
+    
+    
+    // Promotions CRUD
+    async listPromotions(adminId: string): Promise<Promotion[]> {
+    const { data, error } = await supabase
+    .from('promotions')
+    .select('*')
+    .eq('admin_id', adminId)
+    .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []) as Promotion[];
+    },
+    
+    
+    async upsertPromotion(promo: Promotion): Promise<Promotion> {
+    const { data, error } = await supabase
+    .from('promotions')
+    .upsert(promo)
+    .select()
+    .single();
+    if (error) throw error;
+    return data as Promotion;
+    },
+    
+    
+    async setPromotionActive(adminId: string, id: string, active: boolean) {
+    const { error } = await supabase
+    .from('promotions')
+    .update({ active })
+    .eq('admin_id', adminId)
+    .eq('id', id);
+    if (error) throw error;
+    },
 }
 
 
