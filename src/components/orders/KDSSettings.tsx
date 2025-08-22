@@ -80,13 +80,6 @@ function Select({ value, onChange, children }: { value: string; onChange: (v: st
             <h3 className="text-lg font-semibold text-slate-900">Kitchen Display Settings</h3>
             <p className="text-slate-600 text-sm">Control how tickets show in the kitchen and auto-advance behavior.</p>
           </div>
-          <button
-            onClick={save}
-            disabled={!dirty || saving}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm ${dirty ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
-          >
-            {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
-          </button>
         </header>
   
         {/* Columns (dragless reorder) */}

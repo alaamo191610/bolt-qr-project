@@ -77,19 +77,6 @@ export default function FeesTaxSettings({ adminId }:{ adminId: string }){
             {t('fees.description') || 'Define VAT %, service charge %, and delivery fee (in base currency).'}
           </p>
         </div>
-        <button
-          onClick={save}
-          disabled={!dirty || saving}
-          className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm ${
-            dirty ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-500 border-slate-200'
-          }`}
-        >
-          {saving
-            ? (t('common.saving') || 'Saving…')
-            : dirty
-              ? (t('fees.saveChanges') || 'Save changes')
-              : (t('fees.saved') || 'Saved')}
-        </button>
       </header>
 
       <div className="grid md:grid-cols-3 gap-4">

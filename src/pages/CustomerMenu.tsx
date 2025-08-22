@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {Search, MapPin, Check } from "lucide-react";
+import React, { useLayoutEffect, useRef, useState, useEffect, useMemo, useCallback, useDeferredValue } from "react";
+import { Search, MapPin, Check } from "lucide-react";
 import { BsBagHeart, BsQrCode } from "react-icons/bs";
 import { useLanguage } from "../contexts/LanguageContext";
 import { menuService } from "../services/menuService";
@@ -13,9 +13,13 @@ import CartDrawer from "../components/ui/CartDrawer";
 import CategoryFilter from "../components/ui/CategoryFilter";
 import MenuGrid from "../components/ui/MenuGrid";
 import OrderConfirmation from "../components/ui/OrderConfirmation";
-import FloatingCartButton from "../components/ui/FloatingCartButton";
 import CompareSheet from "../components/ui/CompareSheet"; // 🆕 compare modal
+import { HeaderCartPopover } from '../components/ui/Popover';
 import toast from "react-hot-toast";
+import { useAdminMonetary } from '../hooks/useAdminMonetary';
+import { formatPrice } from '../pricing/usePrice';
+import { computeTotals } from '../pricing/totals';
+import type { Promotion } from '../pricing/types';
 
 interface Ingredient {
   id: string;
@@ -53,6 +57,9 @@ const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
+  const { billing, prefs, loading: moneyLoading } = useAdminMonetary(); // adminId optional
+  const [promoRow, setPromoRow] = useState<Promotion | null>(null); // optional
+  const [lastCart, setLastCart] = useState<CartItem[]>([]);
 
   // data
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -63,7 +70,10 @@ const CustomerMenu: React.FC = () => {
   // ui
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearch = useDeferredValue(searchTerm);
   const [showCart, setShowCart] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [showCartOverlay, setShowCartOverlay] = useState(false);
   const [overlayPos, setOverlayPos] = useState<OverlayPos>({
     top: 0,
@@ -82,13 +92,55 @@ const CustomerMenu: React.FC = () => {
   // 🆕 compare
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
+  useLayoutEffect(() => {
+    // grab once on mount
+    setAnchorEl(document.getElementById('header-cart-anchor'));
+  }, []);
+  const handleClearCart = () => {
+    const previous = cart;            // snapshot for undo
+    setCart([]);
+  
+    toast.custom((t) => (
+      <div
+        className={`${
+          t.visible ? 'animate-enter' : 'animate-leave'
+        } bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg rounded-xl px-4 py-3 flex items-center gap-3`}
+      >
+        <span className="text-sm text-slate-700 dark:text-slate-200">
+          {isRTL ? 'تم تفريغ السلة' : 'Cart cleared'}
+        </span>
+        <button
+          onClick={() => {
+            setCart(previous);
+            toast.dismiss(t.id);
+          }}
+          className="ml-auto px-2.5 py-1.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700"
+        >
+          {isRTL ? 'تراجع' : 'Undo'}
+        </button>
+        <button
+          onClick={() => toast.dismiss(t.id)}
+          className="px-2.5 py-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          {isRTL ? 'إغلاق' : 'Close'}
+        </button>
+      </div>
+    ), { duration: 5000 });
+  };
+
+  useLayoutEffect(() => {
+    // if opening and anchor not found yet, try again
+    if (showCartOverlay && !anchorEl) {
+      setAnchorEl(document.getElementById('header-cart-anchor'));
+    }
+  }, [showCartOverlay, anchorEl]);
 
   const toggleCompare = useCallback((id: string) => {
     setCompareIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
 
       if (prev.length >= 2) {
-        toast.error("You can compare up to 2 items", {
+        toast.error(t('compare.limit') || 'You can compare up to 2 items', {
           position: "bottom-center",
           duration: 2500,
           style: {
@@ -128,7 +180,7 @@ const CustomerMenu: React.FC = () => {
   // bootstrap
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const table = (urlParams.get("table") || "T01").trim();
+    const table = (urlParams.get('table') || 'T01').trim().toUpperCase();
     setTableNumber(table);
     loadMenuItems(table);
 
@@ -255,7 +307,7 @@ const CustomerMenu: React.FC = () => {
 
   // derived: filtered items
   const filteredItems = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = deferredSearch.trim().toLowerCase();
     const filtered = menuItems.filter((item) => {
       const matchesCategory =
         selectedCategory === "All" || item.category_id === selectedCategory;
@@ -276,7 +328,7 @@ const CustomerMenu: React.FC = () => {
     });
 
     return filtered;
-  }, [menuItems, selectedCategory, searchTerm, isRTL]);
+  }, [menuItems, selectedCategory, deferredSearch, isRTL]);
 
   // NEW: debounce search tracking
   useEffect(() => {
@@ -289,12 +341,33 @@ const CustomerMenu: React.FC = () => {
 
     return () => clearTimeout(id);
   }, [searchTerm, filteredItems.length]);
+  // ---- variant helpers (same id + same options = same line) ----
+  const variantKey = (m: Partial<MenuItem>) =>
+    JSON.stringify({
+      id: m.id,
+      price_delta: Number((m as any).price_delta || 0),
+      custom_ingredients: ((m as any).custom_ingredients || [])
+        .map((x: any) => ({ id: x.id, action: x.action }))
+        .sort((a: any, b: any) => a.id.localeCompare(b.id)),
+    });
+
+  const isSameVariant = (a: Partial<MenuItem>, b: Partial<MenuItem>) =>
+    variantKey(a) === variantKey(b);
+
+  // ---- money helpers (unit incl. extras) ----
+  type CartLine = CartItem & { price_delta?: number; custom_ingredients?: { id: string; action: 'normal' | 'no' | 'extra' }[] };
+  const unit = (it: CartLine) => (it.price || 0) + (it.price_delta || 0);
+  const line = (it: CartLine) => unit(it) * (it.quantity || 0);
 
   // derived: quantity map / totals
-  const quantityMap = useMemo(
-    () => Object.fromEntries(cart.map((i) => [i.id, i.quantity])),
-    [cart]
-  );
+  const quantityMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const it of cart as CartLine[]) {
+      m[it.id] = (m[it.id] || 0) + (it.quantity || 0);
+    }
+    return m;
+  }, [cart]);
+
 
   const totalItems = useMemo(
     () => cart.reduce((n, it) => n + it.quantity, 0),
@@ -302,49 +375,56 @@ const CustomerMenu: React.FC = () => {
   );
 
   const totalPrice = useMemo(
-    () => cart.reduce((sum, it) => sum + it.price * it.quantity, 0),
+    () => (cart as CartLine[]).reduce((sum, it) => sum + line(it), 0),
     [cart]
   );
 
+  const formattedSubtotal = useMemo(
+    () => (moneyLoading ? currency.format(totalPrice) : formatPrice(totalPrice, prefs)),
+    [moneyLoading, totalPrice, prefs]
+  );
+
+  const breakdown = useMemo(() => {
+    if (moneyLoading || !billing) {
+      const delivery = billing?.deliveryFee ?? 0;
+      return { discount: 0, vat: 0, service: 0, delivery, total: totalPrice + delivery };
+    }
+    const { discount, vat, service, total } = computeTotals(totalPrice, billing, promoRow);
+    return { discount, vat, service, delivery: billing.deliveryFee, total };
+  }, [totalPrice, billing, promoRow, moneyLoading]);
+
   // cart ops
-  const addToCart = useCallback((item: MenuItem) => {
-    setCart((prev) => {
-      const found = prev.find((c) => c.id === item.id);
-      if (found) {
-        const newQuantity = found.quantity + 1;
-        trackMenuEvents.itemAddedToCart(item.id, item.name_en, item.price, 1);
-        return prev.map((c) =>
-          c.id === item.id ? { ...c, quantity: newQuantity } : c
-        );
+  const addToCart = useCallback((incoming: MenuItem) => {
+    setCart(prev => {
+      const copy = [...prev] as CartLine[];
+      const i = copy.findIndex(li => isSameVariant(li, incoming));
+      if (i >= 0) {
+        copy[i] = { ...copy[i], quantity: (copy[i].quantity || 0) + 1 };
+      } else {
+        copy.push({ ...(incoming as any), quantity: 1 });
       }
-      trackMenuEvents.itemAddedToCart(item.id, item.name_en, item.price, 1);
-      return [...prev, { ...item, quantity: 1 }];
+      // analytics: include extras if present
+      const priceWithExtras = (incoming.price || 0) + ((incoming as any).price_delta || 0);
+      trackMenuEvents.itemAddedToCart(incoming.id, incoming.name_en, priceWithExtras, 1);
+      return copy;
     });
   }, []);
 
   const removeFromCart = useCallback((itemId: string) => {
-    setCart((prev) => {
-      const found = prev.find((c) => c.id === itemId);
-      if (found && found.quantity > 1) {
-        trackMenuEvents.itemRemovedFromCart(
-          itemId,
-          found.name_en,
-          found.price,
-          1
-        );
-        return prev.map((c) =>
-          c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c
-        );
+    setCart(prev => {
+      const copy = [...prev] as CartLine[];
+      const idx = [...copy].reverse().findIndex(li => li.id === itemId);
+      if (idx === -1) return prev;
+      const realIdx = copy.length - 1 - idx;
+      const target = copy[realIdx];
+      const q = Math.max(1, Number(target.quantity || 1));
+      if (q > 1) {
+        copy[realIdx] = { ...target, quantity: q - 1 };
+      } else {
+        copy.splice(realIdx, 1);
       }
-      if (found) {
-        trackMenuEvents.itemRemovedFromCart(
-          itemId,
-          found.name_en,
-          found.price,
-          found.quantity
-        );
-      }
-      return prev.filter((c) => c.id !== itemId);
+      trackMenuEvents.itemRemovedFromCart(itemId, target.name_en, unit(target), 1);
+      return copy;
     });
   }, []);
 
@@ -562,7 +642,8 @@ const CustomerMenu: React.FC = () => {
               >
                 <BsBagHeart className="w-5 h-5" />
                 <span className="font-medium hidden sm:inline">
-                  {currency.format(totalPrice)}
+                  {/* {currency.format(totalPrice)} */}
+                  {formattedSubtotal}
                 </span>
                 {totalItems > 0 && (
                   <span
@@ -652,93 +733,129 @@ const CustomerMenu: React.FC = () => {
       </div>
 
       {/* Header cart popover (desktop only) */}
-      {showCartOverlay && isDesktop() && (
-        <div
-          id="header-cart-popover"
-          className="fixed z-[60] animate-scale-in"
-          style={overlayPos as React.CSSProperties}
-          role="dialog"
-          aria-label={t("cart.miniCartAria")}
-        >
-          <div className="relative">
-            {/* arrow */}
-            <span
-              className={[
-                "absolute -top-2 block w-3 h-3 rotate-45",
-                "bg-white dark:bg-slate-800",
-                "border border-slate-200 dark:border-slate-700",
-                isRTL
-                  ? "left-6 border-l-0 border-b-0"
-                  : "right-6 border-r-0 border-b-0",
-              ].join(" ")}
-              aria-hidden
-            />
-            <div className="w-[340px] max-w-[calc(100vw-24px)] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-              <div className="p-3 border-b border-slate-200 dark:border-slate-700">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {t("menu.yourOrder")}
-                  </span>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {totalItems} {t("orders.items") || "items"}
-                  </span>
-                </div>
+      <HeaderCartPopover
+        open={showCartOverlay && isDesktop()}
+        anchorEl={triggerRef.current}
+        isRTL={isRTL}
+      >
+        {/* just the panel content here – no fixed wrapper, no overlayPos */}
+        <div className="relative">
+          <span
+            className={[
+              "pointer-events-none",
+              "absolute -top-2 block w-3 h-3 rotate-45",
+              "bg-white dark:bg-slate-800",
+              "border border-slate-200 dark:border-slate-700",
+              isRTL ? "left-6 border-l-0 border-b-0" : "right-6 border-r-0 border-b-0",
+            ].join(" ")}
+            aria-hidden
+          />
+          {/* Panel */}
+          <div
+            role="region"
+            aria-label={t('cart.preview') || 'Cart preview'}
+            className="animate-scale-in w-full sm:w-[340px] max-w-[calc(100vw-24px)] bg-white dark:bg-slate-800
+                 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-3 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {t('menu.yourOrder')}
+                </span>
+                <span
+                  className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                  aria-live="polite"
+                >
+                  <span className="font-semibold">{totalItems}</span>
+                  <span>{t('orders.items') || 'items'}</span>
+                </span>
               </div>
+            </div>
 
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
-                {cart.length === 0 ? (
-                  <div className="p-6 text-center text-slate-500 dark:text-slate-400">
-                    {t("menu.cartEmpty")}
-                  </div>
-                ) : (
-                  cart.map((it) => (
-                    <div key={it.id} className="p-3 flex items-center gap-3">
-                      <img
-                        src={it.image_url || "/images/placeholder.png"}
-                        alt={isRTL ? it.name_ar || it.name_en : it.name_en}
-                        className="w-10 h-10 rounded-md object-cover"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                            {isRTL ? it.name_ar || it.name_en : it.name_en}
+            {/* Lines */}
+            <div
+              className="max-h-[min(50vh,18rem)] overflow-y-auto divide-y divide-slate-100/80 dark:divide-slate-700/80 [scrollbar-width:thin]"
+              style={{
+                WebkitMaskImage:
+                  'linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent)',
+                maskImage:
+                  'linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent)',
+              }}
+            >
+              {cart.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 dark:text-slate-400">
+                  {t('menu.cartEmpty')}
+                </div>
+              ) : (
+                cart.map((it) => (
+                  <div key={it.id} className="p-3 flex items-center gap-3">
+                    <img
+                      src={it.image_url || '/images/placeholder.png'}
+                      alt={(isRTL ? it.name_ar || it.name_en : it.name_en) || 'item'}
+                      className="w-10 h-10 rounded-md object-cover flex-shrink-0"
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-slate-900 dark:text-white leading-5 line-clamp-2">
+                          {isRTL ? it.name_ar || it.name_en : it.name_en}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                          {formatPrice(line(it as CartLine), prefs)}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>
+                          {it.quantity} × {formatPrice(unit(it as CartLine), prefs)}
+                        </span>
+                        {!!(it as any).selected_modifiers?.length && <span className="mx-2">•</span>}
+                        {!!(it as any).selected_modifiers?.length && (
+                          <span className="truncate inline-block max-w-[55%] align-bottom">
+                            {(it as any).selected_modifiers.join(', ')}
                           </span>
-                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                            {currency.format(it.price * it.quantity)}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {it.quantity} × {currency.format(it.price)}
-                        </div>
+                        )}
+                        {!!(it as any).notes && (
+                          <>
+                            <span className="mx-2">•</span>
+                            <span className="truncate inline-block max-w-[55%] align-bottom italic">
+                              {(it as any).notes}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
 
-              <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-700/30">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-600 dark:text-slate-300">
-                    {t("common.total")}
-                  </span>
-                  <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {currency.format(totalPrice)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowCartOverlay(false);
-                    setShowCart(true);
-                  }}
-                  className="w-full rounded-lg bg-primary text-white py-2 font-semibold shadow hover:opacity-90 transition"
-                >
-                  {t("cart.viewOrder")}
-                </button>
+                    {/* optional quick controls preserved... */}
+                    {/* ... */}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-700/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-slate-600 dark:text-slate-300">{t('common.total')}</span>
+                <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400" aria-live="polite">
+                  {formattedSubtotal}
+                </span>
               </div>
+              <button
+                onClick={() => { setShowCartOverlay(false); setShowCart(true); }}
+                disabled={cart.length === 0}
+                className="w-full rounded-lg bg-primary text-white py-2 font-semibold shadow disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition"
+              >
+                {t('cart.viewOrder')}
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </HeaderCartPopover>
+
+
 
       {/* Cart Drawer */}
       {showCart && (
@@ -751,6 +868,8 @@ const CustomerMenu: React.FC = () => {
           onAdd={addToCart}
           onRemove={removeFromCart}
           onPlaceOrder={placeOrder}
+          onClearCart={handleClearCart}
+          // onEditItem={(item) => openEditModal(item)}
         />
       )}
 
@@ -922,7 +1041,7 @@ const CustomerMenu: React.FC = () => {
                   <Check className="w-4 h-4" />
                   {totalItems}
                 </span>
-                <span className="font-bold">{currency.format(totalPrice)}</span>
+                <span className="font-bold">{formattedSubtotal}</span>
               </div>
 
               {/* subtle focus ring for a11y */}
@@ -930,19 +1049,6 @@ const CustomerMenu: React.FC = () => {
             </button>
           </div>
         </div>
-      )}
-
-
-      {/* Floating cart (when empty) */}
-      {totalItems === 0 && (
-        <FloatingCartButton
-          itemCount={0}
-          isRTL={isRTL}
-          onClick={() => {
-            trackMenuEvents.cartViewed(0, 0);
-            setShowCart(true);
-          }}
-        />
       )}
 
       {/* 🆕 Compare sheet */}

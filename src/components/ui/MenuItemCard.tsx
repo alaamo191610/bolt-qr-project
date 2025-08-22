@@ -7,6 +7,8 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
 import CompareChip from './CompareChip';
+import { useAdminMonetary } from '../../hooks/useAdminMonetary';
+import { formatPrice } from '../../pricing/usePrice';
 
 /* ---------- Types ---------- */
 interface Ingredient { id: string; name_en: string; name_ar: string; extra_price?: number }
@@ -140,31 +142,12 @@ async function flyToHeaderFromRect(
   if (isTemp) anchor.remove();
 }
 
-/* ---------- NEW: “VS” compare icon (two squares + VS badge) ---------- */
-const CompareIconVS: React.FC<{ className?: string; active?: boolean }> = ({ className, active }) => (
-  <span className={['relative inline-flex items-center justify-center', className || ''].join(' ')}>
-    <span className="flex gap-0.5">
-      <span className={`w-3.5 h-3.5 rounded-[3px] ${active ? 'bg-white/90' : 'bg-slate-500/80 dark:bg-slate-400/80'}`} />
-      <span className={`w-3.5 h-3.5 rounded-[3px] ${active ? 'bg-white/70' : 'bg-slate-400/70 dark:bg-slate-500/70'}`} />
-    </span>
-    <span
-      aria-hidden="true"
-      className={`absolute -bottom-1 -right-2 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-extrabold ${active ? 'bg-white text-emerald-600' : 'bg-emerald-600 text-white dark:bg-emerald-500'
-        }`}
-      style={{ lineHeight: 1 }}
-    >
-      VS
-    </span>
-  </span>
-);
-
 /* ---------- component ---------- */
 const MenuItemCard: React.FC<Props> = ({
   item,
   quantity,
   onAdd,
   onRemove,
-  currency,
   onToggleCompare,
   compareSelected = false,
   compareDisabled = false,
@@ -172,9 +155,6 @@ const MenuItemCard: React.FC<Props> = ({
 }) => {
   const { t, isRTL } = useLanguage();
   const { colors } = useTheme();
-
-  // Fixed compare limit, per your requirement
-  const COMPARE_LIMIT = 2;
 
   // Safe i18n → always a string (prevents TS2322 on aria/title)
   const tt = (key: string, fallback: string, values?: any): string => {
@@ -184,6 +164,7 @@ const MenuItemCard: React.FC<Props> = ({
 
   // Full-screen “page”
   const [openPage, setOpenPage] = useState(false);
+  const [pendingQty, setPendingQty] = useState<number>(quantity);
   const lastTriggerRef = useRef<HTMLElement | null>(null);
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
   const panelScrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -234,7 +215,30 @@ const MenuItemCard: React.FC<Props> = ({
     confettiOnceForItem?.(item.id);
     requestAnimationFrame(() => flyToHeaderFromRect(r, isRTL));
   };
+  useEffect(() => {
+    setPendingQty(quantity);
+  }, [quantity]);
 
+  const incPending = () => setPendingQty(q => q + 1);
+  const decPending = () => setPendingQty(q => Math.max(0, q - 1));
+  const commitPending = async (rect: DOMRect) => {
+    if (quantity === 0 && pendingQty === 0) {
+      // first-time add (adds 1 with options)
+      await Promise.resolve(addWithOptions(rect));
+      return;
+    }
+
+    const delta = pendingQty - quantity;
+    if (delta > 0) {
+      for (let i = 0; i < delta; i++) onAdd(item);          // add extra units
+    } else if (delta < 0) {
+      for (let i = 0; i < -delta; i++) onRemove?.(item.id);  // remove units
+    }
+
+    // optional animation + close (if you use these)
+    requestAnimationFrame(() => flyToHeaderFromRect(rect, isRTL));
+    setOpenPage(false);
+  };
   // reset on item change
   useEffect(() => {
     const init: Record<string, 'no' | 'normal' | 'extra'> = {};
@@ -248,10 +252,9 @@ const MenuItemCard: React.FC<Props> = ({
   }, [item.id]);
 
   const isAvailable = item.available !== false;
-  const priceFmt = useMemo(
-    () => currency ?? new Intl.NumberFormat(isRTL ? 'ar-QA' : 'en-QA', { style: 'currency', currency: 'QAR' }),
-    [currency, isRTL]
-  );
+  const { prefs, loading: moneyLoading } = useAdminMonetary(); // if your hook requires adminId, pass it here
+  const fmt = (v: number) => formatPrice(v, prefs);
+
   const displayName = isRTL ? item.name_ar || item.name_en : item.name_en;
   const displayDesc =
     isRTL
@@ -263,6 +266,8 @@ const MenuItemCard: React.FC<Props> = ({
     [ingList, ingChoice]
   );
   const anyPaidExtra = useMemo(() => ingList.some(i => (i.extra_price ?? 0) > 0), [ingList]);
+  const unit = (item.price ?? 0) + extrasTotal; // per one item with extras
+  const qtyForTotal = pendingQty > 0 ? pendingQty : (quantity > 0 ? quantity : 1);
 
   const addWithOptions = (rect?: DOMRect) => {
     const custom_ingredients = ingList.map(i => ({ id: i.id, action: ingChoice[i.id] }));
@@ -482,10 +487,10 @@ const MenuItemCard: React.FC<Props> = ({
                 )}
               </div>
 
-              {/* Footer row */}
+              {/* Footer row item card */}
               <div className={`mt-auto pt-2 flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
                 <div className="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums">
-                  {priceFmt.format(item.price ?? 0)}
+                  <span className={moneyLoading ? 'opacity-0' : ''}>{fmt(item.price ?? 0)}</span>
                 </div>
 
                 {quantity > 0 ? (
@@ -495,7 +500,7 @@ const MenuItemCard: React.FC<Props> = ({
                   >
                     <button
                       onClick={() => { onRemove(item.id); track('remove_from_cart', { item_id: item.id }); }}
-                      className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
+                      className="w-8 h-8 rounded-full bg-slate-200 text-white dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
                       style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})` }}
                       aria-label={tt('common.decrease', 'Decrease')}
                     >
@@ -605,7 +610,7 @@ const MenuItemCard: React.FC<Props> = ({
                   )}
                 </div>
                 <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {priceFmt.format((item.price || 0) + extrasTotal)}
+                  <span className={moneyLoading ? 'opacity-0' : ''}>{fmt((item.price || 0) + extrasTotal)}</span>
                 </div>
               </div>
 
@@ -641,7 +646,9 @@ const MenuItemCard: React.FC<Props> = ({
                 ))}
                 {activeTab === 'ingredients' && (
                   <span className={`${isRTL ? 'mr-auto' : 'ml-auto'} text-xs text-slate-500`}>
-                    {tt('pricing.extras', 'Extras')}: <strong className="tabular-nums">{priceFmt.format(extrasTotal)}</strong>
+                    {tt('pricing.extras', 'Extras')}: <strong className="tabular-nums">
+                      <span className={moneyLoading ? 'opacity-0' : ''}>{fmt(extrasTotal)}</span>
+                    </strong>
                   </span>
                 )}
               </div>
@@ -747,7 +754,7 @@ const MenuItemCard: React.FC<Props> = ({
                                 ].join(' ')}
                                 aria-pressed={checked && choice === 'extra'}
                               >
-                                {tt('custom.extra', 'Extra')} + {priceFmt.format(ing.extra_price!)}
+                                {tt('custom.extra', 'Extra')} + {fmt(ing.extra_price || 0)}
                               </button>
                             )}
                           </div>
@@ -775,19 +782,81 @@ const MenuItemCard: React.FC<Props> = ({
 
             {/* Footer */}
             <div className="row-start-5 row-end-6 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-4 py-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
+
+                {/* total */}
                 <div className="text-sm text-slate-600 dark:text-slate-300">
-                  {tt('pricing.total', 'Total')}: <strong>{priceFmt.format((item.price ?? 0) + extrasTotal)}</strong>
+                  {tt('pricing.total', 'Total')}: <strong>
+                    <span className={moneyLoading ? 'opacity-0' : ''}>
+                      {fmt(unit * qtyForTotal)}
+                    </span>
+                  </strong>
                 </div>
-                <button
-                  onClick={(e) => addWithOptions((e.currentTarget as HTMLElement).getBoundingClientRect())}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-6 font-semibold shadow-lg active:scale-[.99] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"
-                >
-                  {tt('menu.addToOrder', 'Add to order')}
-                </button>
+
+                <div className="flex items-center gap-3">
+                  {/* show +/- when pending > 0 (local-controlled) */}
+                  {pendingQty > 0 && (
+                    <div className="flex items-center gap-2">
+                      {/* − (local only) */}
+                      <button
+                        type="button"
+                        onClick={decPending}
+                        aria-label={tt('common.decrease', 'Decrease')}
+                        className="inline-grid place-items-center w-10 h-10 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 active:scale-95 text-white"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M5 12h14" />
+                        </svg>
+                      </button>
+
+                      {/* pending qty display (not cart yet) */}
+                      <output className="min-w-[2ch] text-center font-semibold text-slate-900 dark:text-white" aria-live="polite">
+                        {pendingQty}
+                      </output>
+
+                      {/* + (local only) */}
+                      <button
+                        type="button"
+                        onClick={incPending}
+                        aria-label={tt('common.increase', 'Increase')}
+                        className="inline-grid place-items-center w-10 h-10 rounded-xl btn-primary text-white active:scale-95"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Add to order / Confirm */}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      // If no quantity yet, treat click as "add 1 with options"
+                      if (quantity === 0) {
+                        try { await Promise.resolve(addWithOptions(rect)); } catch { }
+                        return;
+                      }
+                      // Otherwise, confirm the pending +/- changes
+                      try { await commitPending(rect); } catch { }
+                    }}
+                    className="rounded-xl btn-primary text-white py-3 px-6 font-semibold shadow-lg active:scale-[.99] transition
+               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"
+                    disabled={moneyLoading || item.available === false}
+                    aria-disabled={moneyLoading || item.available === false}
+                  >
+                    {quantity === 0
+                      ? tt('menu.addToOrder', 'Add to order')
+                      : tt('menu.confirmChanges', 'Confirm')}
+                  </button>
+                </div>
+
               </div>
+
               <div className="sr-only" aria-live="polite" aria-atomic="true" id="cart-live-region" />
             </div>
+
           </div>
 
           <style>{`

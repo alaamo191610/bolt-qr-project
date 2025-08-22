@@ -7,7 +7,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import CurrencySettings from '../components/pricing/CurrencySettings';
 import FeesTaxSettings from '../components/pricing/FeesTaxSettings';
 import PromotionsManager from '../components/pricing/PromotionsManager';
-
+import ThemeCustomizer from '../components/ThemeCustomizer';
+import { Palette } from 'lucide-react';
 // ⬅️ your PanelCard component (adjust import path if different)
 import PanelCard from '../components/ui/PanelCard';
 import CollapsiblePanelCard from '../components/ui/CollapsiblePanelCard';
@@ -38,7 +39,7 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   const { t, isRTL } = useLanguage();
   const [form, setForm] = useState<AdminSettings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
-
+  const [themeOpen, setThemeOpen] = useState(false);
   const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(DEFAULTS), [form]);
 
   const onChange =
@@ -78,23 +79,15 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
           title={t('admin.infoTitle') || 'Restaurant Information'}
           // description={t('admin.subtitle') || 'Public details shown to guests'}
           actions={
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
+              {/* NEW: open theme sheet from inside this card */}
               <button
                 type="button"
-                onClick={() => setForm(DEFAULTS)}
-                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
-                disabled={!dirty || saving}
+                onClick={() => setThemeOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
               >
-                {t('common.reset') || 'Reset'}
-              </button>
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={!dirty || saving}
-                className={`px-4 py-2 text-white rounded-lg ${!dirty || saving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
-                  }`}
-              >
-                {saving ? (t('admin.saving') || 'Saving…') : (t('common.save') || 'Save Settings')}
+                <Palette className="w-4 h-4" />
+                {t('theme.themeCustomize') || 'Customize Theme'}
               </button>
             </div>
           }
@@ -155,8 +148,33 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
               />
             </div>
           </form>
-        </CollapsiblePanelCard>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setForm(DEFAULTS)}
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
+              disabled={!dirty || saving}
+            >
+              {t('common.reset') || 'Reset'}
+            </button>
 
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={!dirty || saving}
+              className={`px-4 py-2 text-white rounded-lg ${!dirty || saving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+            >
+              {saving ? (t('admin.saving') || 'Saving…') : (t('common.save') || 'Save Settings')}
+            </button>
+          </div>
+        </CollapsiblePanelCard>
+        <ThemeCustomizer
+          open={themeOpen}
+          onOpenChange={setThemeOpen}
+          title={t('theme.title') || 'Theme Customizer'}
+          subtitle={t('theme.description') || 'Elegant palettes & refined UI'}
+        />
         {/* Tabs for Menu/KDS */}
         <div className="mt-6">
           <Tabs
@@ -187,7 +205,7 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
                   <FeesTaxSettings adminId={adminId} />
                 </div>
               </TabPanel>
-              
+
               <TabPanel value="promos">
                 <PromotionsManager adminId={adminId} />
               </TabPanel>

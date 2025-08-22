@@ -91,6 +91,10 @@ const translations: Record<Language, any> = {
       notesPlaceholder: "Example: no onions / extra sauce",
       unavailableTemp: "Not available right now 🙃",
       reset: "Reset",
+      items: "items",
+      item: "item",
+      min: "min",
+      undo: "Undo",
     },
     errors: {
       general: {
@@ -128,6 +132,37 @@ const translations: Record<Language, any> = {
       estimated: "Estimated",
       min: "min",
       itemAdded: "Item added to cart ✔️",
+      keepBrowsing: "Add more",
+      clear: "Clear cart",
+      browseMenu: "Browse the menu",
+      empty: "Your cart is empty",
+      edit: "Edit",
+      removeItem: "Remove item",
+      noteOptional: "Order note (optional)",
+      notePlaceholder: "e.g., no onions",
+      notes: "Notes",
+      estimatedServing: "Estimated serving time",
+      tipOptional: "Tip (optional)",
+      tipCustom: "Custom %",
+      tipAmount: "Tip amount",
+      tip: "Tip",
+      promo: "Promo code",
+      promoPlaceholder: "Enter code",
+      promoApply: "Apply",
+      promoChecking: "Checking…",
+      promoApplied: "Discount applied",
+      promoInvalid: "Invalid code",
+      promoError: "Could not validate",
+      extras: "Extras",
+      subtotal: "Subtotal",
+      discount: "Discount",
+      vat: "VAT",
+      service: "Service",
+      total: "Total",
+      totalToPay: "Total to pay",
+      vatTooltip: "VAT is calculated after discount and before tip",
+      serviceTooltip: "Service charge is applied before VAT",
+      cleared: "Cart cleared",
     },
     badges: {
       spicy: "Spicy 🌶️",
@@ -136,7 +171,7 @@ const translations: Record<Language, any> = {
       fresh: "Fresh & Refreshing 🍃",
       vegFriendly: "Veggie-friendly 🥗",
     },
-    
+
     pairings: {
       garlicSauce: "Garlic sauce 🧄",
       salad: "Salad 🥗",
@@ -228,6 +263,7 @@ const translations: Record<Language, any> = {
       compareTray: "Compare tray",
       unique: "Unique",
       common: "Common",
+      confirmChanges: "Confirm order",
     },
     compare: {
       compare: "Compare",
@@ -238,7 +274,7 @@ const translations: Record<Language, any> = {
       compareCount: "{{n}} items selected",
       cleared: "Compare list cleared ✔️",
     },
-    
+
     custom: {
       reset: "Reset",
       removeAll: "Remove all",
@@ -371,7 +407,7 @@ const translations: Record<Language, any> = {
       seats: "Seats",
       qrCodeAccess: "QR code to access menu 📱",
     },
-    
+
     admin: {
       title: "Admin Panel",
       subtitle: "Manage menu items and restaurant settings",
@@ -454,21 +490,22 @@ const translations: Record<Language, any> = {
         dark: "dark",
         highContrast: "high-contrast",
         ticketGrouping: "Group tickets",
-      groupings: {
-        none: "none",
-        byTable: "by table",
-        byCourse: "by course",
-      },
-      prepTimeColorsOk: "OK ≤ (min)",
-      prepTimeColorsWarn: "Warn ≤ (min)",
-      visibleStatusesHint: "Visible statuses (left→right). You can include/exclude: pending, preparing, ready, served, cancelled.",
-      saveChanges: "Save changes",
-      loading: "Loading KDS settings…",
+        groupings: {
+          none: "none",
+          byTable: "by table",
+          byCourse: "by course",
+        },
+        prepTimeColorsOk: "OK ≤ (min)",
+        prepTimeColorsWarn: "Warn ≤ (min)",
+        visibleStatusesHint: "Visible statuses (left→right). You can include/exclude: pending, preparing, ready, served, cancelled.",
+        saveChanges: "Save changes",
+        loading: "Loading KDS settings…",
       },
     },
     theme: {
       title: "Theme customization",
       description: "Give your restaurant its own unique look 🎨",
+      themeCustomize: "Customize Theme",
       darkMode: "Dark mode 🌙",
       darkModeDescription: "Switch between light and dark",
       colorPresets: "Color presets",
@@ -517,13 +554,13 @@ const translations: Record<Language, any> = {
       orderTitle: "Orders summary",
       tableSubtotal: "Table subtotal",
       groupedByTable: "Orders by table",
-    } ,
+    },
     restaurant: {
       name: "Bella Vista",
       phone: "(555) 123-4567",
       defaultDescription: "A fine restaurant offering an exceptional dining experience with fresh ingredients and elegant service ✨",
     },
-    
+
     status: {
       errorLoadingMenu: "We couldn’t load the menu 😅",
       tableNotFound: "Table «{table}» not found. Double-check the code or ask us 🙏",
@@ -533,12 +570,12 @@ const translations: Record<Language, any> = {
       failedToPlaceOrder: "Couldn’t place the order 🚫",
       placingOrder: "Placing your order… ⏳",
     },
-    
+
     language: {
       english: "English",
       arabic: "Arabic",
       switchTo: "Switch to",
-    }    
+    }
   },
   ar: {
     common: {
@@ -615,6 +652,10 @@ const translations: Record<Language, any> = {
       notesPlaceholder: "مثال: بلا بصل / زيادة صوص",
       unavailableTemp: "مش متوفر هالمرة 🙃",
       reset: "إعادة ضبط",
+      items: "عناصر",
+      item: "عنصر",
+      min: "دقيقة",
+      undo: "تراجع",
     },
     errors: {
       general: {
@@ -652,7 +693,7 @@ const translations: Record<Language, any> = {
       fresh: "طازج ومنعِّش 🍃",
       vegFriendly: "بناسب النباتيين 🥗",
     },
-    
+
     pairings: {
       garlicSauce: "صلصة ثوم 🧄",
       salad: "سلطة 🥗",
@@ -686,6 +727,37 @@ const translations: Record<Language, any> = {
       estimated: "تقريبًا",
       min: "دقيقة",
       itemAdded: "انضاف الصنف عالسلة ✔️",
+      keepBrowsing: "زيد كمان",
+      clear: "تفريغ السلة",
+      browseMenu: "تصفح القائمة",
+      empty: "سلة التسوق فارغة",
+      edit: "تعديل",
+      removeItem: "إزالة العنصر",
+      noteOptional: "ملاحظة للطلب (اختياري)",
+      notePlaceholder: "مثال: بدون بصل",
+      notes: "ملاحظات",
+      estimatedServing: "وقت التقديم المتوقع",
+      tipOptional: "إكرامية (اختياري)",
+      tipCustom: "مخصص %",
+      tipAmount: "قيمة الإكرامية",
+      tip: "إكرامية",
+      promo: "رمز الخصم",
+      promoPlaceholder: "أدخل الرمز",
+      promoApply: "تطبيق",
+      promoChecking: "جاري التحقق…",
+      promoApplied: "تم تطبيق الخصم",
+      promoInvalid: "رمز غير صالح",
+      promoError: "تعذّر التحقق",
+      extras: "الإضافات",
+      subtotal: "المجموع",
+      discount: "خصم",
+      vat: "ضريبة القيمة المضافة",
+      service: "رسوم الخدمة",
+      total: "الإجمالي",
+      totalToPay: "الإجمالي للدفع",
+      vatTooltip: "تُحتسب الضريبة بعد الخصم وقبل الإكرامية",
+      serviceTooltip: "تُضاف رسوم الخدمة قبل الضريبة",
+      cleared: "تم تفريغ السلة",
     },
     nav: {
       qrCodes: "رموز QR",
@@ -752,6 +824,7 @@ const translations: Record<Language, any> = {
       compareTray: "شريط المقارنة",
       unique: "غير",
       common: "مشترك",
+      confirmChanges: "تأكيد الطلب",
     },
     compare: {
       compare: "قارن",
@@ -762,7 +835,7 @@ const translations: Record<Language, any> = {
       compareCount: "اخترت {{n}} عنصر",
       cleared: "انمسحت قائمة المقارنة ✔️",
     },
-    
+
     custom: {
       reset: "إعادة الضبط",
       removeAll: "شيل الكل",
@@ -895,7 +968,7 @@ const translations: Record<Language, any> = {
       seats: "مقاعد",
       qrCodeAccess: "رمز QR لفتح القائمة 📱",
     },
-    
+
     admin: {
       title: "لوحة الإدارة",
       subtitle: "سيطر على قائمتك وإعدادات مطعمك بسهولة",
@@ -993,6 +1066,7 @@ const translations: Record<Language, any> = {
     theme: {
       title: "تخصيص المظهر",
       description: "خلّي مطعمك يبين بهويته الخاصة 🎨",
+      themeCustomize: "تخصيص السمة",
       darkMode: "الوضع الداكن 🌙",
       darkModeDescription: "بدّل بين الفاتح والداكن",
       colorPresets: "ألوان جاهزة",
@@ -1047,7 +1121,7 @@ const translations: Record<Language, any> = {
       phone: "(555) 123-4567",
       defaultDescription: "مطعم راقي بقدّم تجربة طعام مميزة بمكونات طازجة وخدمة أنيقة ✨",
     },
-    
+
     status: {
       errorLoadingMenu: "ما قدرنا نحمّل القائمة 😅",
       tableNotFound: "الطاولة «{table}» مش موجودة. تأكّد من الرمز أو اسألنا 🙏",
@@ -1057,12 +1131,12 @@ const translations: Record<Language, any> = {
       failedToPlaceOrder: "ما قدرنا نبعت الطلب 🚫",
       placingOrder: "عم نبعت الطلب… ⏳",
     },
-    
+
     language: {
       english: "الإنجليزية",
       arabic: "العربية",
       switchTo: "حوّل لـ",
-    }    
+    }
   }
 };
 

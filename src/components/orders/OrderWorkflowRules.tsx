@@ -94,13 +94,6 @@ function Chip({ children, className = '' }: { children: React.ReactNode; classNa
             <h3 className="text-lg font-semibold text-slate-900">Order Workflow Rules</h3>
             <p className="text-slate-600 text-sm">Define statuses, transitions, and SLAs. These apply across Menu, KDS, and Receipts.</p>
           </div>
-          <button
-            onClick={save}
-            disabled={!dirty || saving}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm ${dirty ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
-          >
-            {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
-          </button>
         </header>
   
         {/* Status list */}
