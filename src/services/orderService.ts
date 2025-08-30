@@ -78,82 +78,70 @@ export const orderService = {
   async createOrder(orderData: {
     table_code: string
     items: CreateOrderItemInput[]
-    note?: string
+    note?: string        // if you want this saved on orders, add handling in the Edge Function
     admin_id?: string
   }) {
     try {
-      // 1) Find table by code
-      const { data: tableData, error: tableError } = await supabase
-        .from('tables')
-        .select('id, admin_id')
-        .eq('code', orderData.table_code)
-        .single()
-      if (tableError) throw tableError
-
-      // 2) Calculate order total = Σ ((base + extras) * qty)
-      const total = orderData.items.reduce((sum, it) => {
-        const unit = (it.price_at_order || 0) + (it.price_delta ?? 0)
-        return sum + unit * (it.quantity || 0)
-      }, 0)
-
-      // 3) Next order number for this admin
-      const { data: lastOrder } = await supabase
-        .from('orders')
-        .select('order_number')
-        .eq('admin_id', tableData.admin_id)
-        .order('order_number', { ascending: false })
-        .limit(1)
-
-      const nextOrderNumber = (lastOrder?.[0]?.order_number || 0) + 1
-
-      // 4) Create order header
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert([
-          {
-            table_id: tableData.id,        // save actual table id
-            status: 'pending',
-            total,
-            note: orderData.note || null,
-            admin_id: tableData.admin_id,
-            order_number: nextOrderNumber,
-            user_id: crypto.randomUUID(),
-          },
-        ])
-        .select()
-        .single()
-      if (orderError) throw orderError
-
-      // 5) Create order items
-      const orderItems = orderData.items.map((it) => {
-        const unitWithExtras = (it.price_at_order || 0) + (it.price_delta ?? 0)
-
-        // Make a readable note so the kitchen sees choices (no onions | extra cheese)
-        const extrasNote = formatIngredientChoices(
-          it.custom_ingredients ?? [],
-          it.ingredient_names_map
-        )
+      // Build function payload items
+      const items = (orderData.items || []).map((it) => {
+        // keep your nice kitchen note text
+        const extrasNote = formatIngredientChoices(it.custom_ingredients ?? [], it.ingredient_names_map)
         const mergedNote = mergeNotes(it.note, extrasNote)
 
+        // map tri-state ingredients -> picks for the function
+        const ingredients =
+          (it.custom_ingredients ?? []).map((c) => {
+            if (c.action === 'no') return [{ ingredientId: c.id, action: 'remove' as const }]
+            if (c.action === 'extra') return [{ ingredientId: c.id, action: 'extra' as const, qty: 1 }]
+            return []
+          })
+
+        // if you later add modifier options to CreateOrderItemInput, map them here:
+        // const options = (it.modifier_options ?? []).map((o: any) => ({
+        //   optionId: o.option_id ?? o.id, qty: o.qty ?? 1
+        // }))
+
+        // if you later add combo children, map them here:
+        // const comboChildren = (it.combo_children ?? []).map((c: any) => ({
+        //   childMenuId: c.child_menu_id ?? c.menu_item_id,
+        //   ingredients: (c.custom_ingredients ?? []).flatMap((x: any) =>
+        //     x.action === 'no' ? [{ ingredientId: x.id, action: 'remove' as const }] :
+        //     x.action === 'extra' ? [{ ingredientId: x.id, action: 'extra' as const, qty: 1 }] : []
+        //   ),
+        //   options: (c.modifier_options ?? []).map((o: any) => ({ optionId: o.option_id ?? o.id, qty: o.qty ?? 1 })),
+        //   notes: c.note
+        // }))
+
         return {
-          order_id: order.id,
-          menu_item_id: it.menu_item_id,
-          quantity: it.quantity,
-          // ✅ We store the unit price INCLUDING extras (no schema change required)
-          price_at_order: unitWithExtras,
-          note: mergedNote || null,
+          menuId: it.menu_item_id,
+          quantity: it.quantity ?? 1,
+          notes: mergedNote || undefined,
+          ingredients,
+          // options,
+          // comboChildren,
         }
       })
+    
+      // Invoke Edge Function (does validation + pricing + inserts server-side)
+      const { data, error } = await supabase.functions.invoke('super-action', {
+        body: {
+          tableCode: orderData.table_code,
+          adminId: orderData.admin_id,  // optional (function can infer from table)
+          items,
+          // orderNote: orderData.note,  // add to the function if you want orders.note saved
+        },
+      })
+      if (error) {
+        console.error('status', error.status);
+        console.error('message', error.message);
+        console.error('context', error.context);    // <-- JSON from the function
+        throw error;
+      }
 
-      const { data: items, error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems)
-        .select()
-      if (itemsError) throw itemsError
-
-      return { order, items }
-    } catch (error) {
-      console.error('Error creating order:', error)
+      // data -> { order_id, total, items }
+      return data
+    } catch (error:any) {
+      console.error('invoke failed:', error?.message, error?.context);
       throw error
     }
   },

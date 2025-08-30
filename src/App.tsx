@@ -1,25 +1,32 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { QrCode, Menu, ShoppingCart, Settings, Users, BarChart3 } from 'lucide-react';
-import { useAuth } from './hooks/useAuth';
-import { useLanguage } from './contexts/LanguageContext';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { LanguageProvider } from './contexts/LanguageContext';
-import { adminService } from './services/adminService';
-import { tableService } from './services/tableService';
-import { menuService } from './services/menuService';
-import { orderService } from './services/orderService';
-import AuthForm from './components/Auth/AuthForm';
-import ResponsiveLayout from './components/ResponsiveLayout';
-import ThemeCustomizer from './components/ThemeCustomizer';
-import QRGenerator from './components/QRGenerator';
-import DigitalMenu from './components/DigitalMenu';
-import OrderManagement from './components/OrderManagement';
-import TableManagement from './components/TableManagement';
-import Analytics from './components/Analytics';
-import AdminPanel from './components/AdminPanel';
-import CustomerMenu from './pages/CustomerMenu';
-import { Toaster } from 'react-hot-toast';
+import React, { useState, useEffect, useMemo } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  QrCode,
+  Menu,
+  ShoppingCart,
+  Settings,
+  Users,
+  BarChart3,
+} from "lucide-react";
+import { useAuth } from "./hooks/useAuth";
+import { useLanguage } from "./contexts/LanguageContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { LanguageProvider } from "./contexts/LanguageContext";
+import { adminService } from "./services/adminService";
+import { tableService } from "./services/tableService";
+import { menuService } from "./services/menuService";
+import { orderService } from "./services/orderService";
+import AuthForm from "./components/Auth/AuthForm";
+import ResponsiveLayout from "./components/ResponsiveLayout";
+import ThemeCustomizer from "./components/ThemeCustomizer";
+import QRGenerator from "./components/QRGenerator";
+import DigitalMenu from "./components/DigitalMenu";
+import OrderManagement from "./components/OrderManagement";
+import TableManagement from "./components/TableManagement";
+import Analytics from "./components/Analytics";
+import AdminPanel from "./components/AdminPanel";
+import CustomerMenu from "./pages/CustomerMenu";
+import { Toaster } from "react-hot-toast";
 // Define interfaces for the component state
 interface Table {
   id: number;
@@ -82,7 +89,10 @@ function App() {
             <Route path="/ar/menu" element={<CustomerMenu />} />
             <Route path="/en/menu" element={<CustomerMenu />} />
             <Route path="/menu/:lang" element={<CustomerMenu />} />
-            <Route path="/" element={user ? <AdminDashboard /> : <AuthForm />} />
+            <Route
+              path="/"
+              element={user ? <AdminDashboard /> : <AuthForm />}
+            />
           </Routes>
         </Router>
 
@@ -92,46 +102,44 @@ function App() {
           toastOptions={{
             duration: 4000,
             style: {
-              padding: '12px 16px',
-              fontSize: '0.875rem',
-              borderRadius: '0.75rem',
-              background: '#ffffff',
-              color: '#0f172a',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.06)',
+              padding: "12px 16px",
+              fontSize: "0.875rem",
+              borderRadius: "0.75rem",
+              background: "#ffffff",
+              color: "#0f172a",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
             },
             success: {
               iconTheme: {
-                primary: '#10b981', // emerald-500
-                secondary: '#d1fae5', // emerald-100
+                primary: "#10b981", // emerald-500
+                secondary: "#d1fae5", // emerald-100
               },
               style: {
-                background: '#ecfdf5',
-                color: '#065f46',
-                borderLeft: '4px solid #10b981',
+                background: "#ecfdf5",
+                color: "#065f46",
+                borderLeft: "4px solid #10b981",
               },
             },
             error: {
               iconTheme: {
-                primary: '#ef4444', // red-500
-                secondary: '#fee2e2', // red-100
+                primary: "#ef4444", // red-500
+                secondary: "#fee2e2", // red-100
               },
               style: {
-                background: '#fef2f2',
-                color: '#991b1b',
-                borderLeft: '4px solid #ef4444',
+                background: "#fef2f2",
+                color: "#991b1b",
+                borderLeft: "4px solid #ef4444",
               },
             },
             loading: {
               style: {
-                background: '#f0fdfa',
-                color: '#0891b2',
-                borderLeft: '4px solid #06b6d4', // cyan-500
+                background: "#f0fdfa",
+                color: "#0891b2",
+                borderLeft: "4px solid #06b6d4", // cyan-500
               },
             },
           }}
         />
-
-
       </LanguageProvider>
     </ThemeProvider>
   );
@@ -141,7 +149,7 @@ const AdminDashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const { t, isLoaded } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState('qr-generator');
+  const [activeTab, setActiveTab] = useState("qr-generator");
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -150,7 +158,8 @@ const AdminDashboard: React.FC = () => {
   const idMapRef = React.useRef(new Map<string, number>());
   const nextIdRef = React.useRef(1);
   const numId = (uuid: string) => {
-    if (!idMapRef.current.has(uuid)) idMapRef.current.set(uuid, nextIdRef.current++);
+    if (!idMapRef.current.has(uuid))
+      idMapRef.current.set(uuid, nextIdRef.current++);
     return idMapRef.current.get(uuid)!;
   };
 
@@ -167,39 +176,48 @@ const AdminDashboard: React.FC = () => {
       setAdminProfile(profile);
 
       const adminTables = await tableService.getTables(user.id);
-      setTables(adminTables.map((table: any) => ({
-        id: parseInt(table.id) || Math.random(),
-        number: table.code,
-        status: 'available',
-        capacity: 4
-      })));
+      setTables(
+        adminTables.map((table: any) => ({
+          id: parseInt(table.id) || Math.random(),
+          number: table.code,
+          status: "available",
+          capacity: 4,
+        }))
+      );
 
       const adminMenuItems = await menuService.getMenuItems(user.id);
-      setMenuItems(adminMenuItems.map((item: any) => ({
-        id: parseInt(item.id),
-        name: item.name_en,
-        description: item.name_ar || item.name_en,
-        price: item.price,
-        category: item.categories?.name_en || 'Other',
-        image: item.image_url || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300'
-      })));
+      setMenuItems(
+        adminMenuItems.map((item: any) => ({
+          id: parseInt(item.id),
+          name: item.name_en,
+          description: item.name_ar || item.name_en,
+          price: item.price,
+          category: item.categories?.name_en || "Other",
+          image:
+            item.image_url ||
+            "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300",
+        }))
+      );
 
       const adminOrders = await orderService.getOrders(user.id);
-      setOrders(adminOrders.map((order: any) => ({
-        id: numId(order.id) ,
-        order_number: order.order_number,
-        tableNumber: order.table_id,
-        items: order.order_items?.map((item: any) => ({
-          name: item.menus?.name_en || 'Unknown Item',
-          price: item.price_at_order,
-          quantity: item.quantity
-        })) || [],
-        total: order.total || 0,
-        status: order.status || 'pending',
-        timestamp: new Date(order.created_at)
-      })));
+      setOrders(
+        adminOrders.map((order: any) => ({
+          id: numId(order.id),
+          order_number: order.order_number,
+          tableNumber: order.table_id,
+          items:
+            order.order_items?.map((item: any) => ({
+              name: item.menus?.name_en || "Unknown Item",
+              price: item.price_at_order,
+              quantity: item.quantity,
+            })) || [],
+          total: order.total || 0,
+          status: order.status || "pending",
+          timestamp: new Date(order.created_at),
+        }))
+      );
     } catch (error) {
-      console.error('Error loading admin data:', error);
+      console.error("Error loading admin data:", error);
     }
   };
 
@@ -208,14 +226,17 @@ const AdminDashboard: React.FC = () => {
     setActiveTab(tabId);
   };
 
-  const navigation = useMemo(() => [
-    { id: 'qr-generator', name: t('nav.qrCodes'), icon: QrCode },
-    { id: 'menu', name: t('nav.digitalMenu'), icon: Menu },
-    { id: 'orders', name: t('nav.orders'), icon: ShoppingCart },
-    { id: 'tables', name: t('nav.tables'), icon: Users },
-    { id: 'analytics', name: t('nav.analytics'), icon: BarChart3 },
-    { id: 'admin', name: t('nav.admin'), icon: Settings },
-  ], [t]);
+  const navigation = useMemo(
+    () => [
+      { id: "qr-generator", name: t("nav.qrCodes"), icon: QrCode },
+      { id: "menu", name: t("nav.digitalMenu"), icon: Menu },
+      { id: "orders", name: t("nav.orders"), icon: ShoppingCart },
+      { id: "tables", name: t("nav.tables"), icon: Users },
+      { id: "analytics", name: t("nav.analytics"), icon: BarChart3 },
+      { id: "admin", name: t("nav.admin"), icon: Settings },
+    ],
+    [t]
+  );
 
   if (!isLoaded) {
     return (
@@ -224,7 +245,7 @@ const AdminDashboard: React.FC = () => {
           <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl flex items-center justify-center mx-auto mb-4">
             <QrCode className="w-8 h-8 text-white animate-pulse" />
           </div>
-          <p className="text-slate-600">{t('common.loading')}</p>
+          <p className="text-slate-600">{t("common.loading")}</p>
         </div>
       </div>
     );
@@ -232,17 +253,23 @@ const AdminDashboard: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'qr-generator':
+      case "qr-generator":
         return <QRGenerator tables={tables} />;
-      case 'menu':
+      case "menu":
         return <DigitalMenu />;
-      case 'orders':
+      case "orders":
         return <OrderManagement orders={orders} setOrders={setOrders} />;
-      case 'tables':
-        return <TableManagement tables={tables} setTables={setTables} onDataChange={loadAdminData} />;
-      case 'analytics':
+      case "tables":
+        return (
+          <TableManagement
+            tables={tables}
+            setTables={setTables}
+            onDataChange={loadAdminData}
+          />
+        );
+      case "analytics":
         return <Analytics orders={orders} />;
-      case 'admin':
+      case "admin":
         return <AdminPanel menuItems={menuItems} setMenuItems={setMenuItems} />;
       default:
         return <QRGenerator tables={tables} />;
@@ -256,8 +283,9 @@ const AdminDashboard: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={handleTabChange}
         userInfo={{
-          name: adminProfile?.name || user?.email?.split('@')[0] || 'Restaurant',
-          email: user?.email || ''
+          name:
+            adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
+          email: user?.email || "",
         }}
         onSignOut={() => user && signOut()}
       >
