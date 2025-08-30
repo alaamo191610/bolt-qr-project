@@ -1,8 +1,22 @@
-// AdminSettings.tsx (replaces AdminPanel)
+'use client';
+
 import React, { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Settings } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-// import { adminService } from '../services/adminService'; // <-- wire to your API if available
+import CurrencySettings from '../components/pricing/CurrencySettings';
+import FeesTaxSettings from '../components/pricing/FeesTaxSettings';
+import PromotionsManager from '../components/pricing/PromotionsManager';
+import ThemeCustomizer from '../components/ThemeCustomizer';
+import { Palette } from 'lucide-react';
+// ⬅️ your PanelCard component (adjust import path if different)
+import PanelCard from '../components/ui/PanelCard';
+import CollapsiblePanelCard from '../components/ui/CollapsiblePanelCard';
+
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from '../components/ui/Tabs';
+// ⬅️ lazy-load client components (avoid SSR issues)
+const OrderWorkflowRules = dynamic(() => import('../components/orders/OrderWorkflowRules'), { ssr: false });
+const KDSSettings = dynamic(() => import('../components/orders/KDSSettings'), { ssr: false });
 
 type AdminSettings = {
   restaurant_name: string;
@@ -19,38 +33,31 @@ const DEFAULTS: AdminSettings = {
     'Fine dining experience with fresh, locally sourced ingredients and exceptional service.',
 };
 
-const AdminSettingsOnly: React.FC = () => {
+type Props = { adminId: string };
+
+const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   const { t, isRTL } = useLanguage();
   const [form, setForm] = useState<AdminSettings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
-
-  const dirty = useMemo(() => {
-    return JSON.stringify(form) !== JSON.stringify(DEFAULTS);
-  }, [form]);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(DEFAULTS), [form]);
 
   const onChange =
     <K extends keyof AdminSettings>(key: K) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setForm((prev) => ({ ...prev, [key]: e.target.value }));
-    };
+      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const onSave = async () => {
     try {
       setSaving(true);
-      // await adminService.updateProfile(form); // <-- call your real API
-      // If successful and you want to reset dirty baseline:
-      // Object.assign(DEFAULTS, form);
-      // toast.success(t('admin.saved')); // optional
-    } catch (e) {
-      console.error(e);
-      // toast.error(t('admin.error'));
+      // await adminService.updateAdminProfile(adminId, form);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className={`space-y-6 ${isRTL ? 'rtl' : ''}`}>
+    <div className={`space-y-6 ${isRTL ? 'rtl' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -67,12 +74,24 @@ const AdminSettingsOnly: React.FC = () => {
           </div>
         </div>
 
-        {/* Settings Form */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-6">
-            {t('admin.title') || 'Restaurant Information'}
-          </h3>
-
+        {/* Restaurant Info Form */}
+        <CollapsiblePanelCard
+          title={t('admin.infoTitle') || 'Restaurant Information'}
+          // description={t('admin.subtitle') || 'Public details shown to guests'}
+          actions={
+            <div className="flex flex-wrap gap-3">
+              {/* NEW: open theme sheet from inside this card */}
+              <button
+                type="button"
+                onClick={() => setThemeOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+              >
+                <Palette className="w-4 h-4" />
+                {t('theme.themeCustomize') || 'Customize Theme'}
+              </button>
+            </div>
+          }
+        >
           <form
             className="grid grid-cols-1 md:grid-cols-2 gap-6"
             onSubmit={(e) => {
@@ -128,31 +147,79 @@ const AdminSettingsOnly: React.FC = () => {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
-
-            <div className="md:col-span-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setForm(DEFAULTS)}
-                className="px-6 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                disabled={!dirty || saving}
-              >
-                {t('common.reset') || 'Reset'}
-              </button>
-              <button
-                type="submit"
-                disabled={!dirty || saving}
-                className={`px-6 py-2 text-white rounded-lg transition-colors ${
-                  !dirty || saving
-                    ? 'bg-emerald-400 cursor-not-allowed'
-                    : 'bg-emerald-600 hover:bg-emerald-700'
-                }`}
-              >
-                {saving
-                  ? t('admin.saving') || 'Saving…'
-                  : t('admin.save') || 'Save Settings'}
-              </button>
-            </div>
           </form>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setForm(DEFAULTS)}
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
+              disabled={!dirty || saving}
+            >
+              {t('common.reset') || 'Reset'}
+            </button>
+
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={!dirty || saving}
+              className={`px-4 py-2 text-white rounded-lg ${!dirty || saving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+            >
+              {saving ? (t('admin.saving') || 'Saving…') : (t('common.save') || 'Save Settings')}
+            </button>
+          </div>
+        </CollapsiblePanelCard>
+        <ThemeCustomizer
+          open={themeOpen}
+          onOpenChange={setThemeOpen}
+          title={t('theme.title') || 'Theme Customizer'}
+          subtitle={t('theme.description') || 'Elegant palettes & refined UI'}
+        />
+        {/* Tabs for Menu/KDS */}
+        <div className="mt-6">
+          <Tabs
+            defaultValue="workflow"
+            storageKey="admin-settings-tab"
+            queryKey="tab"
+            rtl={isRTL}
+          >
+            <TabList>
+              <Tab value="workflow">{t('admin.orderWorkflow') || 'Order Workflow'}</Tab>
+              <Tab value="pricing">{t('admin.tabs.pricing') || 'Pricing & Currency'}</Tab>
+              <Tab value="promos">{t('admin.tabs.promotions') || 'Promotions'}</Tab>
+              <Tab value="kds">{t('admin.kdsSettings') || 'KDS Settings'}</Tab>
+            </TabList>
+
+            <TabPanels>
+              <TabPanel value="workflow">
+                <PanelCard
+                  title={t('admin.orderWorkflow') || 'Order Workflow Rules'}
+                  description={t('admin.orderWorkflowDesc') || 'Statuses, transitions, and SLAs enforced across the app'}
+                >
+                  <OrderWorkflowRules adminId={adminId} />
+                </PanelCard>
+              </TabPanel>
+              <TabPanel value="pricing">
+                <div className="space-y-6">
+                  <CurrencySettings adminId={adminId} />
+                  <FeesTaxSettings adminId={adminId} />
+                </div>
+              </TabPanel>
+
+              <TabPanel value="promos">
+                <PromotionsManager adminId={adminId} />
+              </TabPanel>
+
+              <TabPanel value="kds">
+                <PanelCard
+                  title={t('admin.kdsSettings') || 'Kitchen Display Settings'}
+                  description={t('admin.kdsSettingsDesc') || 'Columns, sounds, auto-bump, and visual preferences for KDS'}
+                >
+                  <KDSSettings adminId={adminId} />
+                </PanelCard>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
         </div>
       </div>
     </div>

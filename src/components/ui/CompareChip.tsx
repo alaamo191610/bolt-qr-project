@@ -70,7 +70,7 @@ export default function CompareChip({
         ].join(' ')}
         style={{
             background: selected
-            ? `linear-gradient(135deg, ${colors.secondary}, ${colors.primary})`
+            ? `${colors.accent}`
             : 'white',
           borderColor: selected ? 'transparent' : '#d1d5db',
           color: selected ? '#ffffff' : 'black',

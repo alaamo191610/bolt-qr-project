@@ -8,6 +8,8 @@ import { useTheme } from "../../contexts/ThemeContext";
 import toast from "react-hot-toast";
 import CompareChip from "./CompareChip";
 import CustomerItemModal from "../../components/CustomerItemModal";
+import { useAdminMonetary } from "../../hooks/useAdminMonetary";
+import { formatPrice } from "../../pricing/usePrice";
 
 // Local copy of the customizer payload type
 type CartLine = {
@@ -247,7 +249,6 @@ const MenuItemCard: React.FC<Props> = ({
   quantity,
   onAdd,
   onRemove,
-  currency,
   onToggleCompare,
   compareSelected = false,
   compareDisabled = false,
@@ -257,9 +258,6 @@ const MenuItemCard: React.FC<Props> = ({
   const { colors } = useTheme();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // Fixed compare limit, per your requirement
-  const COMPARE_LIMIT = 2;
-
   // Safe i18n → always a string (prevents TS2322 on aria/title)
   const tt = (key: string, fallback: string, values?: any): string => {
     const v = t?.(key as any, values) as unknown;
@@ -268,6 +266,7 @@ const MenuItemCard: React.FC<Props> = ({
 
   // Full-screen “page”
   const [openPage, setOpenPage] = useState(false);
+  const [pendingQty, setPendingQty] = useState<number>(quantity);
   const lastTriggerRef = useRef<HTMLElement | null>(null);
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
   const panelScrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -327,7 +326,30 @@ const MenuItemCard: React.FC<Props> = ({
     confettiOnceForItem?.(item.id);
     requestAnimationFrame(() => flyToHeaderFromRect(r, isRTL));
   };
+  useEffect(() => {
+    setPendingQty(quantity);
+  }, [quantity]);
 
+  const incPending = () => setPendingQty((q) => q + 1);
+  const decPending = () => setPendingQty((q) => Math.max(0, q - 1));
+  const commitPending = async (rect: DOMRect) => {
+    if (quantity === 0 && pendingQty === 0) {
+      // first-time add (adds 1 with options)
+      await Promise.resolve(addWithOptions(rect));
+      return;
+    }
+
+    const delta = pendingQty - quantity;
+    if (delta > 0) {
+      for (let i = 0; i < delta; i++) onAdd(item); // add extra units
+    } else if (delta < 0) {
+      for (let i = 0; i < -delta; i++) onRemove?.(item.id); // remove units
+    }
+
+    // optional animation + close (if you use these)
+    requestAnimationFrame(() => flyToHeaderFromRect(rect, isRTL));
+    setOpenPage(false);
+  };
   // reset on item change
   useEffect(() => {
     const init: Record<string, "no" | "normal" | "extra"> = {};
@@ -345,15 +367,9 @@ const MenuItemCard: React.FC<Props> = ({
   }, [item.id]);
 
   const isAvailable = item.available !== false;
-  const priceFmt = useMemo(
-    () =>
-      currency ??
-      new Intl.NumberFormat(isRTL ? "ar-QA" : "en-QA", {
-        style: "currency",
-        currency: "QAR",
-      }),
-    [currency, isRTL]
-  );
+  const { prefs, loading: moneyLoading } = useAdminMonetary(); // if your hook requires adminId, pass it here
+  const fmt = (v: number) => formatPrice(v, prefs);
+
   const displayName = isRTL ? item.name_ar || item.name_en : item.name_en;
   const displayDesc = isRTL
     ? item.description_ar || item.description_en || ""
@@ -372,6 +388,8 @@ const MenuItemCard: React.FC<Props> = ({
     () => ingList.some((i) => (i.extra_price ?? 0) > 0),
     [ingList]
   );
+  const unit = (item.price ?? 0) + extrasTotal; // per one item with extras
+  const qtyForTotal = pendingQty > 0 ? pendingQty : quantity > 0 ? quantity : 1;
 
   const addWithOptions = (rect?: DOMRect) => {
     const custom_ingredients = ingList.map((i) => ({
@@ -654,14 +672,16 @@ const MenuItemCard: React.FC<Props> = ({
                 )}
               </div>
 
-              {/* Footer row */}
+              {/* Footer row item card */}
               <div
                 className={`mt-auto pt-2 flex items-center justify-between ${
                   isRTL ? "flex-row-reverse" : ""
                 }`}
               >
                 <div className="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums">
-                  {priceFmt.format(item.price ?? 0)}
+                  <span className={moneyLoading ? "opacity-0" : ""}>
+                    {fmt(item.price ?? 0)}
+                  </span>
                 </div>
 
                 {quantity > 0 ? (
@@ -676,7 +696,7 @@ const MenuItemCard: React.FC<Props> = ({
                         onRemove(item.id);
                         track("remove_from_cart", { item_id: item.id });
                       }}
-                      className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
+                      className="w-8 h-8 rounded-full bg-slate-200 text-white dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
                       style={{
                         background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                       }}
@@ -747,6 +767,438 @@ const MenuItemCard: React.FC<Props> = ({
       </div>
 
       {/* ======= FULLSCREEN PAGE ======= */}
+      {openPage &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999]">
+            <div className="absolute inset-0 bg-black/40" />
+            <div
+              className={[
+                "absolute inset-x-0 bottom-0 h-[86dvh]",
+                "sm:inset-auto sm:top-4 sm:bottom-4 sm:right-4 sm:left-auto sm:w-[520px] sm:h-[92dvh]",
+                "bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl",
+                "overflow-hidden grid grid-rows-[auto_auto_auto_1fr_auto]",
+              ].join(" ")}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="item-panel-title"
+            >
+              {/* Header */}
+              <div className="row-start-1 row-end-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between z-[90]">
+                <button
+                  ref={firstFocusRef}
+                  onClick={() => setOpenPage(false)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                  aria-label={tt("common.back", "Back")}
+                >
+                  <ArrowLeft
+                    className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`}
+                  />
+                  <span className="text-sm">{tt("common.back", "Back")}</span>
+                </button>
+                <h4
+                  id="item-panel-title"
+                  className="font-bold text-slate-900 dark:text-white truncate max-w-[60%]"
+                >
+                  {displayName}
+                </h4>
+                <button
+                  onClick={() => setOpenPage(false)}
+                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400"
+                  aria-label={tt("common.close", "Close")}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Hero */}
+              <div className="row-start-2 row-end-3 px-4 pt-4">
+                <img
+                  src={
+                    item.image_url ||
+                    "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=800"
+                  }
+                  alt={displayName}
+                  className="w-full h-48 sm:h-56 object-cover rounded-xl"
+                />
+                <div className="mt-3 flex items-center justify-between">
+                  <div>
+                    <h5 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                      {displayName}
+                    </h5>
+                    {item.categories && (
+                      <span className="inline-flex mt-1 text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                        {isRTL
+                          ? item.categories.name_ar
+                          : item.categories.name_en}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                    <span className={moneyLoading ? "opacity-0" : ""}>
+                      {fmt((item.price || 0) + extrasTotal)}
+                    </span>
+                  </div>
+                </div>
+
+                {displayDesc && (
+                  <div
+                    className={`mt-3 rounded-lg bg-slate-50 dark:bg-slate-700/40 p-3 ${
+                      isRTL ? "text-right" : ""
+                    }`}
+                  >
+                    <p
+                      dir="auto"
+                      lang={isRTL ? "ar" : "en"}
+                      style={{ unicodeBidi: "plaintext" as any }}
+                      className="mt-1 text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2"
+                    >
+                      {displayDesc}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tabs + quick actions */}
+              <div className="row-start-3 row-end-4 border-t border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-800 z-[85]">
+                <div
+                  className={`px-4 pt-3 pb-2 flex ${
+                    isRTL ? "flex-row-reverse" : ""
+                  } items-center gap-2`}
+                >
+                  {(["ingredients", "notes"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${
+                        activeTab === tab
+                          ? "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
+                          : "text-slate-600 dark:text-slate-300"
+                      }`}
+                      aria-pressed={activeTab === tab}
+                    >
+                      {tab === "ingredients"
+                        ? tt("menu.customize", "Customize")
+                        : tt("common.notes", "Notes")}
+                    </button>
+                  ))}
+                  {activeTab === "ingredients" && (
+                    <span
+                      className={`${
+                        isRTL ? "mr-auto" : "ml-auto"
+                      } text-xs text-slate-500`}
+                    >
+                      {tt("pricing.extras", "Extras")}:{" "}
+                      <strong className="tabular-nums">
+                        <span className={moneyLoading ? "opacity-0" : ""}>
+                          {fmt(extrasTotal)}
+                        </span>
+                      </strong>
+                    </span>
+                  )}
+                </div>
+
+                {activeTab === "ingredients" && (
+                  <div
+                    className={`px-4 pb-3 flex flex-nowrap items-center gap-2 ${
+                      isRTL ? "flex-row-reverse" : ""
+                    } overflow-x-auto whitespace-nowrap`}
+                  >
+                    <button
+                      onClick={() => {
+                        const next: Record<string, "no" | "normal" | "extra"> =
+                          {};
+                        ingList.forEach((i) => (next[i.id] = "normal"));
+                        setIngChoice(next);
+                        track("customize_quick_reset", { item_id: item.id });
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-700"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />{" "}
+                      {tt("custom.reset", "Reset")}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const next: Record<string, "no" | "normal" | "extra"> =
+                          {};
+                        ingList.forEach((i) => (next[i.id] = "no"));
+                        setIngChoice(next);
+                        track("customize_quick_remove_all", {
+                          item_id: item.id,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200"
+                    >
+                      <X className="w-3.5 h-3.5" />{" "}
+                      {tt("custom.removeAll", "Remove all")}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (!anyPaidExtra) return;
+                        const next: Record<string, "no" | "normal" | "extra"> =
+                          {};
+                        ingList.forEach(
+                          (i) =>
+                            (next[i.id] =
+                              (i.extra_price ?? 0) > 0 ? "extra" : "normal")
+                        );
+                        setIngChoice(next);
+                        track("customize_quick_extra_all", {
+                          item_id: item.id,
+                        });
+                      }}
+                      disabled={!anyPaidExtra}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs ${
+                        anyPaidExtra
+                          ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+                          : "bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <Star className="w-3.5 h-3.5" />{" "}
+                      {tt(
+                        anyPaidExtra
+                          ? "custom.extraAllPaid"
+                          : "custom.extraAll",
+                        anyPaidExtra ? "Extra all (paid)" : "Extra all"
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Scroller */}
+              <div
+                ref={panelScrollRef}
+                className="row-start-4 row-end-5 overflow-y-auto min-h-0 px-4 py-4"
+              >
+                {activeTab === "ingredients" ? (
+                  ingList.length ? (
+                    <div className="space-y-3">
+                      {ingList.map((ing) => {
+                        const choice = ingChoice[ing.id] || "normal";
+                        const checked = choice !== "no";
+                        const canExtra = (ing.extra_price ?? 0) > 0;
+
+                        const toggleCheck = (
+                          e: React.ChangeEvent<HTMLInputElement>
+                        ) => {
+                          const on = e.target.checked;
+                          setIngChoice((prev) => ({
+                            ...prev,
+                            [ing.id]: on ? "normal" : "no",
+                          }));
+                        };
+                        const toggleExtra = () => {
+                          if (!checked) return;
+                          setIngChoice((prev) => ({
+                            ...prev,
+                            [ing.id]: choice === "extra" ? "normal" : "extra",
+                          }));
+                        };
+
+                        return (
+                          <div
+                            key={ing.id}
+                            className="border border-slate-200 dark:border-slate-600 rounded-xl p-3 hover:border-emerald-400/60 transition bg-white dark:bg-slate-800"
+                            role="group"
+                            aria-label={isRTL ? ing.name_ar : ing.name_en}
+                          >
+                            <div
+                              className={`flex items-center ${
+                                isRTL ? "flex-row-reverse" : ""
+                              } gap-3`}
+                            >
+                              <label className="flex items-center gap-2 cursor-pointer flex-1">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-emerald-600 focus:ring-emerald-500"
+                                  checked={checked}
+                                  onChange={toggleCheck}
+                                  aria-label={tt("custom.include", "Include")}
+                                />
+                                <span
+                                  className="text-sm font-medium text-slate-800 dark:text-slate-100"
+                                  dir="auto"
+                                  lang={isRTL ? "ar" : "en"}
+                                >
+                                  {(isRTL ? ing.name_ar : ing.name_en) || ""}
+                                </span>
+                              </label>
+
+                              {canExtra && (
+                                <button
+                                  type="button"
+                                  onClick={toggleExtra}
+                                  disabled={!checked}
+                                  className={[
+                                    "text-xs px-2 py-1 rounded-full border transition",
+                                    checked && choice === "extra"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700"
+                                      : checked
+                                      ? "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600"
+                                      : "bg-slate-100 text-slate-400 border-slate-300 dark:bg-slate-700 dark:text-slate-500 dark:border-slate-600 cursor-not-allowed",
+                                  ].join(" ")}
+                                  aria-pressed={checked && choice === "extra"}
+                                >
+                                  {tt("custom.extra", "Extra")} +{" "}
+                                  {fmt(ing.extra_price || 0)}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-10 text-center text-slate-500 text-sm">
+                      {tt(
+                        "menu.noCustomizations",
+                        "No customizations for this item."
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-slate-800 dark:text-slate-100 mb-1 block">
+                      {tt("common.notes", "Notes")}
+                    </label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      maxLength={140}
+                      className="w-full min-h-[120px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-3 outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder={tt(
+                        "common.notesPlaceholder",
+                        "Add any special requests (140 chars)"
+                      )}
+                    />
+                    <div className="mt-1 text-xs text-slate-500">
+                      {notes.length}/140
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="row-start-5 row-end-6 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  {/* total */}
+                  <div className="text-sm text-slate-600 dark:text-slate-300">
+                    {tt("pricing.total", "Total")}:{" "}
+                    <strong>
+                      <span className={moneyLoading ? "opacity-0" : ""}>
+                        {fmt(unit * qtyForTotal)}
+                      </span>
+                    </strong>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* show +/- when pending > 0 (local-controlled) */}
+                    {pendingQty > 0 && (
+                      <div className="flex items-center gap-2">
+                        {/* − (local only) */}
+                        <button
+                          type="button"
+                          onClick={decPending}
+                          aria-label={tt("common.decrease", "Decrease")}
+                          className="inline-grid place-items-center w-10 h-10 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 active:scale-95 text-white"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          >
+                            <path d="M5 12h14" />
+                          </svg>
+                        </button>
+
+                        {/* pending qty display (not cart yet) */}
+                        <output
+                          className="min-w-[2ch] text-center font-semibold text-slate-900 dark:text-white"
+                          aria-live="polite"
+                        >
+                          {pendingQty}
+                        </output>
+
+                        {/* + (local only) */}
+                        <button
+                          type="button"
+                          onClick={incPending}
+                          aria-label={tt("common.increase", "Increase")}
+                          className="inline-grid place-items-center w-10 h-10 rounded-xl btn-primary text-white active:scale-95"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          >
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Add to order / Confirm */}
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        const rect = (
+                          e.currentTarget as HTMLElement
+                        ).getBoundingClientRect();
+                        // If no quantity yet, treat click as "add 1 with options"
+                        if (quantity === 0) {
+                          try {
+                            await Promise.resolve(addWithOptions(rect));
+                          } catch {}
+                          return;
+                        }
+                        // Otherwise, confirm the pending +/- changes
+                        try {
+                          await commitPending(rect);
+                        } catch {}
+                      }}
+                      className="rounded-xl btn-primary text-white py-3 px-6 font-semibold shadow-lg active:scale-[.99] transition
+               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"
+                      disabled={moneyLoading || item.available === false}
+                      aria-disabled={moneyLoading || item.available === false}
+                    >
+                      {quantity === 0
+                        ? tt("menu.addToOrder", "Add to order")
+                        : tt("menu.confirmChanges", "Confirm")}
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="sr-only"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  id="cart-live-region"
+                />
+              </div>
+            </div>
+
+            <style>{`
+            .animate-page-in { animation: pageIn .32s cubic-bezier(.22,1,.36,1) forwards; }
+            @keyframes pageIn { from { transform: translateY(100%) } to { transform: translateY(0) } }
+            @media (min-width: 640px) {
+              .animate-panel-in { animation: panelIn .30s cubic-bezier(.22,1,.36,1) forwards; }
+              @keyframes panelIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
+            }
+            .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+          `}</style>
+          </div>,
+          document.body
+        )}
     </>
   );
 };
