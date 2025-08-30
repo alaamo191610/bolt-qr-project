@@ -18,8 +18,6 @@ import { HeaderCartPopover } from '../components/ui/Popover';
 import toast from "react-hot-toast";
 import { useAdminMonetary } from '../hooks/useAdminMonetary';
 import { formatPrice } from '../pricing/usePrice';
-import { computeTotals } from '../pricing/totals';
-import type { Promotion } from '../pricing/types';
 
 interface Ingredient {
   id: string;
@@ -57,9 +55,7 @@ const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
-  const { billing, prefs, loading: moneyLoading } = useAdminMonetary(); // adminId optional
-  const [promoRow, setPromoRow] = useState<Promotion | null>(null); // optional
-  const [lastCart, setLastCart] = useState<CartItem[]>([]);
+  const {prefs, loading: moneyLoading } = useAdminMonetary(); // adminId optional
 
   // data
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -99,12 +95,11 @@ const CustomerMenu: React.FC = () => {
   const handleClearCart = () => {
     const previous = cart;            // snapshot for undo
     setCart([]);
-  
+
     toast.custom((t) => (
       <div
-        className={`${
-          t.visible ? 'animate-enter' : 'animate-leave'
-        } bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg rounded-xl px-4 py-3 flex items-center gap-3`}
+        className={`${t.visible ? 'animate-enter' : 'animate-leave'
+          } bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg rounded-xl px-4 py-3 flex items-center gap-3`}
       >
         <span className="text-sm text-slate-700 dark:text-slate-200">
           {isRTL ? 'تم تفريغ السلة' : 'Cart cleared'}
@@ -384,15 +379,6 @@ const CustomerMenu: React.FC = () => {
     [moneyLoading, totalPrice, prefs]
   );
 
-  const breakdown = useMemo(() => {
-    if (moneyLoading || !billing) {
-      const delivery = billing?.deliveryFee ?? 0;
-      return { discount: 0, vat: 0, service: 0, delivery, total: totalPrice + delivery };
-    }
-    const { discount, vat, service, total } = computeTotals(totalPrice, billing, promoRow);
-    return { discount, vat, service, delivery: billing.deliveryFee, total };
-  }, [totalPrice, billing, promoRow, moneyLoading]);
-
   // cart ops
   const addToCart = useCallback((incoming: MenuItem) => {
     setCart(prev => {
@@ -631,6 +617,7 @@ const CustomerMenu: React.FC = () => {
             <div className="flex items-center gap-3" dir="ltr">
               <LanguageToggle variant="button" />
               <button
+                ref={triggerRef}
                 id="header-cart-anchor"
                 data-cart-anchor="header"
                 data-cart-icon
@@ -869,7 +856,7 @@ const CustomerMenu: React.FC = () => {
           onRemove={removeFromCart}
           onPlaceOrder={placeOrder}
           onClearCart={handleClearCart}
-          // onEditItem={(item) => openEditModal(item)}
+        // onEditItem={(item) => openEditModal(item)}
         />
       )}
 
