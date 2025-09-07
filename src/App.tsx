@@ -216,6 +216,7 @@ const AdminDashboard: React.FC = () => {
           timestamp: new Date(order.created_at),
         }))
       );
+      setDataLoaded(true);
     } catch (error) {
       console.error("Error loading admin data:", error);
     }
