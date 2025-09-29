@@ -19,5 +19,5 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   // replace REPO with your actual repo name
-  base: '/REPO/'
+  base: '/bolt-qr-project/'
 })
