@@ -3,6 +3,18 @@ import { supabase } from '../lib/supabase'
 
 // ---------------- Types (kept compatible) ----------------
 type IngredientAction = 'no' | 'normal' | 'extra'
+type DBStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+
+// orderService.ts
+export type Order = {
+  id: string; // ← UUID from DB
+  order_number?: number;
+  tableNumber: string;
+  items: { name: string; price: number; quantity: number }[];
+  total: number;
+  status: 'pending' | 'preparing' | 'ready' | 'served'| 'cancelled';
+  timestamp: string; // ISO
+};
 
 /** One cart line going into createOrder */
 export type CreateOrderItemInput = {
@@ -71,6 +83,52 @@ function formatIngredientChoices(
   if (extraList.length) parts.push(`extra: ${extraList.join(', ')}`)
   return parts.join(' | ')
 }
+async function getOrdersForManagement(adminId: string): Promise<Order[]> {
+  // fetch with the fields you need
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      id,
+      order_number,
+      total,
+      status,
+      created_at,
+      table:tables ( code ),
+      order_items (
+        quantity,
+        price_at_order,
+        menus ( name_en )
+      )
+    `)
+    .eq('admin_id', adminId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Map DB -> UI
+  const toUiStatus = (s?: string): Order['status'] => {
+    if (!s) return 'pending';
+    if (s === 'completed') return 'served';     // was 'ready' before
+    if (s === 'cancelled') return 'cancelled';  // was falling back to 'pending'
+    if (s === 'ready')     return 'ready';
+    if (s === 'preparing') return 'preparing';
+    if (s === 'pending')   return 'pending';
+    return 'pending';
+  };
+  return (data ?? []).map((o: any) => ({
+    id: o.id, // ← UUID used for updates
+    order_number: o.order_number ?? undefined,
+    tableNumber: o.table?.code ?? '',
+    total: Number(o.total ?? 0),
+    status: toUiStatus(o.status),
+    timestamp: o.created_at,
+    items: (o.order_items ?? []).map((it: any) => ({
+      name: it.menus?.name_en ?? 'Item',
+      price: Number(it.price_at_order ?? 0),
+      quantity: Number(it.quantity ?? 1),
+    })),
+  }));
+}
 
 // ---------------- Service ----------------
 export const orderService = {
@@ -121,7 +179,7 @@ export const orderService = {
           // comboChildren,
         }
       })
-    
+
       // Invoke Edge Function (does validation + pricing + inserts server-side)
       const { data, error } = await supabase.functions.invoke('super-action', {
         body: {
@@ -140,7 +198,7 @@ export const orderService = {
 
       // data -> { order_id, total, items }
       return data
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('invoke failed:', error?.message, error?.context);
       throw error
     }
@@ -215,30 +273,22 @@ export const orderService = {
     }))
   },
 
-  // Update order status (same behavior)
-  async updateOrderStatus(orderId: string, status: string) {
-    try {
-      const updates: any = {
-        status,
-        status_updated_at: new Date().toISOString(),
-      }
-      if (status === 'preparing') updates.preparing_at = new Date().toISOString()
-      else if (status === 'completed') updates.completed_at = new Date().toISOString()
-      else if (status === 'cancelled') updates.cancelled_at = new Date().toISOString()
+  // services/orderService.ts
+  async updateOrderStatus(orderId: string, status: DBStatus, adminId?: string) {
+    const now = new Date().toISOString();
+    const updates: Record<string, any> = { status, status_updated_at: now };
+    if (status === 'preparing') updates.preparing_at = now;
+    if (status === 'completed') updates.completed_at = now;
+    if (status === 'cancelled') updates.cancelled_at = now;
+    // note: no ready_at column in your schema, so we just set status+status_updated_at
 
-      const { data, error } = await supabase
-        .from('orders')
-        .update(updates)
-        .eq('id', orderId)
-        .select()
-        .single()
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error('Error updating order status:', error)
-      throw error
-    }
+    let q = supabase.from('orders').update(updates).eq('id', orderId);
+    if (adminId) q = q.eq('admin_id', adminId);
+    const { error } = await q.select().single();
+    if (error) throw error;
+    return true;
   },
+
 
   // Get order by ID (raw)
   async getOrderById(orderId: string) {
@@ -261,4 +311,5 @@ export const orderService = {
       throw error
     }
   },
+  getOrdersForManagement,
 }

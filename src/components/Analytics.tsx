@@ -9,31 +9,12 @@ import TopRevenueItemsChart from '../components/charts/TopRevenueItemsChart';
 import TopTableRevenueChart from '../components/charts/TopTableRevenueChart';
 import ExportOrdersPDFButton from '../components/exports/ExportOrdersPDFButton';
 import type { OrderWithItems as PdfOrder } from '../lib/supabase';
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabase';
+import type { Order as Order } from '../services/orderService';
 
-type OrderStatus = 'pending' | 'preparing' | 'completed' | 'served' | 'cancelled';
 
-interface OrderItem {
-  id?: string;         // menu_item_id
-  name?: string;       // legacy fallback
-  name_en?: string;    // english
-  name_ar?: string;    // arabic
-  price: number;
-  quantity: number;
-}
+interface AnalyticsProps { orders: Order[]; }
 
-interface Order {
-  id: number;
-  tableNumber: string;
-  items: OrderItem[];
-  total: number;
-  status: OrderStatus | string;
-  timestamp: Date;
-}
-
-interface AnalyticsProps {
-  orders: Order[];
-}
 
 interface TrendDay {
   date: string; // YYYY-MM-DD (local)
@@ -41,6 +22,7 @@ interface TrendDay {
   orders: number;
   revenue: number;
 }
+const toDate = (v: string | Date) => (typeof v === 'string' ? new Date(v) : v);
 
 const isSameLocalDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
@@ -69,7 +51,13 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
 
   // ✅ 1) Fetch a menu index (id -> {id,name_en,name_ar}) once on client
   const [menuIndex, setMenuIndex] = useState<Record<string, { id: string; name_en: string; name_ar?: string }>>({});
-
+  type UiItem = Order['items'][number] & Partial<{
+    id: string;
+    name_en: string;
+    name_ar: string;
+    price_at_order: number;
+    menu: { price: number };
+  }>;
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -133,7 +121,8 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       statusRev.set(o.status, (statusRev.get(o.status) ?? 0) + o.total);
       statusCount.set(o.status, (statusCount.get(o.status) ?? 0) + 1);
 
-      for (const it of o.items) {
+      for (const _it of o.items) {
+        const it = _it as UiItem;
         // ✅ 3) ENRICH names from menus by id, else by English name
         let name_en = it.name_en ?? it.name; // if legacy 'name' is English
         let name_ar = it.name_ar;
@@ -196,7 +185,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       const d = new Date(today);
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const dayOrders = orders.filter(o => isSameLocalDay(o.timestamp, d));
+      const dayOrders = orders.filter(o => isSameLocalDay(toDate(o.timestamp), d));
       weekTrend.push({
         date: toLocalISODate(d),
         day: getLocalizedDayName(d, 'short'),
@@ -209,19 +198,19 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       id: String(o.id),
       user_id: 'guest',
       table_id: o.tableNumber,
-      created_at: o.timestamp.toISOString(),
+      created_at: toDate(o.timestamp).toISOString(),
       total: o.total,
       status: o.status as string,
-      items: o.items.map(i => ({
-        name: pickLabel(i),
-        quantity: i.quantity,
-        // prefer the price stored on the order item at the time of purchase
-        price:
-          (i as any).price_at_order ??
-          i.price ??                    
-          (i as any).menu?.price ??      
-          0
-      })), 
+      items: o.items.map(_i => {
+        const i = _i as UiItem;
+        return {
+          name: pickLabel(i),
+          quantity: i.quantity,
+          price:
+            i.price_at_order ?? i.price ?? i.menu?.price ??
+            0
+        }
+      }),
     }));
 
     const totalOrders = orders.length;
@@ -240,7 +229,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       weekTrend,
       transformedOrders,
     };
-  // include menu deps so enrichment re-runs when menus arrive
+    // include menu deps so enrichment re-runs when menus arrive
   }, [orders, getLocalizedDayName, language, menuIndex, menuByEnName]);
 
   const topItemMax = popularItems[0]?.count || 1;
@@ -344,12 +333,11 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
                 <div key={item.id ?? item.aggKey} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm ${
-                        index === 0 ? 'bg-yellow-500'
-                          : index === 1 ? 'bg-gray-400'
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm ${index === 0 ? 'bg-yellow-500'
+                        : index === 1 ? 'bg-gray-400'
                           : index === 2 ? 'bg-amber-600'
-                          : 'bg-slate-400'
-                      }`}
+                            : 'bg-slate-400'
+                        }`}
                     >
                       {index + 1}
                     </div>

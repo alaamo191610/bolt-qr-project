@@ -12,7 +12,7 @@ import { Palette } from 'lucide-react';
 // ⬅️ your PanelCard component (adjust import path if different)
 import PanelCard from '../components/ui/PanelCard';
 import CollapsiblePanelCard from '../components/ui/CollapsiblePanelCard';
-
+import type { MenuItem } from '../order-admin/types';
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from '../components/ui/Tabs';
 // ⬅️ lazy-load client components (avoid SSR issues)
 const OrderWorkflowRules = dynamic(() => import('../components/orders/OrderWorkflowRules'), { ssr: false });
@@ -33,9 +33,11 @@ const DEFAULTS: AdminSettings = {
     'Fine dining experience with fresh, locally sourced ingredients and exceptional service.',
 };
 
-type Props = { adminId: string };
+type Props = {  menuItems: MenuItem[];
+  setMenuItems: React.Dispatch<React.SetStateAction<MenuItem[]>>;
+  adminId: string };
 
-const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
+  const AdminPanel: React.FC<Props> = ({ adminId, menuItems: _menuItems, setMenuItems: _setMenuItems }) => {
   const { t, isRTL } = useLanguage();
   const [form, setForm] = useState<AdminSettings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
@@ -226,4 +228,4 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   );
 };
 
-export default AdminSettingsOnly;
+export default AdminPanel;

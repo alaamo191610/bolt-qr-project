@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+
 import {
   QrCode,
   Menu,
@@ -18,7 +20,6 @@ import { menuService } from "./services/menuService";
 import { orderService } from "./services/orderService";
 import AuthForm from "./components/Auth/AuthForm";
 import ResponsiveLayout from "./components/ResponsiveLayout";
-import ThemeCustomizer from "./components/ThemeCustomizer";
 import QRGenerator from "./components/QRGenerator";
 import DigitalMenu from "./components/DigitalMenu";
 import OrderManagement from "./components/OrderManagement";
@@ -27,6 +28,10 @@ import Analytics from "./components/Analytics";
 import AdminPanel from "./components/AdminPanel";
 import CustomerMenu from "./pages/CustomerMenu";
 import { Toaster } from "react-hot-toast";
+import type { Order as Order } from './services/orderService';
+import type { MenuItem } from './order-admin/types';
+import { useQuery, useMutation} from "@tanstack/react-query";
+
 // Define interfaces for the component state
 interface Table {
   id: number;
@@ -35,27 +40,6 @@ interface Table {
   capacity: number;
 }
 
-interface Order {
-  id: number;
-  tableNumber: string;
-  items: Array<{
-    name: string;
-    price: number;
-    quantity: number;
-  }>;
-  total: number;
-  status: string;
-  timestamp: Date;
-}
-
-interface MenuItem {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  image: string;
-}
 
 interface AdminProfile {
   id: string;
@@ -63,6 +47,7 @@ interface AdminProfile {
   email?: string;
   preferred_language?: string;
 }
+const queryClient = new QueryClient();
 
 function App() {
   const { user, loading } = useAuth();
@@ -81,6 +66,7 @@ function App() {
   }
 
   return (
+    <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <LanguageProvider>
         <Router>
@@ -142,89 +128,94 @@ function App() {
         />
       </LanguageProvider>
     </ThemeProvider>
+    </QueryClientProvider>
   );
 }
-
 const AdminDashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const { t, isLoaded } = useLanguage();
 
   const [activeTab, setActiveTab] = useState("qr-generator");
   const [tables, setTables] = useState<Table[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
-  const idMapRef = React.useRef(new Map<string, number>());
-  const nextIdRef = React.useRef(1);
-  const numId = (uuid: string) => {
-    if (!idMapRef.current.has(uuid))
-      idMapRef.current.set(uuid, nextIdRef.current++);
-    return idMapRef.current.get(uuid)!;
-  };
 
+  const queryClient = useQueryClient();
+
+  // ---- Non-order data stays as normal fetches (you can migrate later if you want)
   useEffect(() => {
-    if (user && !dataLoaded) {
-      loadAdminData();
-    }
-  }, [user, dataLoaded]);
+    (async () => {
+      if (!user) return;
+      try {
+        const profile = await adminService.getAdminProfile(user.id);
+        setAdminProfile(profile);
 
-  const loadAdminData = async () => {
-    if (!user) return;
-    try {
-      const profile = await adminService.getAdminProfile(user.id);
-      setAdminProfile(profile);
+        const adminTables = await tableService.getTables(user.id);
+        setTables(
+          adminTables.map((table: any) => ({
+            id: parseInt(table.id) || Math.random(),
+            number: table.code,
+            status: "available",
+            capacity: 4,
+          }))
+        );
 
-      const adminTables = await tableService.getTables(user.id);
-      setTables(
-        adminTables.map((table: any) => ({
-          id: parseInt(table.id) || Math.random(),
-          number: table.code,
-          status: "available",
-          capacity: 4,
-        }))
+        const adminMenuItems = await menuService.getMenuItems(user.id);
+        setMenuItems(
+          adminMenuItems.map((item: any) => ({
+            id: item.id,
+            name: item.name_en,
+            description: item.name_ar || item.name_en,
+            price: item.price,
+            category: item.categories?.name_en || "Other",
+            image:
+              item.image_url ||
+              "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300",
+          }))
+        );
+      } catch (e) {
+        console.error("Error loading admin data:", e);
+      }
+    })();
+  }, [user]);
+
+  // ---- ORDERS via React Query (auto refetch on focus / interval)
+  const { data: orders = [] } = useQuery({
+    queryKey: ["orders", user?.id],
+    queryFn: () => orderService.getOrdersForManagement(user!.id),
+    enabled: !!user,
+    refetchOnWindowFocus: true,
+    refetchInterval: 20000, // 20s; tweak/remove if you like
+  });
+
+  // ---- Update order status with optimistic UI
+  type UIStatus = Order["status"]; // 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'
+  type DBStatus = "pending" | "preparing" | "ready" | "completed" | "cancelled";
+  const toDbStatus = (s: UIStatus): DBStatus => (s === "served" ? "completed" : s);
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, uiStatus }: { id: string; uiStatus: UIStatus }) => {
+      const dbStatus = toDbStatus(uiStatus);
+      return orderService.updateOrderStatus(id, dbStatus, user?.id);
+    },
+    onMutate: async ({ id, uiStatus }) => {
+      await queryClient.cancelQueries({ queryKey: ["orders", user?.id] });
+      const prev = queryClient.getQueryData<Order[]>(["orders", user?.id]);
+
+      // optimistic update
+      queryClient.setQueryData<Order[]>(["orders", user?.id], (old) =>
+        (old ?? []).map((o) => (o.id === id ? { ...o, status: uiStatus } : o))
       );
 
-      const adminMenuItems = await menuService.getMenuItems(user.id);
-      setMenuItems(
-        adminMenuItems.map((item: any) => ({
-          id: parseInt(item.id),
-          name: item.name_en,
-          description: item.name_ar || item.name_en,
-          price: item.price,
-          category: item.categories?.name_en || "Other",
-          image:
-            item.image_url ||
-            "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300",
-        }))
-      );
-
-      const adminOrders = await orderService.getOrders(user.id);
-      setOrders(
-        adminOrders.map((order: any) => ({
-          id: numId(order.id),
-          order_number: order.order_number,
-          tableNumber: order.table_id,
-          items:
-            order.order_items?.map((item: any) => ({
-              name: item.menus?.name_en || "Unknown Item",
-              price: item.price_at_order,
-              quantity: item.quantity,
-            })) || [],
-          total: order.total || 0,
-          status: order.status || "pending",
-          timestamp: new Date(order.created_at),
-        }))
-      );
-    } catch (error) {
-      console.error("Error loading admin data:", error);
-    }
-  };
-
-  // Simple tab change handler
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId);
-  };
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["orders", user?.id], ctx.prev);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders", user?.id] });
+    },
+  });
 
   const navigation = useMemo(
     () => [
@@ -250,6 +241,7 @@ const AdminDashboard: React.FC = () => {
       </div>
     );
   }
+  if (!user) return null;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -258,41 +250,50 @@ const AdminDashboard: React.FC = () => {
       case "menu":
         return <DigitalMenu />;
       case "orders":
-        return <OrderManagement orders={orders} setOrders={setOrders} />;
+        return (
+          <OrderManagement
+            orders={orders}
+            adminId={user.id}
+            onUpdateStatus={(id: string, uiStatus: Order['status']) =>
+              updateStatus.mutateAsync({ id, uiStatus }).then(() => {}) // <- returns void
+            }          />
+        );
       case "tables":
         return (
           <TableManagement
             tables={tables}
             setTables={setTables}
-            onDataChange={loadAdminData}
+            onDataChange={() => { /* keep if you need refresh */ }}
           />
         );
       case "analytics":
         return <Analytics orders={orders} />;
       case "admin":
-        return <AdminPanel menuItems={menuItems} setMenuItems={setMenuItems} />;
+        return (
+          <AdminPanel
+            menuItems={menuItems}
+            setMenuItems={setMenuItems}
+            adminId={user.id}
+          />
+        );
       default:
         return <QRGenerator tables={tables} />;
     }
   };
 
   return (
-    <>
-      <ResponsiveLayout
-        navigation={navigation}
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-        userInfo={{
-          name:
-            adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
-          email: user?.email || "",
-        }}
-        onSignOut={() => user && signOut()}
-      >
-        {renderContent()}
-      </ResponsiveLayout>
-      <ThemeCustomizer />
-    </>
+    <ResponsiveLayout
+      navigation={navigation}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      userInfo={{
+        name: adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
+        email: user?.email || "",
+      }}
+      onSignOut={() => user && signOut()}
+    >
+      {renderContent()}
+    </ResponsiveLayout>
   );
 };
 

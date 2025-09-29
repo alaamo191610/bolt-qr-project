@@ -27,6 +27,15 @@ export type KDSPrefs = {
   prepTimeColors: { ok: number; warn: number }
 }
 
+export type MenuItem = {
+  id: string | number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  image: string;
+};
+
 export type AdminSettings = {
   admin_id: string
   order_rules: OrderFlowRules

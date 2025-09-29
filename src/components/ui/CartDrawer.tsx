@@ -474,7 +474,7 @@ const CartDrawer: React.FC<Props> = ({
                 {/* Extras (informational; already included in subtotal) */}
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-slate-600 dark:text-slate-300">
-                    {t('menu.extras') || (isRTL ? 'الإضافات' : 'Extras')}
+                    {t('cart.extras') || (isRTL ? 'الإضافات' : 'Extras')}
                   </span>
                   <span className="text-sm font-medium text-slate-900 dark:text-white">
                     {fmt(extras)}
@@ -484,7 +484,7 @@ const CartDrawer: React.FC<Props> = ({
                 {/* Subtotal */}
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-slate-600 dark:text-slate-300">
-                    {t('common.subtotal') || (isRTL ? 'المجموع' : 'Subtotal')}
+                    {t('cart.subtotal') || (isRTL ? 'المجموع' : 'Subtotal')}
                   </span>
                   <span className="text-base font-semibold text-slate-900 dark:text-white">
                     {fmt(subtotal)}
@@ -507,7 +507,7 @@ const CartDrawer: React.FC<Props> = ({
                 {billing?.showVatLine && (
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-slate-600 dark:text-slate-300">
-                      {t('billing.vat') || 'VAT'}
+                      {t('fees.vat') || 'VAT'}
                       <span
                         className="ml-1 inline-block w-4 h-4 rounded-full border border-slate-300 text-[10px] grid place-items-center"
                         title={isRTL ? 'تُحتسب الضريبة بعد الخصم وقبل الإكرامية (حسب الإعدادات)' : 'VAT is calculated after discount and before tip (per settings)'}
@@ -522,7 +522,7 @@ const CartDrawer: React.FC<Props> = ({
                 {billing?.showServiceChargeLine && (
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-slate-600 dark:text-slate-300">
-                      {t('billing.serviceCharge') || (isRTL ? 'رسوم الخدمة' : 'Service')}
+                      {t('fees.serviceCharge') || (isRTL ? 'رسوم الخدمة' : 'Service')}
                       <span
                         className="ml-1 inline-block w-4 h-4 rounded-full border border-slate-300 text-[10px] grid place-items-center"
                         title={isRTL ? 'رسوم الخدمة تُضاف على المجموع قبل الضريبة' : 'Service charge is applied to the subtotal before VAT'}
@@ -537,7 +537,7 @@ const CartDrawer: React.FC<Props> = ({
                 {/* Total (original) */}
                 <div className="flex items-center justify-between py-2 border-t mt-2">
                   <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    {t('billing.total') || (isRTL ? 'الإجمالي' : 'Total')}
+                    {t('common.total') || (isRTL ? 'الإجمالي' : 'Total')}
                   </span>
                   <span className="text-lg font-extrabold text-slate-900 dark:text-white">
                     {fmt(breakdown.total)}
