@@ -8,7 +8,8 @@ import {
   Users,
   BarChart3,
 } from "lucide-react";
-import { useAuth } from "./hooks/useAuth";
+// import { useAuth } from "./hooks/useAuth";
+import { useAuth } from "./providers/AuthProvider";
 import { useLanguage } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";

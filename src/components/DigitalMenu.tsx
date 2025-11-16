@@ -8,7 +8,9 @@ import {
   Edit,
   AlertTriangle,
 } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
+// import { useAuth } from "../hooks/useAuthhhhh";
+import { useAuth } from "../providers/AuthProvider";
+
 import { useLanguage } from "../contexts/LanguageContext";
 import { supabase } from "../lib/supabase";
 import toast from "react-hot-toast";
