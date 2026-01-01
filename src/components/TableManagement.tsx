@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Users, Plus, Trash2, MapPin } from "lucide-react";
-import { supabase } from "../lib/supabase";
 import { tableService } from "../services/tableService";
 
 interface Table {
@@ -31,14 +30,8 @@ const TableManagement: React.FC<TableManagementProps> = ({
 
   const addTableToDatabase = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
-
       const tableData = {
         code: newTable.code.trim(),
-        admin_id: user.id,
       };
 
       const createdTable = await tableService.addTable(tableData);

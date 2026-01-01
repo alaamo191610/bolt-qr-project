@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabase";
 import { Plus, Trash2, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { api } from "../services/api";
 
 /**
  * AdminOptionsPanel
@@ -98,27 +98,14 @@ export default function AdminOptionsPanel({
     try {
       setLoading(true);
       setError(null);
-      const [{ data: ingr }, { data: menus }] = await Promise.all([
-        supabase
-          .from("ingredients")
-          .select("id, name_en, name_ar, extra_price")
-          .order("name_en"),
-        supabase
-          .from("menus")
-          .select("id, name_en, price")
-          .is("deleted_at", null)
-          .order("name_en"),
-      ]);
-      setAllIngredients(ingr || []);
-      setAllMenus(menus || []);
+
+      const data = await api.get(`/menus/${menuId}/options`);
+
+      setAllIngredients(data.allIngredients || []);
+      setAllMenus(data.allMenus || []);
 
       // ingredients for this menu
-      const { data: mi } = await supabase
-        .from("menu_ingredients")
-        .select(
-          "ingredient_id, removable, extra_available, max_extra, extra_price_override"
-        )
-        .eq("menu_id", menuId);
+      const mi = data.menuIngredients;
       setIngCfg(
         (mi || []).map((r) => ({
           ingredient_id: r.ingredient_id,
@@ -133,14 +120,9 @@ export default function AdminOptionsPanel({
       );
 
       // modifier groups attached to this menu
-      const { data: mmg } = await supabase
-        .from("menu_modifier_groups")
-        .select(
-          "modifier_groups(id, name_en, name_ar, selection_type, min_select, max_select, required, modifier_options(id, name_en, name_ar, price_delta, max_qty, is_default))"
-        )
-        .eq("menu_id", menuId);
-
-      const g = (mmg || []).map((x: any) => x.modifier_groups).filter(Boolean);
+      const g = (data.menuModifierGroups || [])
+        .map((x: any) => x.modifier_group)
+        .filter(Boolean);
       setGroups(
         (g || []).map((gr: any) => ({
           id: gr.id,
@@ -162,13 +144,7 @@ export default function AdminOptionsPanel({
       );
 
       // combo for this parent menu (assume 1 group per parent for now)
-      const { data: cg } = await supabase
-        .from("combo_groups")
-        .select(
-          "id, min_select, max_select, combo_group_items(child_menu_id, upgrade_price_delta, is_default)"
-        )
-        .eq("menu_id", menuId)
-        .limit(1);
+      const cg = data.comboGroups;
       const grp = cg && cg[0];
       setCombo(
         grp
@@ -212,13 +188,7 @@ export default function AdminOptionsPanel({
   const saveIngredients = async () => {
     setSaving(true);
     try {
-      // clear then insert current config
-      await supabase.from("menu_ingredients").delete().eq("menu_id", menuId);
-      if (ingCfg.length) {
-        await supabase
-          .from("menu_ingredients")
-          .insert(ingCfg.map((r) => ({ menu_id: menuId, ...r })));
-      }
+      await api.post(`/menus/${menuId}/ingredients`, { ingredients: ingCfg });
     } finally {
       setSaving(false);
     }
@@ -262,69 +232,7 @@ export default function AdminOptionsPanel({
   const saveGroups = async () => {
     setSaving(true);
     try {
-      // upsert groups, collect ids
-      const groupIds: string[] = [];
-      for (const gr of groups) {
-        let gid = gr.id;
-        if (!gid) {
-          const { data, error } = await supabase
-            .from("modifier_groups")
-            .insert([
-              {
-                name_en: gr.name_en,
-                name_ar: gr.name_ar ?? null,
-                selection_type: gr.selection_type,
-                min_select: gr.min_select ?? null,
-                max_select: gr.max_select ?? null,
-                required: !!gr.required,
-              },
-            ])
-            .select("id")
-            .single();
-          if (error) throw error;
-          gid = data.id;
-        } else {
-          const { error } = await supabase
-            .from("modifier_groups")
-            .update({
-              name_en: gr.name_en,
-              name_ar: gr.name_ar ?? null,
-              selection_type: gr.selection_type,
-              min_select: gr.min_select ?? null,
-              max_select: gr.max_select ?? null,
-              required: !!gr.required,
-            })
-            .eq("id", gid);
-          if (error) throw error;
-        }
-        groupIds.push(gid!);
-
-        // replace options of this group
-        await supabase.from("modifier_options").delete().eq("group_id", gid);
-        if (gr.options.length) {
-          await supabase.from("modifier_options").insert(
-            gr.options.map((o) => ({
-              group_id: gid,
-              name_en: o.name_en,
-              name_ar: o.name_ar ?? null,
-              price_delta: o.price_delta ?? 0,
-              max_qty: o.max_qty ?? null,
-              is_default: !!o.is_default,
-            }))
-          );
-        }
-      }
-
-      // link menu -> groups (reset and insert)
-      await supabase
-        .from("menu_modifier_groups")
-        .delete()
-        .eq("menu_id", menuId);
-      if (groupIds.length) {
-        await supabase
-          .from("menu_modifier_groups")
-          .insert(groupIds.map((id) => ({ menu_id: menuId, group_id: id })));
-      }
+      await api.post(`/menus/${menuId}/modifiers`, { groups });
     } finally {
       setSaving(false);
     }
@@ -342,45 +250,7 @@ export default function AdminOptionsPanel({
   const saveCombo = async () => {
     setSaving(true);
     try {
-      let groupId = combo.id;
-      if (!groupId) {
-        const { data, error } = await supabase
-          .from("combo_groups")
-          .insert([
-            {
-              menu_id: menuId,
-              min_select: combo.min_select ?? 0,
-              max_select: combo.max_select ?? 1,
-            },
-          ])
-          .select("id")
-          .single();
-        if (error) throw error;
-        groupId = data.id;
-      } else {
-        const { error } = await supabase
-          .from("combo_groups")
-          .update({
-            min_select: combo.min_select ?? 0,
-            max_select: combo.max_select ?? 1,
-          })
-          .eq("id", groupId);
-        if (error) throw error;
-      }
-      // replace items
-      await supabase.from("combo_group_items").delete().eq("group_id", groupId);
-      if (combo.items.length) {
-        await supabase.from("combo_group_items").insert(
-          combo.items
-            .filter((it) => it.child_menu_id)
-            .map((it) => ({
-              group_id: groupId!,
-              child_menu_id: it.child_menu_id,
-              is_default: !!it.is_default,
-              upgrade_price_delta: it.upgrade_price_delta ?? 0,
-            }))
-        );
-      }
+      await api.post(`/menus/${menuId}/combos`, { combo });
     } finally {
       setSaving(false);
     }

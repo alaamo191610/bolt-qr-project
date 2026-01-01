@@ -1,22 +1,23 @@
-'use client';
-
-import React, { useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
-import { Settings } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
-import CurrencySettings from '../components/pricing/CurrencySettings';
-import FeesTaxSettings from '../components/pricing/FeesTaxSettings';
-import PromotionsManager from '../components/pricing/PromotionsManager';
-import ThemeCustomizer from '../components/ThemeCustomizer';
-import { Palette } from 'lucide-react';
+import React, { useMemo, useState, Suspense } from "react";
+import { Settings } from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext";
+import CurrencySettings from "../components/pricing/CurrencySettings";
+import FeesTaxSettings from "../components/pricing/FeesTaxSettings";
+import PromotionsManager from "../components/pricing/PromotionsManager";
+import ThemeCustomizer from "../components/ThemeCustomizer";
+import { Palette } from "lucide-react";
 // ⬅️ your PanelCard component (adjust import path if different)
-import PanelCard from '../components/ui/PanelCard';
-import CollapsiblePanelCard from '../components/ui/CollapsiblePanelCard';
+import PanelCard from "../components/ui/PanelCard";
+import CollapsiblePanelCard from "../components/ui/CollapsiblePanelCard";
 
-import { Tabs, TabList, Tab, TabPanels, TabPanel } from '../components/ui/Tabs';
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from "../components/ui/Tabs";
 // ⬅️ lazy-load client components (avoid SSR issues)
-const OrderWorkflowRules = dynamic(() => import('../components/orders/OrderWorkflowRules'), { ssr: false });
-const KDSSettings = dynamic(() => import('../components/orders/KDSSettings'), { ssr: false });
+const OrderWorkflowRules = React.lazy(
+  () => import("../components/orders/OrderWorkflowRules")
+);
+const KDSSettings = React.lazy(
+  () => import("../components/orders/KDSSettings")
+);
 
 type AdminSettings = {
   restaurant_name: string;
@@ -26,11 +27,11 @@ type AdminSettings = {
 };
 
 const DEFAULTS: AdminSettings = {
-  restaurant_name: 'Bella Vista Restaurant',
-  phone: '+1 (555) 123-4567',
-  address: '123 Main Street, City, State 12345',
+  restaurant_name: "Bella Vista Restaurant",
+  phone: "+1 (555) 123-4567",
+  address: "123 Main Street, City, State 12345",
   description:
-    'Fine dining experience with fresh, locally sourced ingredients and exceptional service.',
+    "Fine dining experience with fresh, locally sourced ingredients and exceptional service.",
 };
 
 type Props = { adminId: string };
@@ -40,12 +41,15 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   const [form, setForm] = useState<AdminSettings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(DEFAULTS), [form]);
+  const dirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(DEFAULTS),
+    [form]
+  );
 
   const onChange =
     <K extends keyof AdminSettings>(key: K) =>
-      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        setForm((prev) => ({ ...prev, [key]: e.target.value }));
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const onSave = async () => {
     try {
@@ -57,7 +61,10 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   };
 
   return (
-    <div className={`space-y-6 ${isRTL ? 'rtl' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div
+      className={`space-y-6 ${isRTL ? "rtl" : ""}`}
+      dir={isRTL ? "rtl" : "ltr"}
+    >
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -66,17 +73,17 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
           </div>
           <div>
             <h2 className="text-2xl font-bold text-slate-900">
-              {t('admin.title') || 'Restaurant Settings'}
+              {t("admin.title") || "Restaurant Settings"}
             </h2>
             <p className="text-slate-600">
-              {t('admin.subtitle') || 'Manage your restaurant information'}
+              {t("admin.subtitle") || "Manage your restaurant information"}
             </p>
           </div>
         </div>
 
         {/* Restaurant Info Form */}
         <CollapsiblePanelCard
-          title={t('admin.infoTitle') || 'Restaurant Information'}
+          title={t("admin.infoTitle") || "Restaurant Information"}
           // description={t('admin.subtitle') || 'Public details shown to guests'}
           actions={
             <div className="flex flex-wrap gap-3">
@@ -87,7 +94,7 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
               >
                 <Palette className="w-4 h-4" />
-                {t('theme.themeCustomize') || 'Customize Theme'}
+                {t("theme.themeCustomize") || "Customize Theme"}
               </button>
             </div>
           }
@@ -101,12 +108,12 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
           >
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                {t('admin.name') || 'Restaurant Name'}
+                {t("admin.name") || "Restaurant Name"}
               </label>
               <input
                 type="text"
                 value={form.restaurant_name}
-                onChange={onChange('restaurant_name')}
+                onChange={onChange("restaurant_name")}
                 required
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
@@ -114,36 +121,36 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                {t('admin.phone') || 'Contact Phone'}
+                {t("admin.phone") || "Contact Phone"}
               </label>
               <input
                 type="tel"
                 value={form.phone}
-                onChange={onChange('phone')}
+                onChange={onChange("phone")}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                {t('admin.address') || 'Address'}
+                {t("admin.address") || "Address"}
               </label>
               <input
                 type="text"
                 value={form.address}
-                onChange={onChange('address')}
+                onChange={onChange("address")}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                {t('admin.description') || 'Description'}
+                {t("admin.description") || "Description"}
               </label>
               <textarea
                 rows={3}
                 value={form.description}
-                onChange={onChange('description')}
+                onChange={onChange("description")}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -155,25 +162,30 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
               className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
               disabled={!dirty || saving}
             >
-              {t('common.reset') || 'Reset'}
+              {t("common.reset") || "Reset"}
             </button>
 
             <button
               type="button"
               onClick={onSave}
               disabled={!dirty || saving}
-              className={`px-4 py-2 text-white rounded-lg ${!dirty || saving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
-                }`}
+              className={`px-4 py-2 text-white rounded-lg ${
+                !dirty || saving
+                  ? "bg-emerald-400 cursor-not-allowed"
+                  : "bg-emerald-600 hover:bg-emerald-700"
+              }`}
             >
-              {saving ? (t('admin.saving') || 'Saving…') : (t('common.save') || 'Save Settings')}
+              {saving
+                ? t("admin.saving") || "Saving…"
+                : t("common.save") || "Save Settings"}
             </button>
           </div>
         </CollapsiblePanelCard>
         <ThemeCustomizer
           open={themeOpen}
           onOpenChange={setThemeOpen}
-          title={t('theme.title') || 'Theme Customizer'}
-          subtitle={t('theme.description') || 'Elegant palettes & refined UI'}
+          title={t("theme.title") || "Theme Customizer"}
+          subtitle={t("theme.description") || "Elegant palettes & refined UI"}
         />
         {/* Tabs for Menu/KDS */}
         <div className="mt-6">
@@ -184,19 +196,30 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             rtl={isRTL}
           >
             <TabList>
-              <Tab value="workflow">{t('admin.orderWorkflow') || 'Order Workflow'}</Tab>
-              <Tab value="pricing">{t('admin.tabs.pricing') || 'Pricing & Currency'}</Tab>
-              <Tab value="promos">{t('admin.tabs.promotions') || 'Promotions'}</Tab>
-              <Tab value="kds">{t('admin.kdsSettings') || 'KDS Settings'}</Tab>
+              <Tab value="workflow">
+                {t("admin.orderWorkflow") || "Order Workflow"}
+              </Tab>
+              <Tab value="pricing">
+                {t("admin.tabs.pricing") || "Pricing & Currency"}
+              </Tab>
+              <Tab value="promos">
+                {t("admin.tabs.promotions") || "Promotions"}
+              </Tab>
+              <Tab value="kds">{t("admin.kdsSettings") || "KDS Settings"}</Tab>
             </TabList>
 
             <TabPanels>
               <TabPanel value="workflow">
                 <PanelCard
-                  title={t('admin.orderWorkflow') || 'Order Workflow Rules'}
-                  description={t('admin.orderWorkflowDesc') || 'Statuses, transitions, and SLAs enforced across the app'}
+                  title={t("admin.orderWorkflow") || "Order Workflow Rules"}
+                  description={
+                    t("admin.orderWorkflowDesc") ||
+                    "Statuses, transitions, and SLAs enforced across the app"
+                  }
                 >
-                  <OrderWorkflowRules adminId={adminId} />
+                  <Suspense fallback={<div>Loading...</div>}>
+                    <OrderWorkflowRules adminId={adminId} />
+                  </Suspense>
                 </PanelCard>
               </TabPanel>
               <TabPanel value="pricing">
@@ -212,10 +235,15 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
 
               <TabPanel value="kds">
                 <PanelCard
-                  title={t('admin.kdsSettings') || 'Kitchen Display Settings'}
-                  description={t('admin.kdsSettingsDesc') || 'Columns, sounds, auto-bump, and visual preferences for KDS'}
+                  title={t("admin.kdsSettings") || "Kitchen Display Settings"}
+                  description={
+                    t("admin.kdsSettingsDesc") ||
+                    "Columns, sounds, auto-bump, and visual preferences for KDS"
+                  }
                 >
-                  <KDSSettings adminId={adminId} />
+                  <Suspense fallback={<div>Loading...</div>}>
+                    <KDSSettings adminId={adminId} />
+                  </Suspense>
                 </PanelCard>
               </TabPanel>
             </TabPanels>

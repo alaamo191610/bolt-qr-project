@@ -388,7 +388,7 @@ const MenuItemCard: React.FC<Props> = ({
     () => ingList.some((i) => (i.extra_price ?? 0) > 0),
     [ingList]
   );
-  const unit = (item.price ?? 0) + extrasTotal; // per one item with extras
+  const unit = (Number(item.price) || 0) + extrasTotal; // per one item with extras
   const qtyForTotal = pendingQty > 0 ? pendingQty : quantity > 0 ? quantity : 1;
 
   const addWithOptions = (rect?: DOMRect) => {
@@ -556,7 +556,7 @@ const MenuItemCard: React.FC<Props> = ({
   return (
     <>
       <div
-        className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-md hover:shadow-lg transition overflow-hidden"
+        className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group h-full"
         role="group"
       >
         {/* Compare chip (top corner) */}
@@ -605,9 +605,9 @@ const MenuItemCard: React.FC<Props> = ({
             }
           }}
         >
-          <div className="flex items-stretch gap-4 p-4">
+          <div className="flex items-start gap-3 sm:gap-5 p-3 sm:p-4 h-full">
             {/* Image */}
-            <div className="shrink-0 w-[128px] h-[128px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative">
+            <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner">
               <img
                 src={item.image_url || FALLBACK_400}
                 srcSet={[
@@ -633,30 +633,30 @@ const MenuItemCard: React.FC<Props> = ({
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 opacity-0"
+                className="absolute inset-0 w-full h-full object-cover transition-all duration-500 opacity-0 group-hover:scale-110"
                 onLoad={(e) => (e.currentTarget.style.opacity = "1")}
               />
             </div>
 
             {/* Content */}
-            <div className="min-w-0 flex-1 flex flex-col">
+            <div className="min-w-0 flex-1 flex flex-col justify-between h-full">
               <div className="min-w-0">
                 <h3
                   dir="auto"
                   lang={isRTL ? "ar" : "en"}
                   style={{ unicodeBidi: "plaintext" as any }}
-                  className="text-[18px] sm:text-[20px] font-bold text-slate-900 dark:text-white truncate"
+                  className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight mb-1 line-clamp-2"
                 >
                   {displayName}
                 </h3>
 
                 {displayDesc ? (
-                  <p className="mt-1 text-slate-500 dark:text-slate-400 text-[12px] leading-snug line-clamp-2">
+                  <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2">
                     {displayDesc}
                   </p>
                 ) : (
                   !!item.ingredients_details?.length && (
-                    <p className="mt-1 text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2">
+                    <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2">
                       {(item.ingredients_details || [])
                         .map(
                           (d) =>
@@ -674,13 +674,13 @@ const MenuItemCard: React.FC<Props> = ({
 
               {/* Footer row item card */}
               <div
-                className={`mt-auto pt-2 flex items-center justify-between ${
+                className={`mt-2 pt-1 flex items-end justify-between ${
                   isRTL ? "flex-row-reverse" : ""
                 }`}
               >
-                <div className="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums">
+                <div className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                   <span className={moneyLoading ? "opacity-0" : ""}>
-                    {fmt(item.price ?? 0)}
+                    {fmt(Number(item.price) || 0)}
                   </span>
                 </div>
 

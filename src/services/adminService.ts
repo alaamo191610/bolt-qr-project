@@ -1,29 +1,18 @@
-import { supabase } from '../lib/supabase';
 import type { Admin } from '../lib/supabase';
 import type { OrderFlowRules, KDSPrefs } from '../order-admin/types';
 import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
-
-/** Resolve admin id from param or current session */
-async function resolveAdminId(maybeId?: string) {
-  if (maybeId) return maybeId;
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) throw error;
-  if (!user?.id) throw new Error('Not authenticated');
-  return user.id;
-}
+import { api } from './api';
 
 export const adminService = {
+  async login(credentials: { email: string; password: string }) {
+    return await api.post('/auth/login', credentials);
+  },
+
   // Get admin profile
   async getAdminProfile(adminId?: string) {
     try {
-      const id = await resolveAdminId(adminId);
-      const { data, error } = await supabase
-        .from('admins')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      if (error) throw error;
-      return data || null;
+      // If adminId is provided, fetch that profile. Otherwise, backend will use the token user.
+      return await api.get('/admin/profile', adminId ? { id: adminId } : {});
     } catch (error) {
       console.error('Error fetching admin profile:', error);
       throw error;
@@ -33,14 +22,8 @@ export const adminService = {
   // Update admin profile
   async updateAdminProfile(adminId: string | undefined, updates: Partial<Admin>) {
     try {
-      const id = await resolveAdminId(adminId);
-      const { data, error } = await supabase
-        .from('admins')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
+      const id = adminId || (await api.get('/admin/profile')).id; // Get self if no ID
+      const data = await api.put('/admin/profile', { id, ...updates });
       return data;
     } catch (error) {
       console.error('Error updating admin profile:', error);
@@ -51,14 +34,8 @@ export const adminService = {
   // Update admin language preference
   async updateAdminLanguage(adminId: string | undefined, language: 'en' | 'ar') {
     try {
-      const id = await resolveAdminId(adminId);
-      const { data, error } = await supabase
-        .from('admins')
-        .update({ preferred_language: language })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
+      const id = adminId || (await api.get('/admin/profile')).id;
+      const data = await api.put('/admin/profile', { id, preferred_language: language });
       return data;
     } catch (error) {
       console.error('Error updating admin language:', error);
@@ -69,28 +46,8 @@ export const adminService = {
   // Get restaurant analytics
   async getAnalytics(adminId: string | undefined, days: number = 30) {
     try {
-      const id = await resolveAdminId(adminId);
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-
-      const { data: orders, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            quantity,
-            price_at_order,
-            menus (
-              name_en,
-              name_ar
-            )
-          )
-        `)
-        .eq('admin_id', id)
-        .gte('created_at', startDate.toISOString())
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const id = adminId || (await api.get('/admin/profile')).id;
+      const orders = await api.get('/admin/analytics', { adminId: id, days: String(days) });
 
       const totalRevenue = orders?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
       const totalOrders = orders?.length || 0;
@@ -124,88 +81,76 @@ export const adminService = {
 
   // -------- Order workflow & KDS --------
   async getAdminSettings(adminId?: string) {
-    const id = await resolveAdminId(adminId);
-    const { data, error } = await supabase
-      .from('admins')
-      .select('id, order_rules, kds_prefs')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw error;
-    return data as { id: string; order_rules: OrderFlowRules; kds_prefs: KDSPrefs } | null;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    return await api.get('/admin/settings', { id });
   },
 
   async saveOrderRules(adminId: string | undefined, order_rules: OrderFlowRules) {
-    const id = await resolveAdminId(adminId);
-    const { error } = await supabase.from('admins').update({ order_rules }).eq('id', id);
-    if (error) throw error;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    await api.post('/admin/settings/order-rules', { id, order_rules }); // Changed to POST/PUT in backend
   },
 
   async saveKDSPrefs(adminId: string | undefined, kds_prefs: KDSPrefs) {
-    const id = await resolveAdminId(adminId);
-    const { error } = await supabase.from('admins').update({ kds_prefs }).eq('id', id);
-    if (error) throw error;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    await api.post('/admin/settings/kds-prefs', { id, kds_prefs });
   },
 
   // -------- Pricing / Billing --------
   async getAdminMonetarySettings(adminId?: string) {
-    const id = await resolveAdminId(adminId);
-    const { data, error } = await supabase
-      .from('admins')
-      .select('id, pricing_prefs, billing_settings')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw error;
-    return data as {
-      id: string;
-      pricing_prefs: PricingPrefs | null;
-      billing_settings: BillingSettings | null;
-    } | null;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    return await api.get('/admin/monetary', { adminId: id });
   },
 
   async savePricingPrefs(adminId: string | undefined, pricing_prefs: PricingPrefs) {
-    const id = await resolveAdminId(adminId);
-    const { error } = await supabase.from('admins').update({ pricing_prefs }).eq('id', id);
-    if (error) throw error;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    await api.put('/admin/pricing', { id, pricing_prefs });
   },
 
   async saveBillingSettings(adminId: string | undefined, billing_settings: BillingSettings) {
-    const id = await resolveAdminId(adminId);
-    const { error } = await supabase.from('admins').update({ billing_settings }).eq('id', id);
-    if (error) throw error;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    await api.put('/admin/billing', { id, billing_settings });
   },
 
   // -------- Promotions --------
   async listPromotions(adminId?: string): Promise<Promotion[]> {
-    const id = await resolveAdminId(adminId);
-    const { data, error } = await supabase
-      .from('promotions')
-      .select('*')
-      .eq('admin_id', id)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
+    const id = adminId || (await api.get('/admin/profile')).id;
+    const data = await api.get('/promotions', { adminId: id });
     return (data || []) as Promotion[];
   },
 
   async upsertPromotion(promo: Promotion, adminId?: string): Promise<Promotion> {
-    const id = await resolveAdminId(adminId ?? promo.admin_id);
+    const id = adminId || (await api.get('/admin/profile')).id;
     const payload = { ...promo, admin_id: id };
-    const { data, error } = await supabase
-      .from('promotions')
-      .upsert(payload)
-      .select()
-      .single();
-    if (error) throw error;
+    const data = await api.post('/promotions', payload);
     return data as Promotion;
   },
 
   async setPromotionActive(adminId: string | undefined, id: string, active: boolean) {
-    const owner = await resolveAdminId(adminId);
-    const { error } = await supabase
-      .from('promotions')
-      .update({ active })
-      .eq('admin_id', owner)
-      .eq('id', id);
-    if (error) throw error;
+    // We don't strictly need adminId here if the backend checks ownership, 
+    // but for now we just pass the ID to the endpoint
+    await api.put(`/promotions/${id}/active`, { active });
+  },
+
+  // -------- User Management --------
+  async getAllAdmins() {
+    try {
+      return await api.get('/admins');
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+      throw error;
+    }
+  },
+
+  async createAdmin(data: {
+    email: string;
+    password?: string;
+    restaurant_name: string;
+  }) {
+    return await api.post('/admins', data);
+  },
+
+  async deleteAdmin(id: string) {
+    return await api.delete(`/admins/${id}`);
   },
 };
 
@@ -218,22 +163,13 @@ export type AdminThemeRow = {
 };
 
 export async function fetchAdminTheme(): Promise<AdminThemeRow> {
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) throw authErr;
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('admins')
-    .select('theme, theme_mode, theme_color')
-    .eq('id', user.id)
-    .single();
-
-  if (error) throw error;
+  const id = (await api.get('/admin/profile')).id;
+  const data = await api.get('/admin/profile', { id });
 
   return {
-    theme: (data as any)?.theme ?? null,
-    theme_mode: (data as any)?.theme_mode ?? null,
-    theme_color: (data as any)?.theme_color ?? null,
+    theme: data?.theme ?? null,
+    theme_mode: data?.theme_mode ?? null,
+    theme_color: data?.theme_color ?? null,
   };
 }
 
@@ -241,18 +177,12 @@ export async function updateAdminTheme(patch: {
   theme?: { primary: string; secondary: string; accent: string };
   theme_mode?: 'light' | 'dark' | 'system';
 }) {
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) throw authErr;
-  if (!user) throw new Error('Not authenticated');
+  const id = (await api.get('/admin/profile')).id;
+  const data = await api.put('/admin/theme', { id, ...patch });
 
-  const { data, error } = await supabase
-    .from('admins')
-    .update(patch)
-    .eq('id', user.id)
-    .select('theme, theme_mode, theme_color')
-    .single();
-
-  if (error) throw error;
-
-  return data as AdminThemeRow;
+  return {
+    theme: data?.theme ?? null,
+    theme_mode: data?.theme_mode ?? null,
+    theme_color: data?.theme_color ?? null,
+  };
 }

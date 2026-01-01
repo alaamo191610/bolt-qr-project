@@ -1,5 +1,5 @@
 // orderService.ts
-import { supabase } from '../lib/supabase'
+import { api } from './api'
 
 // ---------------- Types (kept compatible) ----------------
 type IngredientAction = 'no' | 'normal' | 'extra'
@@ -122,24 +122,12 @@ export const orderService = {
         }
       })
     
-      // Invoke Edge Function (does validation + pricing + inserts server-side)
-      const { data, error } = await supabase.functions.invoke('super-action', {
-        body: {
-          tableCode: orderData.table_code,
-          adminId: orderData.admin_id,  // optional (function can infer from table)
-          items,
-          // orderNote: orderData.note,  // add to the function if you want orders.note saved
-        },
-      })
-      if (error) {
-        console.error('status', error.status);
-        console.error('message', error.message);
-        console.error('context', error.context);    // <-- JSON from the function
-        throw error;
-      }
-
-      // data -> { order_id, total, items }
-      return data
+      // Call Backend API instead of Edge Function
+      return await api.post('/orders', {
+        tableCode: orderData.table_code,
+        adminId: orderData.admin_id,
+        items,
+      });
     } catch (error:any) {
       console.error('invoke failed:', error?.message, error?.context);
       throw error
@@ -149,30 +137,16 @@ export const orderService = {
   // Get orders for admin (raw, with nested menus; unchanged columns)
   async getOrders(adminId: string, status?: string) {
     try {
-      let query = supabase
-        .from('orders')
-        .select(`
-          id,
-          order_number,
-          total,
-          status,
-          created_at,
-          table:tables ( id, code ),
-          order_items (
-            quantity,
-            price_at_order,
-            note,
-            menus ( name_en, price )
-          )
-        `)
-        .eq('admin_id', adminId)
-        .order('created_at', { ascending: false })
-
-      if (status) query = query.eq('status', status)
-
-      const { data, error } = await query
-      if (error) throw error
-      return data || []
+      const orders = await api.get('/orders', { adminId, status });
+      return (orders || []).map((o: any) => ({
+        ...o,
+        total: Number(o.total) || 0,
+        order_items: (o.order_items || []).map((oi: any) => ({
+          ...oi,
+          price_at_order: Number(oi.price_at_order) || 0,
+          menus: oi.menus ? { ...oi.menus, price: Number(oi.menus.price) || 0 } : null
+        }))
+      }));
     } catch (error) {
       console.error('Error fetching orders:', error)
       throw error
@@ -181,25 +155,13 @@ export const orderService = {
 
   // Cleaned, mapped shape for Analytics (unit price already includes extras)
   async getOrdersForAnalytics(adminId: string): Promise<AnalyticsOrder[]> {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        id, table_id, status, total, created_at,
-        order_items (
-          id, quantity, price_at_order, created_at,
-          menus ( id, name_en, name_ar )
-        )
-      `)
-      .eq('admin_id', adminId)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-
+    // Reuse the getOrders API or create a specific analytics endpoint
+    const data = await api.get('/orders', { adminId });
     return (data ?? []).map((o: any) => ({
       id: o.id,
       tableNumber: o.table_id, // join tables for code if you want the code instead of id
       status: o.status ?? 'pending',
-      total: o.total ?? 0,
+      total: Number(o.total) || 0,
       timestamp: new Date(o.created_at),
       items: (o.order_items ?? []).map((oi: any) => {
         const m = oi.menus
@@ -208,7 +170,7 @@ export const orderService = {
           name_en: m?.name_en ?? undefined,
           name_ar: m?.name_ar ?? undefined,
           name: m?.name_en ?? undefined, // legacy fallback
-          price: oi.price_at_order || 0, // ✅ already includes any extras
+          price: Number(oi.price_at_order) || 0, // ✅ already includes any extras
           quantity: oi.quantity,
         } as AnalyticsOrderItem
       }),
@@ -218,22 +180,13 @@ export const orderService = {
   // Update order status (same behavior)
   async updateOrderStatus(orderId: string, status: string) {
     try {
-      const updates: any = {
-        status,
-        status_updated_at: new Date().toISOString(),
-      }
-      if (status === 'preparing') updates.preparing_at = new Date().toISOString()
-      else if (status === 'completed') updates.completed_at = new Date().toISOString()
-      else if (status === 'cancelled') updates.cancelled_at = new Date().toISOString()
-
-      const { data, error } = await supabase
-        .from('orders')
-        .update(updates)
-        .eq('id', orderId)
-        .select()
-        .single()
-      if (error) throw error
-      return data
+      // Implement PUT /api/orders/:id/status in backend
+      const res = await fetch(`http://localhost:3000/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      return await res.json();
     } catch (error) {
       console.error('Error updating order status:', error)
       throw error
@@ -243,19 +196,7 @@ export const orderService = {
   // Get order by ID (raw)
   async getOrderById(orderId: string) {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            menus ( id, name_en, name_ar, price, image_url )
-          )
-        `)
-        .eq('id', orderId)
-        .single()
-      if (error) throw error
-      return data
+      return await api.get(`/orders/${orderId}`);
     } catch (error) {
       console.error('Error fetching order:', error)
       throw error

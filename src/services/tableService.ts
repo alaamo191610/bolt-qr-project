@@ -1,18 +1,11 @@
-import { supabase } from '../lib/supabase'
 import type { Table } from '../lib/supabase'
+import { api } from './api'
 
 export const tableService = {
   // Get all tables for admin
   async getTables(adminId: string) {
     try {
-      const { data, error } = await supabase
-        .from('tables')
-        .select('*')
-        .eq('admin_id', adminId)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
-      return data || []
+      return await api.get('/tables', { adminId });
     } catch (error) {
       console.error('Error fetching tables:', error)
       throw error
@@ -22,20 +15,8 @@ export const tableService = {
   // Add new table
   async addTable(table: Omit<Table, 'id' | 'created_at'>) {
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-      
-      // Add admin_id to the table
-      const tableWithAdmin = { ...table, admin_id: user.id }
-      
-      const { data, error } = await supabase
-        .from('tables')
-        .insert([tableWithAdmin])
-        .select()
-
-      if (error) throw error
-      return data?.[0] || null
+      // Backend will get admin_id from the token
+      return await api.post('/tables', table);
     } catch (error) {
       console.error('Error adding table:', error)
       throw error
@@ -45,14 +26,13 @@ export const tableService = {
   // Update table
   async updateTable(id: string, updates: Partial<Table>) {
     try {
-      const { data, error } = await supabase
-        .from('tables')
-        .update(updates)
-        .eq('id', id)
-        .select()
-
-      if (error) throw error
-      return data?.[0] || null
+      const res = await fetch(`http://localhost:3000/api/tables/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (!res.ok) throw new Error('Failed to update table');
+      return await res.json();
     } catch (error) {
       console.error('Error updating table:', error)
       throw error
@@ -62,14 +42,9 @@ export const tableService = {
   // Delete table
   async deleteTable(id: string) {
     try {
-      const { data, error } = await supabase
-        .from('tables')
-        .delete()
-        .eq('id', id)
-        .select()
-
-      if (error) throw error
-      return data?.[0] || null
+      const res = await fetch(`http://localhost:3000/api/tables/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete table');
+      return await res.json();
     } catch (error) {
       console.error('Error deleting table:', error)
       throw error
@@ -79,13 +54,7 @@ export const tableService = {
   // Get table by code
   async getTableByCode(code: string) {
     try {
-      const { data, error } = await supabase
-        .from('tables')
-        .select('*')
-        .eq('code', code)
-
-      if (error) throw error
-      return data?.[0] || null
+      return await api.get(`/tables/public/${code}`);
     } catch (error) {
       console.error('Error fetching table by code:', error)
       throw error

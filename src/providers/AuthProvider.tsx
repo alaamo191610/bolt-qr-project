@@ -1,15 +1,20 @@
 // src/providers/AuthProvider.tsx
 import React from "react";
-import type { User } from "@supabase/supabase-js";
-import { supabase } from "../lib/supabase";
 import { adminService } from "../services/adminService";
+import { api } from "../services/api";
+
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+}
 
 type AuthCtxType = {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string) => Promise<any>;
-  signOut: () => Promise<{ error: any | null }>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AuthCtx = React.createContext<AuthCtxType>({
@@ -17,7 +22,7 @@ const AuthCtx = React.createContext<AuthCtxType>({
   loading: true,
   signIn: async () => {},
   signUp: async () => {},
-  signOut: async () => ({ error: null }),
+  signOut: async () => {},
 });
 
 export const useAuth = () => React.useContext(AuthCtx);
@@ -26,106 +31,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [loading, setLoading] = React.useState(true);
 
-  // keep only ONE subscription; guard duplicate work in StrictMode
-  const hasInitRef = React.useRef(false);
-  const langLoadedForRef = React.useRef<string | null>(null);
-  const inflightLangRef = React.useRef<Promise<void> | null>(null);
+  const initAuth = async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Fetch profile using the token to validate session and get user info
+      const profile = await api.get("/admin/profile");
+      if (profile) {
+        setUser({
+          id: profile.id,
+          email: profile.email,
+          name: profile.restaurant_name,
+        });
+
+        // Handle language preference
+        const pref = profile.preferred_language;
+        if (pref) {
+          const saved = localStorage.getItem("restaurant-language");
+          if (saved !== pref) {
+            localStorage.setItem("restaurant-language", pref);
+            window.dispatchEvent(
+              new CustomEvent("admin-language-loaded", {
+                detail: { language: pref },
+              })
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Session restoration failed:", error);
+      localStorage.removeItem("auth_token");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   React.useEffect(() => {
-    if (hasInitRef.current) return;
-    hasInitRef.current = true;
-
-    const loadLangOnce = (uid: string) => {
-      if (!uid) return;
-      if (langLoadedForRef.current === uid && !import.meta.env.DEV) return;
-      // dedupe in-flight
-      if (inflightLangRef.current) return;
-      inflightLangRef.current = (async () => {
-        try {
-          const adminProfile = await adminService.getAdminProfile(uid);
-          const pref = adminProfile?.preferred_language;
-          if (pref) {
-            const saved = localStorage.getItem("restaurant-language");
-            if (saved !== pref) {
-              localStorage.setItem("restaurant-language", pref);
-              window.dispatchEvent(
-                new CustomEvent("admin-language-loaded", {
-                  detail: { language: pref },
-                })
-              );
-            }
-          }
-          langLoadedForRef.current = uid;
-        } catch (e) {
-          console.error("load admin language failed:", e);
-        } finally {
-          inflightLangRef.current = null;
-        }
-      })();
-    };
-
-    // initial session
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user ?? null;
-      setUser(u);
-      if (u) loadLangOnce(u.id);
-      setLoading(false);
-    });
-
-    // subscribe to changes ONCE
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (event === "SIGNED_IN" && u) loadLangOnce(u.id);
-      if (event !== "TOKEN_REFRESHED") setLoading(false);
-    });
-
-    return () => {
-      sub.subscription.unsubscribe();
-    };
+    initAuth();
   }, []);
 
   // methods
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { data, error };
+    try {
+      const { token, user: authUser } = await adminService.login({
+        email,
+        password,
+      });
+      localStorage.setItem("auth_token", token);
+      setUser({
+        id: authUser.id,
+        email: authUser.email,
+        name: authUser.name,
+      });
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw error;
+    }
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: undefined },
-    });
-
-    if (data.user && !error) {
-      const { error: profileError } = await supabase.from("admins").insert([
-        {
-          id: data.user.id,
-          email: data.user.email,
-          name: email.split("@")[0],
-          preferred_language: "en",
-        },
-      ]);
-      if (profileError)
-        console.error("Error creating admin profile:", profileError);
+    try {
+      // Try to create the first admin (backend will block if admins already exist)
+      await adminService.createAdmin({
+        email,
+        password,
+        restaurant_name: email.split("@")[0],
+      });
+      // Auto login after sign up
+      await signIn(email, password);
+    } catch (error: any) {
+      console.error("Signup failed:", error);
+      throw new Error(
+        error.message ||
+          "Registration failed. If an admin already exists, please log in."
+      );
     }
-    return { data, error };
   };
 
   const signOut = async () => {
+    localStorage.removeItem("auth_token");
     sessionStorage.clear();
-    const { error } = await supabase.auth.signOut();
-    if (
-      error &&
-      error.message === "Session from session_id claim in JWT does not exist"
-    ) {
-      return { error: null };
-    }
-    return { error };
+    setUser(null);
   };
 
   return (
