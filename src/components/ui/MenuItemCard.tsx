@@ -10,6 +10,7 @@ import CompareChip from "./CompareChip";
 import CustomerItemModal from "../../components/CustomerItemModal";
 import { useAdminMonetary } from "../../hooks/useAdminMonetary";
 import { formatPrice } from "../../pricing/usePrice";
+import { MenuBadgeStack } from "./MenuBadge";
 
 // Local copy of the customizer payload type
 type CartLine = {
@@ -53,6 +54,11 @@ export interface MenuItem {
   ingredients_details?: { ingredient: Ingredient }[];
   categories?: { id: string; name_en: string; name_ar: string };
 
+  // 🆕 UX Enhancement Fields
+  tags?: string[]; // ["spicy", "vegan", "best_seller", "new", "popular"]
+  is_featured?: boolean; // For stories section
+  has_modifiers?: boolean; // Quick-add eligibility
+
   // optional/legacy
   modifiers?: Modifier[];
   selected_modifiers?: string[];
@@ -82,19 +88,19 @@ function track(name: string, props?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   try {
     (window as any).dataLayer?.push({ event: name, ...props });
-  } catch {}
+  } catch { }
   try {
     window.dispatchEvent(
       new CustomEvent("analytics:event", { detail: { name, props } })
     );
-  } catch {}
+  } catch { }
 }
 
 /* ---------- small motion helpers ---------- */
 function onAnimationFinish(a: Animation) {
   const f = (a as any).finished as Promise<Animation> | undefined;
   return (
-    f?.then(() => {}) ??
+    f?.then(() => { }) ??
     new Promise<void>((r) =>
       a.addEventListener("finish", () => r(), { once: true })
     )
@@ -185,16 +191,14 @@ async function flyToHeaderFromRect(
     [
       { transform: "translate(0,0) scale(1)", opacity: 1, offset: 0 },
       {
-        transform: `translate(${midX - startX}px, ${
-          midY - startY
-        }px) scale(0.9)`,
+        transform: `translate(${midX - startX}px, ${midY - startY
+          }px) scale(0.9)`,
         opacity: 0.9,
         offset: 0.55,
       },
       {
-        transform: `translate(${endX - startX}px, ${
-          endY - startY
-        }px) scale(0.66)`,
+        transform: `translate(${endX - startX}px, ${endY - startY
+          }px) scale(0.66)`,
         opacity: 0.2,
         offset: 1,
       },
@@ -219,23 +223,20 @@ const CompareIconVS: React.FC<{ className?: string; active?: boolean }> = ({
   >
     <span className="flex gap-0.5">
       <span
-        className={`w-3.5 h-3.5 rounded-[3px] ${
-          active ? "bg-white/90" : "bg-slate-500/80 dark:bg-slate-400/80"
-        }`}
+        className={`w-3.5 h-3.5 rounded-[3px] ${active ? "bg-white/90" : "bg-slate-500/80 dark:bg-slate-400/80"
+          }`}
       />
       <span
-        className={`w-3.5 h-3.5 rounded-[3px] ${
-          active ? "bg-white/70" : "bg-slate-400/70 dark:bg-slate-500/70"
-        }`}
+        className={`w-3.5 h-3.5 rounded-[3px] ${active ? "bg-white/70" : "bg-slate-400/70 dark:bg-slate-500/70"
+          }`}
       />
     </span>
     <span
       aria-hidden="true"
-      className={`absolute -bottom-1 -right-2 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-extrabold ${
-        active
-          ? "bg-white text-emerald-600"
-          : "bg-emerald-600 text-white dark:bg-emerald-500"
-      }`}
+      className={`absolute -bottom-1 -right-2 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-extrabold ${active
+        ? "bg-white text-emerald-600"
+        : "bg-emerald-600 text-white dark:bg-emerald-500"
+        }`}
       style={{ lineHeight: 1 }}
     >
       VS
@@ -388,7 +389,7 @@ const MenuItemCard: React.FC<Props> = ({
     () => ingList.some((i) => (i.extra_price ?? 0) > 0),
     [ingList]
   );
-  const unit = (item.price ?? 0) + extrasTotal; // per one item with extras
+  const unit = (Number(item.price) || 0) + extrasTotal; // per one item with extras
   const qtyForTotal = pendingQty > 0 ? pendingQty : quantity > 0 ? quantity : 1;
 
   const addWithOptions = (rect?: DOMRect) => {
@@ -556,7 +557,7 @@ const MenuItemCard: React.FC<Props> = ({
   return (
     <>
       <div
-        className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-md hover:shadow-lg transition overflow-hidden"
+        className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group h-full"
         role="group"
       >
         {/* Compare chip (top corner) */}
@@ -605,9 +606,9 @@ const MenuItemCard: React.FC<Props> = ({
             }
           }}
         >
-          <div className="flex items-stretch gap-4 p-4">
+          <div className="flex items-start gap-3 sm:gap-5 p-3 sm:p-4 h-full">
             {/* Image */}
-            <div className="shrink-0 w-[128px] h-[128px] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative">
+            <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner">
               <img
                 src={item.image_url || FALLBACK_400}
                 srcSet={[
@@ -633,30 +634,52 @@ const MenuItemCard: React.FC<Props> = ({
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 opacity-0"
+                className="absolute inset-0 w-full h-full object-cover transition-all duration-500 opacity-0 group-hover:scale-110"
                 onLoad={(e) => (e.currentTarget.style.opacity = "1")}
               />
+
+              {/* Badges Overlay */}
+              {item.tags && item.tags.length > 0 && (
+                <div className="absolute top-1.5 left-1.5 z-10">
+                  <MenuBadgeStack tags={item.tags} maxVisible={2} />
+                </div>
+              )}
+
+              {/* Quick-Add Button (only for simple items) */}
+              {isAvailable && !item.has_modifiers && quantity === 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlus(e as any);
+                  }}
+                  className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-white dark:bg-slate-800 shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 z-10"
+                  aria-label={tt("menu.quickAdd", "Quick add")}
+                  title={tt("menu.quickAdd", "Quick add")}
+                >
+                  <Plus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                </button>
+              )}
             </div>
 
             {/* Content */}
-            <div className="min-w-0 flex-1 flex flex-col">
+            <div className="min-w-0 flex-1 flex flex-col justify-between h-full">
               <div className="min-w-0">
                 <h3
                   dir="auto"
                   lang={isRTL ? "ar" : "en"}
                   style={{ unicodeBidi: "plaintext" as any }}
-                  className="text-[18px] sm:text-[20px] font-bold text-slate-900 dark:text-white truncate"
+                  className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight mb-1 line-clamp-2"
                 >
                   {displayName}
                 </h3>
 
                 {displayDesc ? (
-                  <p className="mt-1 text-slate-500 dark:text-slate-400 text-[12px] leading-snug line-clamp-2">
+                  <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2">
                     {displayDesc}
                   </p>
                 ) : (
                   !!item.ingredients_details?.length && (
-                    <p className="mt-1 text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2">
+                    <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2">
                       {(item.ingredients_details || [])
                         .map(
                           (d) =>
@@ -674,21 +697,19 @@ const MenuItemCard: React.FC<Props> = ({
 
               {/* Footer row item card */}
               <div
-                className={`mt-auto pt-2 flex items-center justify-between ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`mt-2 pt-1 flex items-end justify-between ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
-                <div className="text-[12px] font-bold text-slate-900 dark:text-white tabular-nums">
+                <div className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                   <span className={moneyLoading ? "opacity-0" : ""}>
-                    {fmt(item.price ?? 0)}
+                    {fmt(Number(item.price) || 0)}
                   </span>
                 </div>
 
                 {quantity > 0 ? (
                   <div
-                    className={`flex items-center ${
-                      isRTL ? "flex-row-reverse" : ""
-                    }`}
+                    className={`flex items-center ${isRTL ? "flex-row-reverse" : ""
+                      }`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
@@ -710,11 +731,10 @@ const MenuItemCard: React.FC<Props> = ({
                     <button
                       onClick={onPlus}
                       disabled={!isAvailable}
-                      className={`w-8 h-8 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${
-                        isAvailable
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                          : "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
-                      }`}
+                      className={`w-8 h-8 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
+                        }`}
                       style={{
                         background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                       }}
@@ -728,11 +748,10 @@ const MenuItemCard: React.FC<Props> = ({
                     <button
                       onClick={onPlus}
                       disabled={!isAvailable}
-                      className={`w-10 h-10 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${
-                        isAvailable
-                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-95"
-                          : "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
-                      }`}
+                      className={`w-10 h-10 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-95"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
+                        }`}
                       style={{
                         background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                       }}
@@ -842,9 +861,8 @@ const MenuItemCard: React.FC<Props> = ({
 
                 {displayDesc && (
                   <div
-                    className={`mt-3 rounded-lg bg-slate-50 dark:bg-slate-700/40 p-3 ${
-                      isRTL ? "text-right" : ""
-                    }`}
+                    className={`mt-3 rounded-lg bg-slate-50 dark:bg-slate-700/40 p-3 ${isRTL ? "text-right" : ""
+                      }`}
                   >
                     <p
                       dir="auto"
@@ -861,19 +879,17 @@ const MenuItemCard: React.FC<Props> = ({
               {/* Tabs + quick actions */}
               <div className="row-start-3 row-end-4 border-t border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-800 z-[85]">
                 <div
-                  className={`px-4 pt-3 pb-2 flex ${
-                    isRTL ? "flex-row-reverse" : ""
-                  } items-center gap-2`}
+                  className={`px-4 pt-3 pb-2 flex ${isRTL ? "flex-row-reverse" : ""
+                    } items-center gap-2`}
                 >
                   {(["ingredients", "notes"] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                        activeTab === tab
-                          ? "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
-                          : "text-slate-600 dark:text-slate-300"
-                      }`}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${activeTab === tab
+                        ? "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
+                        : "text-slate-600 dark:text-slate-300"
+                        }`}
                       aria-pressed={activeTab === tab}
                     >
                       {tab === "ingredients"
@@ -883,9 +899,8 @@ const MenuItemCard: React.FC<Props> = ({
                   ))}
                   {activeTab === "ingredients" && (
                     <span
-                      className={`${
-                        isRTL ? "mr-auto" : "ml-auto"
-                      } text-xs text-slate-500`}
+                      className={`${isRTL ? "mr-auto" : "ml-auto"
+                        } text-xs text-slate-500`}
                     >
                       {tt("pricing.extras", "Extras")}:{" "}
                       <strong className="tabular-nums">
@@ -899,9 +914,8 @@ const MenuItemCard: React.FC<Props> = ({
 
                 {activeTab === "ingredients" && (
                   <div
-                    className={`px-4 pb-3 flex flex-nowrap items-center gap-2 ${
-                      isRTL ? "flex-row-reverse" : ""
-                    } overflow-x-auto whitespace-nowrap`}
+                    className={`px-4 pb-3 flex flex-nowrap items-center gap-2 ${isRTL ? "flex-row-reverse" : ""
+                      } overflow-x-auto whitespace-nowrap`}
                   >
                     <button
                       onClick={() => {
@@ -940,8 +954,8 @@ const MenuItemCard: React.FC<Props> = ({
                           {};
                         ingList.forEach(
                           (i) =>
-                            (next[i.id] =
-                              (i.extra_price ?? 0) > 0 ? "extra" : "normal")
+                          (next[i.id] =
+                            (i.extra_price ?? 0) > 0 ? "extra" : "normal")
                         );
                         setIngChoice(next);
                         track("customize_quick_extra_all", {
@@ -949,11 +963,10 @@ const MenuItemCard: React.FC<Props> = ({
                         });
                       }}
                       disabled={!anyPaidExtra}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs ${
-                        anyPaidExtra
-                          ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
-                          : "bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
-                      }`}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs ${anyPaidExtra
+                        ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+                        : "bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
+                        }`}
                     >
                       <Star className="w-3.5 h-3.5" />{" "}
                       {tt(
@@ -1005,9 +1018,8 @@ const MenuItemCard: React.FC<Props> = ({
                             aria-label={isRTL ? ing.name_ar : ing.name_en}
                           >
                             <div
-                              className={`flex items-center ${
-                                isRTL ? "flex-row-reverse" : ""
-                              } gap-3`}
+                              className={`flex items-center ${isRTL ? "flex-row-reverse" : ""
+                                } gap-3`}
                             >
                               <label className="flex items-center gap-2 cursor-pointer flex-1">
                                 <input
@@ -1036,8 +1048,8 @@ const MenuItemCard: React.FC<Props> = ({
                                     checked && choice === "extra"
                                       ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700"
                                       : checked
-                                      ? "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600"
-                                      : "bg-slate-100 text-slate-400 border-slate-300 dark:bg-slate-700 dark:text-slate-500 dark:border-slate-600 cursor-not-allowed",
+                                        ? "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600"
+                                        : "bg-slate-100 text-slate-400 border-slate-300 dark:bg-slate-700 dark:text-slate-500 dark:border-slate-600 cursor-not-allowed",
                                   ].join(" ")}
                                   aria-pressed={checked && choice === "extra"}
                                 >
@@ -1158,13 +1170,13 @@ const MenuItemCard: React.FC<Props> = ({
                         if (quantity === 0) {
                           try {
                             await Promise.resolve(addWithOptions(rect));
-                          } catch {}
+                          } catch { }
                           return;
                         }
                         // Otherwise, confirm the pending +/- changes
                         try {
                           await commitPending(rect);
-                        } catch {}
+                        } catch { }
                       }}
                       className="rounded-xl btn-primary text-white py-3 px-6 font-semibold shadow-lg active:scale-[.99] transition
                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"

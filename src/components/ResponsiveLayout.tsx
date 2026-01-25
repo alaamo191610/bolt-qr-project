@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { Menu, X, Search, User } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";

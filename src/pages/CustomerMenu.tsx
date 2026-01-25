@@ -22,6 +22,7 @@ import CategoryFilter from "../components/ui/CategoryFilter";
 import MenuGrid from "../components/ui/MenuGrid";
 import OrderConfirmation from "../components/ui/OrderConfirmation";
 import CompareSheet from "../components/ui/CompareSheet"; // 🆕 compare modal
+import StoriesSection from "../components/ui/StoriesSection"; // 🆕 stories
 import { HeaderCartPopover } from "../components/ui/Popover";
 import toast from "react-hot-toast";
 import { useAdminMonetary } from "../hooks/useAdminMonetary";
@@ -51,6 +52,11 @@ export interface MenuItem {
   category_id?: string;
   ingredients_details?: { ingredient: Ingredient }[];
   categories?: { id: string; name_en: string; name_ar: string };
+
+  // 🆕 UX Enhancement Fields
+  tags?: string[]; // ["spicy", "vegan", "best_seller", "new", "popular"]
+  is_featured?: boolean; // For stories section
+  has_modifiers?: boolean; // Quick-add eligibility
 }
 interface CartItem extends MenuItem {
   quantity: number;
@@ -63,7 +69,7 @@ const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
-  const { prefs, loading: moneyLoading } = useAdminMonetary(); // adminId optional
+  const { prefs, restaurantName, logoUrl, loading: moneyLoading } = useAdminMonetary(); // 🆕 Get branding
   // near top
   const didInitRef = useRef(false);
 
@@ -109,9 +115,8 @@ const CustomerMenu: React.FC = () => {
     toast.custom(
       (t) => (
         <div
-          className={`${
-            t.visible ? "animate-enter" : "animate-leave"
-          } bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg rounded-xl px-4 py-3 flex items-center gap-3`}
+          className={`${t.visible ? "animate-enter" : "animate-leave"
+            } bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg rounded-xl px-4 py-3 flex items-center gap-3`}
         >
           <span className="text-sm text-slate-700 dark:text-slate-200">
             {isRTL ? "تم تفريغ السلة" : "Cart cleared"}
@@ -322,6 +327,11 @@ const CustomerMenu: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // derived: featured items for stories
+  const featuredItems = useMemo(() => {
+    return menuItems.filter(item => item.is_featured && item.available !== false).slice(0, 8); // Max 8 stories
+  }, [menuItems]);
 
   // derived: filtered items
   const filteredItems = useMemo(() => {
@@ -628,23 +638,40 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${
-        isRTL ? "rtl" : "ltr"
-      }`}
+      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${isRTL ? "rtl" : "ltr"
+        }`}
     >
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            {/* left: title & meta */}
+            {/* left: logo + title & meta */}
             <div className="animate-fade-in">
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                {t("restaurant.name")}
-              </h1>
+              <div className="flex items-center gap-3 mb-1">
+                {/* Restaurant Logo or Icon */}
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={restaurantName || "Restaurant"}
+                    className="h-12 w-12 object-cover rounded-lg shadow-md"
+                  />
+                ) : (
+                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md">
+                    <span className="text-2xl font-bold text-white">
+                      {restaurantName?.charAt(0)?.toUpperCase() || "Q"}
+                    </span>
+                  </div>
+                )}
+
+                {/* Restaurant Name */}
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {restaurantName || t("restaurant.name")}
+                </h1>
+              </div>
+
               <div
-                className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`flex items-center text-sm text-slate-600 dark:text-slate-400 gap-4 ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
                 <div className="flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
@@ -675,9 +702,8 @@ const CustomerMenu: React.FC = () => {
                 </span>
                 {totalItems > 0 && (
                   <span
-                    className={`absolute -top-2 ${
-                      isRTL ? "-left-2" : "-right-2"
-                    } bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}
+                    className={`absolute -top-2 ${isRTL ? "-left-2" : "-right-2"
+                      } bg-amber-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold animate-pulse`}
                   >
                     {totalItems}
                   </span>
@@ -695,18 +721,16 @@ const CustomerMenu: React.FC = () => {
             {/* Search */}
             <div className="relative">
               <Search
-                className={`absolute ${
-                  isRTL ? "right-3" : "left-3"
-                } top-3 w-5 h-5 text-slate-400 dark:text-slate-500`}
+                className={`absolute ${isRTL ? "right-3" : "left-3"
+                  } top-3 w-5 h-5 text-slate-400 dark:text-slate-500`}
               />
               <input
                 type="text"
                 placeholder={t("menu.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full ${
-                  isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
-                } py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+                className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
+                  } py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
               />
             </div>
 
@@ -730,6 +754,12 @@ const CustomerMenu: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* 🆕 Instagram-Style Stories Section */}
+        <StoriesSection
+          featuredItems={featuredItems}
+          onAddToCart={addToCart}
+        />
 
         {/* Menu Items */}
         <MenuGrid
@@ -914,7 +944,7 @@ const CustomerMenu: React.FC = () => {
           onRemove={removeFromCart}
           onPlaceOrder={placeOrder}
           onClearCart={handleClearCart}
-          // onEditItem={(item) => openEditModal(item)}
+        // onEditItem={(item) => openEditModal(item)}
         />
       )}
 
@@ -994,9 +1024,8 @@ const CustomerMenu: React.FC = () => {
 
               {/* Right: actions */}
               <div
-                className={`flex items-center gap-2 ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
                 <button
                   onClick={() => {
@@ -1083,9 +1112,8 @@ const CustomerMenu: React.FC = () => {
               </div>
 
               <div
-                className={`relative flex items-center gap-2 text-sm ${
-                  isRTL ? "flex-row-reverse" : ""
-                }`}
+                className={`relative flex items-center gap-2 text-sm ${isRTL ? "flex-row-reverse" : ""
+                  }`}
               >
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 border border-white/30 dark:border-white/10 bg-white/10 dark:bg-white/10 backdrop-blur-sm">
                   <Check className="w-4 h-4" />

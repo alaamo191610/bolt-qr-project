@@ -3,9 +3,8 @@
 
 /* Font variables */
 :root {
-  --font-playpen-arabic: 'Playpen Sans Arabic', cursive;
+  --font-playpen-arabic: "Montserrat", sans-serif;
 }
-
 
 .font-playpen-arabic {
   font-family: var(--font-playpen-arabic);

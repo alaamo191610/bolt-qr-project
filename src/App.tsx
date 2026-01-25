@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import {
   QrCode,
@@ -7,8 +7,8 @@ import {
   Settings,
   Users,
   BarChart3,
+  UserCog,
 } from "lucide-react";
-// import { useAuth } from "./hooks/useAuth";
 import { useAuth } from "./providers/AuthProvider";
 import { useLanguage } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -24,10 +24,13 @@ import QRGenerator from "./components/QRGenerator";
 import DigitalMenu from "./components/DigitalMenu";
 import OrderManagement from "./components/OrderManagement";
 import TableManagement from "./components/TableManagement";
+import UserManagement from "./components/UserManagement";
 import Analytics from "./components/Analytics";
 import AdminPanel from "./components/AdminPanel";
 import CustomerMenu from "./pages/CustomerMenu";
-import { Toaster } from "react-hot-toast";
+import SuperAdminLogin from "./components/super-admin/SuperAdminLogin";
+import SuperAdminDashboard from "./components/super-admin/SuperAdminDashboard";
+import { Toaster, toast } from "react-hot-toast";
 // Define interfaces for the component state
 interface Table {
   id: number;
@@ -86,10 +89,17 @@ function App() {
       <LanguageProvider>
         <Router>
           <Routes>
+            {/* Customer Menu Routes */}
             <Route path="/menu" element={<CustomerMenu />} />
             <Route path="/ar/menu" element={<CustomerMenu />} />
             <Route path="/en/menu" element={<CustomerMenu />} />
             <Route path="/menu/:lang" element={<CustomerMenu />} />
+
+            {/* Super Admin Routes */}
+            <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+            <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+
+            {/* Main Admin Route */}
             <Route
               path="/"
               element={user ? <AdminDashboard /> : <AuthForm />}
@@ -158,38 +168,36 @@ const AdminDashboard: React.FC = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
   const idMapRef = React.useRef(new Map<string, number>());
   const nextIdRef = React.useRef(1);
-  const numId = (uuid: string) => {
+  const numId = useCallback((uuid: string) => {
     if (!idMapRef.current.has(uuid))
       idMapRef.current.set(uuid, nextIdRef.current++);
     return idMapRef.current.get(uuid)!;
-  };
+  }, []);
 
-  useEffect(() => {
-    if (user && !dataLoaded) {
-      loadAdminData();
-    }
-  }, [user, dataLoaded]);
-
-  const loadAdminData = async () => {
+  const loadAdminData = useCallback(async () => {
     if (!user) return;
     try {
-      const profile = await adminService.getAdminProfile(user.id);
-      setAdminProfile(profile);
+      const [profile, adminTables, adminMenuItems, adminOrders] =
+        await Promise.all([
+          adminService.getAdminProfile(user.id),
+          tableService.getTables(user.id),
+          menuService.getMenuItems(user.id),
+          orderService.getOrders(user.id),
+        ]);
 
-      const adminTables = await tableService.getTables(user.id);
+      setAdminProfile(profile);
       setTables(
         adminTables.map((table: any) => ({
-          id: parseInt(table.id) || Math.random(),
+          id: numId(String(table.id)),
           number: table.code,
           status: "available",
           capacity: 4,
         }))
       );
 
-      const adminMenuItems = await menuService.getMenuItems(user.id);
       setMenuItems(
         adminMenuItems.map((item: any) => ({
-          id: parseInt(item.id),
+          id: numId(String(item.id)),
           name: item.name_en,
           description: item.name_ar || item.name_en,
           price: item.price,
@@ -200,7 +208,6 @@ const AdminDashboard: React.FC = () => {
         }))
       );
 
-      const adminOrders = await orderService.getOrders(user.id);
       setOrders(
         adminOrders.map((order: any) => ({
           id: numId(order.id),
@@ -220,8 +227,15 @@ const AdminDashboard: React.FC = () => {
       setDataLoaded(true);
     } catch (error) {
       console.error("Error loading admin data:", error);
+      toast.error("Failed to load dashboard data");
     }
-  };
+  }, [user, numId]);
+
+  useEffect(() => {
+    if (user && !dataLoaded) {
+      loadAdminData();
+    }
+  }, [user, dataLoaded, loadAdminData]);
 
   // Simple tab change handler
   const handleTabChange = (tabId: string) => {
@@ -235,6 +249,7 @@ const AdminDashboard: React.FC = () => {
       { id: "orders", name: t("nav.orders"), icon: ShoppingCart },
       { id: "tables", name: t("nav.tables"), icon: Users },
       { id: "analytics", name: t("nav.analytics"), icon: BarChart3 },
+      { id: "users", name: "Users", icon: UserCog },
       { id: "admin", name: t("nav.admin"), icon: Settings },
     ],
     [t]
@@ -269,6 +284,8 @@ const AdminDashboard: React.FC = () => {
             onDataChange={loadAdminData}
           />
         );
+      case "users":
+        return <UserManagement />;
       case "analytics":
         return <Analytics orders={orders} />;
       case "admin":

@@ -1,23 +1,34 @@
-'use client';
+import React, { useMemo, useState, useEffect } from "react";
+import {
+  BarChart3,
+  TrendingUp,
+  DollarSign,
+  Clock,
+  Users,
+  Star,
+} from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext";
+import OrderTrendChart from "../components/charts/OrderTrendChart";
+import StatusPieChart from "../components/charts/StatusPieChart";
+import TopRevenueItemsChart from "../components/charts/TopRevenueItemsChart";
+import TopTableRevenueChart from "../components/charts/TopTableRevenueChart";
+import HourlyHeatmap from "../components/charts/HourlyHeatmap";
+import ExportOrdersPDFButton from "../components/exports/ExportOrdersPDFButton";
+import type { OrderWithItems as PdfOrder } from "../lib/supabase";
+import { menuService } from "../services/menuService";
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, DollarSign, Clock, Users, Star } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
-import OrderTrendChart from '../components/charts/OrderTrendChart';
-import StatusPieChart from '../components/charts/StatusPieChart';
-import TopRevenueItemsChart from '../components/charts/TopRevenueItemsChart';
-import TopTableRevenueChart from '../components/charts/TopTableRevenueChart';
-import ExportOrdersPDFButton from '../components/exports/ExportOrdersPDFButton';
-import type { OrderWithItems as PdfOrder } from '../lib/supabase';
-import { supabase } from '../lib/supabase'; 
-
-type OrderStatus = 'pending' | 'preparing' | 'completed' | 'served' | 'cancelled';
+type OrderStatus =
+  | "pending"
+  | "preparing"
+  | "completed"
+  | "served"
+  | "cancelled";
 
 interface OrderItem {
-  id?: string;         // menu_item_id
-  name?: string;       // legacy fallback
-  name_en?: string;    // english
-  name_ar?: string;    // arabic
+  id?: string; // menu_item_id
+  name?: string; // legacy fallback
+  name_en?: string; // english
+  name_ar?: string; // arabic
   price: number;
   quantity: number;
 }
@@ -37,7 +48,7 @@ interface AnalyticsProps {
 
 interface TrendDay {
   date: string; // YYYY-MM-DD (local)
-  day: string;  // localized short day label
+  day: string; // localized short day label
   orders: number;
   revenue: number;
 }
@@ -49,45 +60,61 @@ const isSameLocalDay = (a: Date, b: Date) =>
 
 const toLocalISODate = (d: Date) => {
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
 
 const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
   const { t, getLocalizedDayName, language } = useLanguage();
-  const locale = language === 'ar' ? 'ar-QA' : 'en-QA';
+  const locale = language === "ar" ? "ar-QA" : "en-QA";
 
   const money = useMemo(
-    () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'QAR', maximumFractionDigits: 2 }),
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "QAR",
+        maximumFractionDigits: 2,
+      }),
     [locale]
   );
   const numberFmt = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
-  const pickLabel = (d: { name?: string; name_en?: string; name_ar?: string }) =>
-    language === 'ar' ? (d.name_ar ?? d.name ?? d.name_en ?? '') : (d.name_en ?? d.name ?? d.name_ar ?? '');
+  const pickLabel = (d: {
+    name?: string;
+    name_en?: string;
+    name_ar?: string;
+  }) =>
+    language === "ar"
+      ? d.name_ar ?? d.name ?? d.name_en ?? ""
+      : d.name_en ?? d.name ?? d.name_ar ?? "";
 
   // ✅ 1) Fetch a menu index (id -> {id,name_en,name_ar}) once on client
-  const [menuIndex, setMenuIndex] = useState<Record<string, { id: string; name_en: string; name_ar?: string }>>({});
+  const [menuIndex, setMenuIndex] = useState<
+    Record<string, { id: string; name_en: string; name_ar?: string }>
+  >({});
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase
-        .from('menus')
-        .select('id,name_en,name_ar');
+      const data = await menuService.getMenuItems(); // Use service instead of direct DB
 
-      if (!error && data && mounted) {
-        setMenuIndex(Object.fromEntries(data.map(m => [m.id, m])));
+      if (data && mounted) {
+        setMenuIndex(Object.fromEntries(data.map((m: any) => [m.id, m])));
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // ✅ 2) Weak fallback: map English name -> menu entry (used only when no id on the item)
   const menuByEnName = useMemo(() => {
-    const map: Record<string, { id: string; name_en: string; name_ar?: string }> = {};
-    Object.values(menuIndex).forEach(mi => {
+    const map: Record<
+      string,
+      { id: string; name_en: string; name_ar?: string }
+    > = {};
+    Object.values(menuIndex).forEach((mi) => {
       if (mi.name_en) map[mi.name_en.toLowerCase().trim()] = mi;
     });
     return map;
@@ -97,9 +124,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
     totalRevenue,
     totalOrders,
     avgOrderValue,
-    popularItems,          // [{ aggKey,id,name,name_en,name_ar,count }]
+    popularItems, // [{ aggKey,id,name,name_en,name_ar,count }]
     topTables,
-    topItemsByRevenue,     // [{ aggKey,id,name,name_en,name_ar,revenue }]
+    topItemsByRevenue, // [{ aggKey,id,name,name_en,name_ar,revenue }]
     topTablesByRevenue,
     revenueByStatus,
     statusData,
@@ -125,12 +152,18 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
     let totalRevenue = 0;
 
     for (const o of orders) {
-      totalRevenue += o.total;
+      totalRevenue += Number(o.total) || 0;
 
       tableCount.set(o.tableNumber, (tableCount.get(o.tableNumber) ?? 0) + 1);
-      tableRevenue.set(o.tableNumber, (tableRevenue.get(o.tableNumber) ?? 0) + o.total);
+      tableRevenue.set(
+        o.tableNumber,
+        (tableRevenue.get(o.tableNumber) ?? 0) + (Number(o.total) || 0)
+      );
 
-      statusRev.set(o.status, (statusRev.get(o.status) ?? 0) + o.total);
+      statusRev.set(
+        o.status,
+        (statusRev.get(o.status) ?? 0) + (Number(o.total) || 0)
+      );
       statusCount.set(o.status, (statusCount.get(o.status) ?? 0) + 1);
 
       for (const it of o.items) {
@@ -148,12 +181,16 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
         }
 
         const aggKey =
-          it.id ??
-          `${name_en ?? ''}|${name_ar ?? ''}|${it.name ?? ''}`.trim();
+          it.id ?? `${name_en ?? ""}|${name_ar ?? ""}|${it.name ?? ""}`.trim();
 
-        const rec =
-          itemAgg.get(aggKey) ??
-          { id: it.id, name: it.name, name_en, name_ar, count: 0, revenue: 0 };
+        const rec = itemAgg.get(aggKey) ?? {
+          id: it.id,
+          name: it.name,
+          name_en,
+          name_ar,
+          count: 0,
+          revenue: 0,
+        };
 
         rec.count += it.quantity;
         rec.revenue += it.price * it.quantity;
@@ -174,20 +211,36 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 5)
       .map(([aggKey, { id, name, name_en, name_ar, count }]) => ({
-        aggKey, id, name, name_en, name_ar, count
+        aggKey,
+        id,
+        name,
+        name_en,
+        name_ar,
+        count,
       }));
 
     const topItemsByRevenue = Array.from(itemAgg.entries())
       .sort((a, b) => b[1].revenue - a[1].revenue)
       .slice(0, 5)
       .map(([aggKey, { id, name, name_en, name_ar, revenue }]) => ({
-        aggKey, id, name, name_en, name_ar, revenue
+        aggKey,
+        id,
+        name,
+        name_en,
+        name_ar,
+        revenue,
       }));
 
-    const topTables = toSortedArr(tableCount).slice(0, 5).map(([table, count]) => ({ table, count }));
-    const topTablesByRevenue = toSortedArr(tableRevenue).slice(0, 5).map(([table, revenue]) => ({ table, revenue }));
+    const topTables = toSortedArr(tableCount)
+      .slice(0, 5)
+      .map(([table, count]) => ({ table, count }));
+    const topTablesByRevenue = toSortedArr(tableRevenue)
+      .slice(0, 5)
+      .map(([table, revenue]) => ({ table, revenue }));
     const revenueByStatus = Object.fromEntries(statusRev.entries());
-    const statusData = Array.from(statusCount.entries()).map(([status, count]) => ({ status, count }));
+    const statusData = Array.from(statusCount.entries()).map(
+      ([status, count]) => ({ status, count })
+    );
 
     // last 7 days (local)
     const today = new Date();
@@ -196,32 +249,29 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       const d = new Date(today);
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - i);
-      const dayOrders = orders.filter(o => isSameLocalDay(o.timestamp, d));
+      const dayOrders = orders.filter((o) => isSameLocalDay(o.timestamp, d));
       weekTrend.push({
         date: toLocalISODate(d),
-        day: getLocalizedDayName(d, 'short'),
+        day: getLocalizedDayName(d, "short"),
         orders: dayOrders.length,
-        revenue: dayOrders.reduce((s, o) => s + o.total, 0),
+        revenue: dayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0),
       });
     }
 
-    const transformedOrders: PdfOrder[] = orders.map(o => ({
+    const transformedOrders: PdfOrder[] = orders.map((o) => ({
       id: String(o.id),
-      user_id: 'guest',
+      user_id: "guest",
       table_id: o.tableNumber,
       created_at: o.timestamp.toISOString(),
       total: o.total,
       status: o.status as string,
-      items: o.items.map(i => ({
+      items: o.items.map((i) => ({
         name: pickLabel(i),
         quantity: i.quantity,
         // prefer the price stored on the order item at the time of purchase
         price:
-          (i as any).price_at_order ??
-          i.price ??                    
-          (i as any).menu?.price ??      
-          0
-      })), 
+          (i as any).price_at_order ?? i.price ?? (i as any).menu?.price ?? 0,
+      })),
     }));
 
     const totalOrders = orders.length;
@@ -240,7 +290,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       weekTrend,
       transformedOrders,
     };
-  // include menu deps so enrichment re-runs when menus arrive
+    // include menu deps so enrichment re-runs when menus arrive
   }, [orders, getLocalizedDayName, language, menuIndex, menuByEnName]);
 
   const topItemMax = popularItems[0]?.count || 1;
@@ -255,17 +305,20 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
             <BarChart3 className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-slate-900">{t('analytics.title')}</h2>
-            <p className="text-slate-600">{t('analytics.subtitle')}</p>
+            <h2 className="text-2xl font-bold text-slate-900">
+              {t("analytics.title")}
+            </h2>
+            <p className="text-slate-600">{t("analytics.subtitle")}</p>
           </div>
           <div className="flex justify-end">
             <ExportOrdersPDFButton
               orders={transformedOrders}
               t={t}
-              language={language === 'ar' ? 'ar' : 'en'}
+              language={language === "ar" ? "ar" : "en"}
               dateRange={
                 weekTrend.length
-                  ? `${weekTrend[0].date} – ${weekTrend[weekTrend.length - 1].date}`
+                  ? `${weekTrend[0].date} – ${weekTrend[weekTrend.length - 1].date
+                  }`
                   : undefined
               }
             />
@@ -285,7 +338,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
           <div className="text-2xl font-bold text-emerald-900 mb-1">
             {money.format(totalRevenue)}
           </div>
-          <div className="text-sm text-emerald-700">{t('analytics.totalRevenue')}</div>
+          <div className="text-sm text-emerald-700">
+            {t("analytics.totalRevenue")}
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
@@ -298,7 +353,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
           <div className="text-2xl font-bold text-blue-900 mb-1">
             {numberFmt.format(totalOrders)}
           </div>
-          <div className="text-sm text-blue-700">{t('analytics.totalOrders')}</div>
+          <div className="text-sm text-blue-700">
+            {t("analytics.totalOrders")}
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-6 border border-purple-200">
@@ -311,7 +368,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
           <div className="text-2xl font-bold text-purple-900 mb-1">
             {money.format(avgOrderValue)}
           </div>
-          <div className="text-sm text-purple-700">{t('analytics.avgOrderValue')}</div>
+          <div className="text-sm text-purple-700">
+            {t("analytics.avgOrderValue")}
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-200">
@@ -322,9 +381,13 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
             <TrendingUp className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-2xl font-bold text-amber-900 mb-1">
-            {numberFmt.format(orders.filter(o => o.status === 'served').length)}
+            {numberFmt.format(
+              orders.filter((o) => o.status === "served").length
+            )}
           </div>
-          <div className="text-sm text-amber-700">{t('analytics.ordersServed')}</div>
+          <div className="text-sm text-amber-700">
+            {t("analytics.ordersServed")}
+          </div>
         </div>
       </div>
 
@@ -333,23 +396,32 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center gap-2 mb-6">
             <Star className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-lg font-bold text-slate-900">{t('analytics.popularItems')}</h3>
+            <h3 className="text-lg font-bold text-slate-900">
+              {t("analytics.popularItems")}
+            </h3>
           </div>
 
           {!popularItems.length ? (
-            <div className="text-slate-500 text-sm">{t('analytics.noData')}</div>
+            <div className="text-slate-500 text-sm">
+              {t("analytics.noData")}
+            </div>
           ) : (
             <div className="space-y-4">
               {popularItems.map((item, index) => (
-                <div key={item.id ?? item.aggKey} className="flex items-center justify-between">
+                <div
+                  key={item.id ?? item.aggKey}
+                  className="flex items-center justify-between"
+                >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm ${
-                        index === 0 ? 'bg-yellow-500'
-                          : index === 1 ? 'bg-gray-400'
-                          : index === 2 ? 'bg-amber-600'
-                          : 'bg-slate-400'
-                      }`}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm ${index === 0
+                        ? "bg-yellow-500"
+                        : index === 1
+                          ? "bg-gray-400"
+                          : index === 2
+                            ? "bg-amber-600"
+                            : "bg-slate-400"
+                        }`}
                     >
                       {index + 1}
                     </div>
@@ -359,7 +431,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-600">
-                      {numberFmt.format(item.count)} {t('analytics.orders')}
+                      {numberFmt.format(item.count)} {t("analytics.orders")}
                     </span>
                     <div className="w-20 bg-slate-100 rounded-full h-2">
                       <div
@@ -378,31 +450,42 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center gap-2 mb-6">
             <Users className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-lg font-bold text-slate-900">{t('analytics.mostActiveTables')}</h3>
+            <h3 className="text-lg font-bold text-slate-900">
+              {t("analytics.mostActiveTables")}
+            </h3>
           </div>
 
           {!topTables.length ? (
-            <div className="text-slate-500 text-sm">{t('analytics.noData')}</div>
+            <div className="text-slate-500 text-sm">
+              {t("analytics.noData")}
+            </div>
           ) : (
             <div className="space-y-4">
               {topTables.map((table, index) => (
-                <div key={table.table} className="flex items-center justify-between">
+                <div
+                  key={table.table}
+                  className="flex items-center justify-between"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-                      <span className="font-bold text-slate-700">#{index + 1}</span>
+                      <span className="font-bold text-slate-700">
+                        #{index + 1}
+                      </span>
                     </div>
                     <span className="font-medium text-slate-900">
-                      {t('common.table')} {table.table}
+                      {t("common.table")} {table.table}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-600">
-                      {numberFmt.format(table.count)} {t('analytics.orders')}
+                      {numberFmt.format(table.count)} {t("analytics.orders")}
                     </span>
                     <div className="w-20 bg-slate-100 rounded-full h-2">
                       <div
                         className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(table.count / topTableMax) * 100}%` }}
+                        style={{
+                          width: `${(table.count / topTableMax) * 100}%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -415,13 +498,18 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
 
       {/* Revenue by Status */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-lg font-bold text-slate-900 mb-6">{t('analytics.revenueByStatus')}</h3>
+        <h3 className="text-lg font-bold text-slate-900 mb-6">
+          {t("analytics.revenueByStatus")}
+        </h3>
         {!Object.keys(revenueByStatus).length ? (
-          <div className="text-slate-500 text-sm">{t('analytics.noData')}</div>
+          <div className="text-slate-500 text-sm">{t("analytics.noData")}</div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(revenueByStatus).map(([status, revenue]) => (
-              <div key={status} className="text-center p-4 bg-slate-50 rounded-lg">
+              <div
+                key={status}
+                className="text-center p-4 bg-slate-50 rounded-lg"
+              >
                 <div className="text-2xl font-bold text-slate-900 mb-1">
                   {money.format(revenue as number)}
                 </div>
@@ -434,6 +522,9 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
         )}
       </div>
 
+      {/* Hourly Heatmap */}
+      <HourlyHeatmap orders={orders} />
+
       {/* Charts */}
       <TopTableRevenueChart data={topTablesByRevenue} t={t} />
       <TopRevenueItemsChart data={topItemsByRevenue} t={t} />
@@ -442,19 +533,25 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
 
       {/* Weekly Trend mini-cards */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-lg font-bold text-slate-900 mb-6">{t('analytics.weekTrend')}</h3>
+        <h3 className="text-lg font-bold text-slate-900 mb-6">
+          {t("analytics.weekTrend")}
+        </h3>
         {!weekTrend.length ? (
-          <div className="text-slate-500 text-sm">{t('analytics.noData')}</div>
+          <div className="text-slate-500 text-sm">{t("analytics.noData")}</div>
         ) : (
           <div className="grid grid-cols-7 gap-2">
             {weekTrend.map((item, index) => (
               <div key={index} className="text-center">
-                <div className="text-xs font-medium text-slate-600 mb-2">{item.day}</div>
+                <div className="text-xs font-medium text-slate-600 mb-2">
+                  {item.day}
+                </div>
                 <div className="bg-slate-100 rounded-lg p-3">
                   <div className="text-lg font-bold text-slate-900 mb-1">
                     {numberFmt.format(item.orders)}
                   </div>
-                  <div className="text-xs text-slate-600">{t('analytics.orders')}</div>
+                  <div className="text-xs text-slate-600">
+                    {t("analytics.orders")}
+                  </div>
                   <div className="text-xs font-medium text-emerald-600 mt-1">
                     {money.format(item.revenue)}
                   </div>

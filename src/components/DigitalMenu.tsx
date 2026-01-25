@@ -8,11 +8,10 @@ import {
   Edit,
   AlertTriangle,
 } from "lucide-react";
-// import { useAuth } from "../hooks/useAuthhhhh";
 import { useAuth } from "../providers/AuthProvider";
 
 import { useLanguage } from "../contexts/LanguageContext";
-import { supabase } from "../lib/supabase";
+import { menuService } from "../services/menuService";
 import toast from "react-hot-toast";
 import { UploadCloud, Loader2, XCircle } from "lucide-react";
 import AdminOptionsPanel from "../components/AdminOptionsPanel"; // adjust path
@@ -38,6 +37,7 @@ interface MenuItem {
   available: boolean;
   category_id: string;
   created_at: string;
+  user_id?: string;
   categories?: Category | null;
   ingredients_details?: {
     ingredient: Ingredient;
@@ -353,6 +353,7 @@ const ImageUploadField = ({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useLanguage();
+  const { user } = useAuth();
 
   const handleFileUpload = async (file: File) => {
     // Validate file size (max 5MB)
@@ -376,21 +377,19 @@ const ImageUploadField = ({
         ? `${uploadPrefix}/${Date.now()}.${fileExt}`
         : `${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("menu-images")
-        .upload(fileName, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type,
-        });
+      // Use Backend API for upload
+      const formData = new FormData();
+      formData.append("file", file);
 
-      if (uploadError) throw uploadError;
+      const res = await fetch("http://localhost:3000/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      const { data: publicUrlData } = supabase.storage
-        .from("menu-images")
-        .getPublicUrl(fileName);
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      const imageUrl = data.url;
 
-      const imageUrl = publicUrlData?.publicUrl || "";
       onChange(imageUrl);
     } catch (err: any) {
       console.error("Upload failed:", err.message);
@@ -427,9 +426,6 @@ const ImageUploadField = ({
 
     try {
       // Ensure the user is logged in (needed if your policy is "owner = auth.uid()")
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
       if (!user) {
         console.warn("No auth user; delete will be blocked by RLS.");
         return;
@@ -469,10 +465,9 @@ const ImageUploadField = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         className={`relative flex items-center justify-center px-4 py-10 border-2 border-dashed rounded-lg cursor-pointer transition group
-          ${
-            isDragging
-              ? "border-emerald-500 bg-emerald-50"
-              : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+          ${isDragging
+            ? "border-emerald-500 bg-emerald-50"
+            : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
           }
         `}
       >
@@ -639,40 +634,46 @@ const DigitalMenu: React.FC = () => {
       if (shouldUseCache) {
         const cachedItems = sessionStorage.getItem(`menuItems_${user.id}`);
         if (cachedItems) {
-          const parsed = JSON.parse(cachedItems);
-          if (Date.now() - parsed.timestamp < 300000) {
-            // 5 minutes cache
-            setItems(parsed.data);
-            setLoading(false);
-            return;
+          try {
+            const parsed = JSON.parse(cachedItems);
+            // Validate cache integrity (check for NaN prices)
+            if (
+              parsed &&
+              Array.isArray(parsed.data) &&
+              parsed.data.every((i: any) => !isNaN(Number(i.price)))
+            ) {
+              if (Date.now() - parsed.timestamp < 300000) {
+                setItems(parsed.data);
+                setLoading(false);
+                return;
+              }
+            } else {
+              sessionStorage.removeItem(`menuItems_${user.id}`);
+            }
+          } catch {
+            sessionStorage.removeItem(`menuItems_${user.id}`);
           }
         }
       }
 
-      const { data, error } = await supabase
-        .from("menus")
-        .select(
-          `
-          *, 
-          categories(id, name_en, name_ar), 
-          ingredients_details:menu_ingredients(ingredient:ingredients(id, name_en, name_ar))
-        `
-        )
-        .eq("user_id", user.id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const data = await menuService.getMenuItems(user.id);
 
       console.log("Fetched items:", data); // Debug log
-      setItems(data || []);
+
+      // FIX: Apply client-side filtering as a temporary workaround.
+      // The backend should ideally filter items by user_id.
+      const userItems = (data || []).filter(
+        (item: MenuItem) => item.user_id === user.id
+      );
+
+      setItems(userItems);
 
       // Cache the data
-      if (data) {
+      if (userItems) {
         sessionStorage.setItem(
           `menuItems_${user.id}`,
           JSON.stringify({
-            data: data,
+            data: userItems,
             timestamp: Date.now(),
           })
         );
@@ -687,12 +688,7 @@ const DigitalMenu: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .order("name_en");
-
-      if (error) throw error;
+      const data = await menuService.getCategories();
       setCategories(data || []);
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -702,12 +698,7 @@ const DigitalMenu: React.FC = () => {
 
   const fetchIngredients = async () => {
     try {
-      const { data, error } = await supabase
-        .from("ingredients")
-        .select("*")
-        .order("name_en");
-
-      if (error) throw error;
+      const data = await menuService.getIngredients();
       setIngredients(data || []);
     } catch (error) {
       console.error("Error fetching ingredients:", error);
@@ -722,13 +713,7 @@ const DigitalMenu: React.FC = () => {
   }) => {
     try {
       setCategoryLoading(true);
-      const { data, error } = await supabase
-        .from("categories")
-        .insert([categoryData])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await menuService.addCategory(categoryData);
 
       setCategories((prev) => [...prev, data]);
       setCategoryFormOpen(false);
@@ -746,13 +731,7 @@ const DigitalMenu: React.FC = () => {
   }) => {
     try {
       setIngredientLoading(true);
-      const { data, error } = await supabase
-        .from("ingredients")
-        .insert([ingredientData])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await menuService.addIngredient(ingredientData);
 
       setIngredients((prev) => [...prev, data]);
       setIngredientFormOpen(false);
@@ -791,22 +770,6 @@ const DigitalMenu: React.FC = () => {
     }
     setFormOpen(true);
   };
-  const STORAGE_BUCKET = "menu-images";
-
-  const isSupabasePublicUrl = (url: string) =>
-    !!url && url.includes(`/storage/v1/object/public/${STORAGE_BUCKET}/`);
-
-  const pathFromPublicUrl = (url: string): string | null => {
-    try {
-      const u = new URL(url);
-      const marker = `/object/public/${STORAGE_BUCKET}/`;
-      const i = u.pathname.indexOf(marker);
-      if (i === -1) return null;
-      return decodeURIComponent(u.pathname.slice(i + marker.length)); // e.g. "uid/123.jpg" or "1754743853513.jpg"
-    } catch {
-      return null;
-    }
-  };
 
   const handleSubmit = async () => {
     const newErrors: Record<string, string> = {};
@@ -842,6 +805,7 @@ const DigitalMenu: React.FC = () => {
       available: form.available,
       user_id: user.id,
       image_url: form.image_url || null,
+      ingredients: form.ingredients, // Pass ingredients to service
     };
 
     setFormLoading(true);
@@ -852,37 +816,9 @@ const DigitalMenu: React.FC = () => {
       await toast.promise(
         (async () => {
           if (form.id) {
-            // Update
-            res = await supabase
-              .from("menus")
-              .update(payload)
-              .eq("id", form.id)
-              .select("id");
-            if (res.error) throw res.error;
-            menuId = form.id;
-
-            // Cleanup old ingredients
-            await supabase
-              .from("menu_ingredients")
-              .delete()
-              .eq("menu_id", form.id);
+            await menuService.updateMenuItem(form.id, payload);
           } else {
-            // Insert
-            res = await supabase.from("menus").insert(payload).select("id");
-            if (res.error) throw res.error;
-            menuId = res.data?.[0]?.id;
-          }
-
-          // Add new ingredients
-          if (menuId && form.ingredients.length > 0) {
-            const inserts = form.ingredients.map((i) => ({
-              menu_id: menuId,
-              ingredient_id: i,
-            }));
-            const insertRes = await supabase
-              .from("menu_ingredients")
-              .insert(inserts);
-            if (insertRes.error) throw insertRes.error;
+            await menuService.addMenuItem(payload);
           }
         })(),
         {
@@ -913,48 +849,7 @@ const DigitalMenu: React.FC = () => {
     try {
       setDeleteLoading(true);
 
-      // 1) Get the image_url for this item
-      const { data: item, error: fetchErr } = await supabase
-        .from("menus")
-        .select("id, image_url")
-        .eq("id", itemToDelete)
-        .single();
-      if (fetchErr) throw fetchErr;
-
-      const imageUrl = item?.image_url;
-
-      // 2) If it’s a Supabase image, only delete from Storage if *no other* active rows use it
-      if (isSupabasePublicUrl(imageUrl || "")) {
-        // count other (non-deleted) rows using the same image
-        const { data: others, error: countErr } = await supabase
-          .from("menus")
-          .select("id", { count: "exact", head: true })
-          .neq("id", itemToDelete)
-          .is("deleted_at", null)
-          .eq("image_url", imageUrl);
-        if (countErr) throw countErr;
-
-        const canDeleteFromStorage = (others?.length ?? 0) === 0; // head:true => data is empty array, rely on count via error? some libs return null; safer:
-        // If your client doesn’t return count with head:true, switch to:
-        // .select('id', { count: 'exact' }) then use `others?.length === 0`
-
-        if (canDeleteFromStorage) {
-          const path = pathFromPublicUrl(imageUrl!);
-          if (path) {
-            const { error: remErr } = await supabase.storage
-              .from(STORAGE_BUCKET)
-              .remove([path]);
-            if (remErr) console.warn("Storage delete failed:", remErr.message);
-          }
-        }
-      }
-
-      // 3) Soft-delete the row (and clear image_url)
-      const { error: updErr } = await supabase
-        .from("menus")
-        .update({ deleted_at: new Date().toISOString(), image_url: null })
-        .eq("id", itemToDelete);
-      if (updErr) throw updErr;
+      await menuService.deleteMenuItem(itemToDelete);
 
       // 4) UI
       setItems((prev) => prev.filter((it) => it.id !== itemToDelete));
@@ -973,57 +868,10 @@ const DigitalMenu: React.FC = () => {
     try {
       setDeleteLoading(true);
 
-      // 1) Fetch image URLs for selected items
-      const { data: rows, error: fetchErr } = await supabase
-        .from("menus")
-        .select("id, image_url")
-        .in("id", selectedItems);
-      if (fetchErr) throw fetchErr;
-
-      // 2) Collect unique Supabase URLs from selected
-      const urls = Array.from(
-        new Set(
-          (rows ?? []).map((r) => r.image_url || "").filter(isSupabasePublicUrl)
-        )
-      );
-
-      // 3) Find which of those URLs are still used by other (non-selected, non-deleted) rows
-      let deletablePaths: string[] = [];
-      if (urls.length) {
-        const { data: stillUsed, error: useErr } = await supabase
-          .from("menus")
-          .select("image_url")
-          .in("image_url", urls)
-          .not(
-            "id",
-            "in",
-            `(${selectedItems.map((id) => `'${id}'`).join(",")})`
-          )
-          .is("deleted_at", null);
-        if (useErr) throw useErr;
-
-        const stillUsedSet = new Set((stillUsed ?? []).map((r) => r.image_url));
-        deletablePaths = urls
-          .filter((u) => !stillUsedSet.has(u))
-          .map((u) => pathFromPublicUrl(u))
-          .filter((p): p is string => !!p);
-      }
-
-      // 4) Delete unused images from Storage in one call
-      if (deletablePaths.length) {
-        const { error: remErr } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .remove(deletablePaths);
-        if (remErr)
-          console.warn("Some images failed to remove:", remErr.message);
-      }
-
       // 5) Soft-delete DB rows + clear image_url
-      const { error: updErr } = await supabase
-        .from("menus")
-        .update({ deleted_at: new Date().toISOString(), image_url: null })
-        .in("id", selectedItems);
-      if (updErr) throw updErr;
+      await Promise.all(
+        selectedItems.map((id) => menuService.deleteMenuItem(id))
+      );
 
       // 6) UI
       setItems((prev) =>
@@ -1032,7 +880,7 @@ const DigitalMenu: React.FC = () => {
       sessionStorage.removeItem(`menuItems_${user?.id}`);
       toast.success(
         t("common.deletedSelected", { count: String(selectedItems.length) }) ||
-          `${selectedItems.length} items deleted successfully`
+        `${selectedItems.length} items deleted successfully`
       );
       setSelectedItems([]);
       setDeleteAllModalOpen(false);
@@ -1057,6 +905,38 @@ const DigitalMenu: React.FC = () => {
       setSelectedItems([]);
     } else {
       setSelectedItems(filteredItems.map((item) => item.id));
+    }
+  };
+
+  // Quick toggle availability handler
+  const handleToggleAvailability = async (itemId: string, currentAvailable: boolean) => {
+    const newAvailable = !currentAvailable;
+
+    // Optimistic UI update
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, available: newAvailable } : item
+      )
+    );
+
+    try {
+      await menuService.toggleAvailability(itemId, newAvailable);
+      toast.success(
+        newAvailable
+          ? t("common.itemNowAvailable") || "Item is now available"
+          : t("common.itemNowUnavailable") || "Item is now out of stock"
+      );
+      // Clear cache to ensure fresh data on next fetch
+      if (user) sessionStorage.removeItem(`menuItems_${user.id}`);
+    } catch (error) {
+      // Revert optimistic update on error
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId ? { ...item, available: currentAvailable } : item
+        )
+      );
+      toast.error(t("common.errorOccurred") || "Failed to update availability");
+      console.error("Error toggling availability:", error);
     }
   };
 
@@ -1224,7 +1104,7 @@ const DigitalMenu: React.FC = () => {
                         {getLocalizedName(item)}
                       </h3>
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg ml-2">
-                        ${item.price.toFixed(2)}
+                        ${Number(item.price).toFixed(2)}
                       </span>
                     </div>
 
@@ -1234,18 +1114,35 @@ const DigitalMenu: React.FC = () => {
                         : t("common.noCategory")}
                     </p>
 
-                    <div className="flex items-center space-x-2 mb-3">
+                    <div className="flex items-center justify-between space-x-2 mb-3">
                       <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          item.available
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${item.available
                             ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
                             : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                        }`}
+                          }`}
                       >
                         {item.available
                           ? t("common.available")
                           : t("common.unavailable")}
                       </span>
+
+                      {/* Quick Toggle Switch */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleAvailability(item.id, item.available);
+                        }}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${item.available
+                            ? "bg-emerald-600"
+                            : "bg-slate-300 dark:bg-slate-600"
+                          }`}
+                        title={item.available ? t("common.markUnavailable") || "Mark unavailable" : t("common.markAvailable") || "Mark available"}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.available ? "translate-x-6" : "translate-x-1"
+                            }`}
+                        />
+                      </button>
                     </div>
 
                     {item.ingredients_details &&
@@ -1332,11 +1229,10 @@ const DigitalMenu: React.FC = () => {
                       setForm((f) => ({ ...f, name_en: e.target.value }))
                     }
                     placeholder={t("common.nameEn")}
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      errors.name_en
-                        ? "border-red-500"
-                        : "border-slate-300 dark:border-slate-600"
-                    } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.name_en
+                      ? "border-red-500"
+                      : "border-slate-300 dark:border-slate-600"
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
                   {errors.name_en && (
                     <p className="text-sm text-red-500 mt-1">
@@ -1357,11 +1253,10 @@ const DigitalMenu: React.FC = () => {
                       setForm((f) => ({ ...f, name_ar: e.target.value }))
                     }
                     placeholder={t("common.nameAr")}
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      errors.name_ar
-                        ? "border-red-500"
-                        : "border-slate-300 dark:border-slate-600"
-                    } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.name_ar
+                      ? "border-red-500"
+                      : "border-slate-300 dark:border-slate-600"
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
                   {errors.name_ar && (
                     <p className="text-sm text-red-500 mt-1">
@@ -1384,11 +1279,10 @@ const DigitalMenu: React.FC = () => {
                       setForm((f) => ({ ...f, price: e.target.value }))
                     }
                     placeholder="0.00"
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      errors.price
-                        ? "border-red-500"
-                        : "border-slate-300 dark:border-slate-600"
-                    } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.price
+                      ? "border-red-500"
+                      : "border-slate-300 dark:border-slate-600"
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   />
                   {errors.price && (
                     <p className="text-sm text-red-500 mt-1">{errors.price}</p>
@@ -1402,15 +1296,14 @@ const DigitalMenu: React.FC = () => {
                   </label>
                   <select
                     ref={(el) => (fieldRefs.current.category_id = el)}
-                    value={form.category_id ?? ""}
+                    value={form.category_id ?? " hjk"}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, category_id: e.target.value }))
                     }
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      errors.category_id
-                        ? "border-red-500"
-                        : "border-slate-300 dark:border-slate-600"
-                    } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`w-full px-3 py-2 rounded-lg border ${errors.category_id
+                      ? "border-red-500"
+                      : "border-slate-300 dark:border-slate-600"
+                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                   >
                     <option value="">{t("common.selectCategory")}</option>
                     {categories.map((cat) => (
@@ -1451,14 +1344,12 @@ const DigitalMenu: React.FC = () => {
                     onClick={() =>
                       setForm((f) => ({ ...f, available: !f.available }))
                     }
-                    className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors ${
-                      form.available ? "bg-emerald-500" : "bg-slate-300"
-                    }`}
+                    className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors ${form.available ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
                   >
                     <div
-                      className={`w-4 h-4 bg-white rounded-full shadow-md transform duration-300 ${
-                        form.available ? "translate-x-4" : "translate-x-0"
-                      }`}
+                      className={`w-4 h-4 bg-white rounded-full shadow-md transform duration-300 ${form.available ? "translate-x-4" : "translate-x-0"
+                        }`}
                     />
                   </button>
                 </div>
@@ -1524,8 +1415,8 @@ const DigitalMenu: React.FC = () => {
                 {formLoading
                   ? t("common.saving")
                   : form.id
-                  ? t("common.updateItem")
-                  : t("common.addItem")}
+                    ? t("common.updateItem")
+                    : t("common.addItem")}
               </button>
             </div>
           </div>

@@ -1,39 +1,16 @@
-import { supabase } from '../lib/supabase'
 import type { MenuItem, Category } from '../lib/supabase'
+import { api } from './api'
 
 export const menuService = {
   // Get all menu items with categories
   async getMenuItems(adminId?: string) {
     try {
-      let query = supabase
-        .from('menus')
-        .select(`
-        *,
-        categories (
-          id,
-          name_en,
-          name_ar
-        ),
-        description_en, description_ar,
-        ingredients_details:menu_ingredients (
-          ingredient:ingredients (
-            id,
-            name_en,
-            name_ar
-          )
-        )
-      `)
-        .is('deleted_at', null)
-        .eq('available', true)
-
-      if (adminId) {
-        query = query.eq('user_id', adminId)
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false })
-
-      if (error) throw error
-      return data || []
+      // The backend handles the joins and filtering
+      const items = await api.get('/menus', adminId ? { adminId } : undefined);
+      return (items || []).map((item: any) => ({
+        ...item,
+        price: Number(item.price) || 0
+      }));
     } catch (error) {
       console.error('Error fetching menu items:', error)
       throw error
@@ -44,15 +21,29 @@ export const menuService = {
   // Get categories
   async getCategories() {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name_en')
-
-      if (error) throw error
-      return data || []
+      return await api.get('/categories');
     } catch (error) {
       console.error('Error fetching categories:', error)
+      throw error
+    }
+  },
+
+  // Get ingredients
+  async getIngredients() {
+    try {
+      return await api.get('/ingredients');
+    } catch (error) {
+      console.error('Error fetching ingredients:', error)
+      throw error
+    }
+  },
+
+  // Add new ingredient
+  async addIngredient(ingredient: { name_en: string; name_ar: string }) {
+    try {
+      return await api.post('/ingredients', ingredient);
+    } catch (error) {
+      console.error('Error adding ingredient:', error)
       throw error
     }
   },
@@ -60,21 +51,9 @@ export const menuService = {
   // Add new menu item
   async addMenuItem(item: Omit<MenuItem, 'id' | 'created_at'>) {
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
-      // Add user_id to the item
-      const itemWithUser = { ...item, user_id: user.id }
-
-      const { data, error } = await supabase
-        .from('menus')
-        .insert([itemWithUser])
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      // Note: In a real app, user_id comes from the auth token on the backend
+      // For now, we assume the item object passed in has user_id or backend handles it
+      return await api.post('/menus', item);
     } catch (error) {
       console.error('Error adding menu item:', error)
       throw error
@@ -84,15 +63,12 @@ export const menuService = {
   // Update menu item
   async updateMenuItem(id: string, updates: Partial<MenuItem>) {
     try {
-      const { data, error } = await supabase
-        .from('menus')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      const res = await fetch(`http://localhost:3000/api/menus/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      return await res.json();
     } catch (error) {
       console.error('Error updating menu item:', error)
       throw error
@@ -102,15 +78,8 @@ export const menuService = {
   // Soft delete menu item
   async deleteMenuItem(id: string) {
     try {
-      const { data, error } = await supabase
-        .from('menus')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      const res = await fetch(`http://localhost:3000/api/menus/${id}`, { method: 'DELETE' });
+      return await res.json();
     } catch (error) {
       console.error('Error deleting menu item:', error)
       throw error
@@ -120,16 +89,19 @@ export const menuService = {
   // Add new category
   async addCategory(category: Omit<Category, 'id'>) {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .insert([category])
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      return await api.post('/categories', category);
     } catch (error) {
       console.error('Error adding category:', error)
+      throw error
+    }
+  },
+
+  // Toggle menu item availability (quick action)
+  async toggleAvailability(id: string, available: boolean) {
+    try {
+      return await api.put(`/menus/${id}`, { available });
+    } catch (error) {
+      console.error('Error toggling availability:', error)
       throw error
     }
   }
