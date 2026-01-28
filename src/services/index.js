@@ -83,6 +83,22 @@ app.post('/api/menus', authenticate, async (req, res) => {
   const { name_en, name_ar, price, category_id, image_url, available, ingredients } = req.body;
   const user_id = req.user.id; // Get user ID from authenticated token
   try {
+    // 🆕 Enforce Menu Item Limit
+    const admin = await prisma.admin.findUnique({
+      where: { id: user_id },
+      select: { max_menu_items: true }
+    });
+
+    const currentCount = await prisma.menu.count({
+      where: { user_id, deleted_at: null }
+    });
+
+    if (admin && currentCount >= admin.max_menu_items) {
+      return res.status(403).json({
+        error: `Menu item limit reached for your plan (limit: ${admin.max_menu_items}). Please upgrade to add more.`
+      });
+    }
+
     const menu = await prisma.menu.create({
       data: {
         name_en, name_ar, price, category_id: Number(category_id), image_url, available, user_id,
@@ -266,6 +282,57 @@ app.post('/api/menus/:id/combos', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Public endpoint for menu customization configuration
+app.get('/api/public/menus/:id/config', async (req, res) => {
+  const menuId = Number(req.params.id);
+  try {
+    const [menu, ingredients, modifierGroups, comboGroups] = await Promise.all([
+      prisma.menu.findUnique({
+        where: { id: menuId, deleted_at: null },
+        include: { category: true }
+      }),
+      prisma.menuIngredient.findMany({
+        where: { menu_id: menuId },
+        include: { ingredient: true }
+      }),
+      prisma.menuModifierGroup.findMany({
+        where: { menu_id: menuId },
+        include: {
+          modifier_group: {
+            include: {
+              modifier_options: true
+            }
+          }
+        }
+      }),
+      prisma.comboGroup.findMany({
+        where: { menu_id: menuId },
+        include: {
+          combo_group_items: {
+            include: {
+              menus: {
+                select: { id: true, name_en: true, price: true }
+              }
+            }
+          }
+        }
+      })
+    ]);
+
+    if (!menu) return res.status(404).json({ error: 'Menu item not found' });
+
+    res.json({
+      menu,
+      ingredients,
+      modifierGroups,
+      comboGroups
+    });
+  } catch (err) {
+    console.error('Error fetching menu config:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Categories & Ingredients ---
 app.get('/api/categories', async (req, res) => {
   const categories = await prisma.category.findMany({ orderBy: { name_en: 'asc' } });
@@ -395,6 +462,22 @@ app.post('/api/tables', authenticate, async (req, res) => {
   const tableCode = code || number;
 
   try {
+    // 🆕 Enforce Table Limit
+    const admin = await prisma.admin.findUnique({
+      where: { id: admin_id },
+      select: { max_tables: true }
+    });
+
+    const currentCount = await prisma.table.count({
+      where: { admin_id }
+    });
+
+    if (admin && currentCount >= admin.max_tables) {
+      return res.status(403).json({
+        error: `Table limit reached for your plan (limit: ${admin.max_tables}). Please upgrade to add more.`
+      });
+    }
+
     const table = await prisma.table.create({
       data: { code: tableCode, capacity: Number(capacity), admin_id }
     });

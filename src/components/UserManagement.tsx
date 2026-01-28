@@ -6,7 +6,6 @@ import type { Admin } from "../lib/supabase";
 
 const UserManagement: React.FC = () => {
   const [admins, setAdmins] = useState<Admin[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newUser, setNewUser] = useState({
     email: "",
@@ -21,13 +20,10 @@ const UserManagement: React.FC = () => {
 
   const loadAdmins = async () => {
     try {
-      setLoading(true);
       const data = await adminService.getAllAdmins();
       setAdmins(data);
     } catch (error) {
       toast.error("Failed to load users");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -144,7 +140,7 @@ const UserManagement: React.FC = () => {
                   onChange={(e) =>
                     setNewUser({ ...newUser, email: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div>
@@ -158,7 +154,7 @@ const UserManagement: React.FC = () => {
                   onChange={(e) =>
                     setNewUser({ ...newUser, password: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div>
@@ -171,7 +167,7 @@ const UserManagement: React.FC = () => {
                   onChange={(e) =>
                     setNewUser({ ...newUser, restaurant_name: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div className="flex gap-3 mt-6">

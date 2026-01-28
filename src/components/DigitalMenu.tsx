@@ -376,6 +376,7 @@ const ImageUploadField = ({
       const fileName = uploadPrefix
         ? `${uploadPrefix}/${Date.now()}.${fileExt}`
         : `${Date.now()}.${fileExt}`;
+      console.log('Uploading file:', fileName);
 
       // Use Backend API for upload
       const formData = new FormData();
@@ -439,6 +440,8 @@ const ImageUploadField = ({
         return;
       }
 
+      // Supabase storage delete not configured - skip for now
+      /*
       const { error } = await supabase.storage
         .from("menu-images")
         .remove([path]);
@@ -446,6 +449,7 @@ const ImageUploadField = ({
         console.warn("Failed to delete image from Supabase:", error);
         return;
       }
+      */
 
       onChange(""); // clear the field
     } catch (err) {
@@ -804,14 +808,13 @@ const DigitalMenu: React.FC = () => {
       category_id,
       available: form.available,
       user_id: user.id,
-      image_url: form.image_url || null,
+      image_url: form.image_url || undefined,
       ingredients: form.ingredients, // Pass ingredients to service
     };
 
     setFormLoading(true);
 
     try {
-      let res, menuId: string;
 
       await toast.promise(
         (async () => {
@@ -824,7 +827,7 @@ const DigitalMenu: React.FC = () => {
         {
           loading: form.id ? t("common.saving") : t("common.adding"),
           success: form.id ? t("common.updated") : t("common.added"),
-          error: t("common.errorOccurred") || "Something went wrong",
+          error: (err: any) => err.message || t("common.errorOccurred") || "Something went wrong",
         }
       );
 
@@ -1117,8 +1120,8 @@ const DigitalMenu: React.FC = () => {
                     <div className="flex items-center justify-between space-x-2 mb-3">
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${item.available
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                            : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                          : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
                           }`}
                       >
                         {item.available
@@ -1133,8 +1136,8 @@ const DigitalMenu: React.FC = () => {
                           handleToggleAvailability(item.id, item.available);
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${item.available
-                            ? "bg-emerald-600"
-                            : "bg-slate-300 dark:bg-slate-600"
+                          ? "bg-emerald-600"
+                          : "bg-slate-300 dark:bg-slate-600"
                           }`}
                         title={item.available ? t("common.markUnavailable") || "Mark unavailable" : t("common.markAvailable") || "Mark available"}
                       >
@@ -1223,7 +1226,7 @@ const DigitalMenu: React.FC = () => {
                     {t("common.nameEn")} *
                   </label>
                   <input
-                    ref={(el) => (fieldRefs.current.name_en = el)}
+                    ref={(el) => { fieldRefs.current.name_en = el; }}
                     value={form.name_en}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, name_en: e.target.value }))
@@ -1247,7 +1250,7 @@ const DigitalMenu: React.FC = () => {
                     {t("common.nameAr")} *
                   </label>
                   <input
-                    ref={(el) => (fieldRefs.current.name_ar = el)}
+                    ref={(el) => { fieldRefs.current.name_ar = el; }}
                     value={form.name_ar}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, name_ar: e.target.value }))
@@ -1271,7 +1274,7 @@ const DigitalMenu: React.FC = () => {
                     {t("common.price")} *
                   </label>
                   <input
-                    ref={(el) => (fieldRefs.current.price = el)}
+                    ref={(el) => { fieldRefs.current.price = el; }}
                     type="number"
                     step="0.01"
                     value={form.price}
@@ -1295,7 +1298,7 @@ const DigitalMenu: React.FC = () => {
                     {t("common.category")} *
                   </label>
                   <select
-                    ref={(el) => (fieldRefs.current.category_id = el)}
+                    ref={(el) => { fieldRefs.current.category_id = el; }}
                     value={form.category_id ?? " hjk"}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, category_id: e.target.value }))

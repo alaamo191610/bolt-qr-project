@@ -26,13 +26,7 @@ export const tableService = {
   // Update table
   async updateTable(id: string, updates: Partial<Table>) {
     try {
-      const res = await fetch(`http://localhost:3000/api/tables/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      if (!res.ok) throw new Error('Failed to update table');
-      return await res.json();
+      return await api.put(`/tables/${id}`, updates);
     } catch (error) {
       console.error('Error updating table:', error)
       throw error
@@ -42,9 +36,7 @@ export const tableService = {
   // Delete table
   async deleteTable(id: string) {
     try {
-      const res = await fetch(`http://localhost:3000/api/tables/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete table');
-      return await res.json();
+      return await api.delete(`/tables/${id}`);
     } catch (error) {
       console.error('Error deleting table:', error)
       throw error

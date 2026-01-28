@@ -121,14 +121,14 @@ export const orderService = {
           // comboChildren,
         }
       })
-    
+
       // Call Backend API instead of Edge Function
       return await api.post('/orders', {
         tableCode: orderData.table_code,
         adminId: orderData.admin_id,
         items,
       });
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('invoke failed:', error?.message, error?.context);
       throw error
     }
@@ -137,7 +137,9 @@ export const orderService = {
   // Get orders for admin (raw, with nested menus; unchanged columns)
   async getOrders(adminId: string, status?: string) {
     try {
-      const orders = await api.get('/orders', { adminId, status });
+      const params: Record<string, string> = { adminId };
+      if (status) params.status = status;
+      const orders = await api.get('/orders', params);
       return (orders || []).map((o: any) => ({
         ...o,
         total: Number(o.total) || 0,
@@ -181,12 +183,7 @@ export const orderService = {
   async updateOrderStatus(orderId: string, status: string) {
     try {
       // Implement PUT /api/orders/:id/status in backend
-      const res = await fetch(`http://localhost:3000/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      return await res.json();
+      return await api.put(`/orders/${orderId}/status`, { status });
     } catch (error) {
       console.error('Error updating order status:', error)
       throw error

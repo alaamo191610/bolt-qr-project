@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Users, Plus, Trash2, MapPin } from "lucide-react";
 import { tableService } from "../services/tableService";
+import toast from "react-hot-toast";
 
 interface Table {
   id: number;
@@ -46,8 +47,10 @@ const TableManagement: React.FC<TableManagementProps> = ({
       setTables((prev) => [...prev, uiTable]);
       setNewTable({ code: "", capacity: 4 });
       setShowAddModal(false);
-    } catch (error) {
+      toast.success("Table added successfully!");
+    } catch (error: any) {
       console.error("Error adding table:", error);
+      toast.error(error.message || "Failed to add table");
     }
   };
 
@@ -236,7 +239,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
                     setNewTable((prev) => ({ ...prev, code: e.target.value }))
                   }
                   placeholder="e.g., T05, A1, VIP1"
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <div>
@@ -254,7 +257,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
                   }
                   min="1"
                   max="20"
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
             </div>

@@ -8,6 +8,7 @@ import {
   Star,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useCurrency } from "../contexts/CurrencyContext";
 import OrderTrendChart from "../components/charts/OrderTrendChart";
 import StatusPieChart from "../components/charts/StatusPieChart";
 import TopRevenueItemsChart from "../components/charts/TopRevenueItemsChart";
@@ -67,17 +68,9 @@ const toLocalISODate = (d: Date) => {
 
 const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
   const { t, getLocalizedDayName, language } = useLanguage();
+  const { formatPrice } = useCurrency();
   const locale = language === "ar" ? "ar-QA" : "en-QA";
 
-  const money = useMemo(
-    () =>
-      new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency: "QAR",
-        maximumFractionDigits: 2,
-      }),
-    [locale]
-  );
   const numberFmt = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
   const pickLabel = (d: {
@@ -336,7 +329,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
             <TrendingUp className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-2xl font-bold text-emerald-900 mb-1">
-            {money.format(totalRevenue)}
+            {formatPrice(totalRevenue)}
           </div>
           <div className="text-sm text-emerald-700">
             {t("analytics.totalRevenue")}
@@ -366,7 +359,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
             <TrendingUp className="w-4 h-4 text-purple-600" />
           </div>
           <div className="text-2xl font-bold text-purple-900 mb-1">
-            {money.format(avgOrderValue)}
+            {formatPrice(avgOrderValue)}
           </div>
           <div className="text-sm text-purple-700">
             {t("analytics.avgOrderValue")}
@@ -511,7 +504,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
                 className="text-center p-4 bg-slate-50 rounded-lg"
               >
                 <div className="text-2xl font-bold text-slate-900 mb-1">
-                  {money.format(revenue as number)}
+                  {formatPrice(revenue as number)}
                 </div>
                 <div className="text-sm text-slate-600">
                   {t(`analytics.status.${status}`)}
@@ -553,7 +546,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
                     {t("analytics.orders")}
                   </div>
                   <div className="text-xs font-medium text-emerald-600 mt-1">
-                    {money.format(item.revenue)}
+                    {formatPrice(item.revenue)}
                   </div>
                 </div>
               </div>

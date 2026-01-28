@@ -21,8 +21,8 @@ export interface MenuItem {
   id: string
   name_en: string
   name_ar?: string
-  description_en?: string 
-  description_ar?: string 
+  description_en?: string
+  description_ar?: string
   price: number
   available: boolean
   image_url?: string
@@ -73,7 +73,7 @@ export interface OrderWithItems extends Order {
 export interface Table {
   id: string
   name?: string
-  admin_id: string
+  admin_id?: string
   code: string
   created_at: string
 }

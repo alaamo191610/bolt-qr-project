@@ -89,7 +89,7 @@ export function TabList({ children }: { children: React.ReactNode }) {
       role="tablist"
       ref={listRef}
       onKeyDown={onKeyDown}
-      className="inline-flex w-full gap-2 rounded-xl border bg-white p-1"
+      className="inline-flex w-full gap-2 rounded-xl border bg-white p-1 overflow-x-auto scrollbar-hide"
     >
       {children}
     </div>
@@ -110,7 +110,7 @@ export function Tab({ value, children }: { value: string; children: React.ReactN
       aria-controls={panelId}
       tabIndex={selected ? 0 : -1}
       onClick={() => ctx.setActive(value)}
-      className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition
+      className={`flex-none md:flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition
         ${selected ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
     >
       {children}

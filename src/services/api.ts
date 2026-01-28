@@ -8,13 +8,28 @@ const getHeaders = () => {
   };
 };
 
+const handleResponse = async (res: Response) => {
+  if (!res.ok) {
+    let errorMsg = `API Error: ${res.statusText}`;
+    try {
+      const errorData = await res.json();
+      if (errorData && errorData.error) {
+        errorMsg = errorData.error;
+      }
+    } catch (e) {
+      // Not JSON or no error field, backup to statusText
+    }
+    throw new Error(errorMsg);
+  }
+  return res.json();
+};
+
 export const api = {
   async get(endpoint: string, params?: Record<string, string>) {
     const url = new URL(`${API_URL}${endpoint}`);
     if (params) Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
     const res = await fetch(url.toString(), { headers: getHeaders() });
-    if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-    return res.json();
+    return handleResponse(res);
   },
 
   async post(endpoint: string, body: any) {
@@ -23,8 +38,7 @@ export const api = {
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-    return res.json();
+    return handleResponse(res);
   },
 
   async put(endpoint: string, body: any) {
@@ -33,8 +47,7 @@ export const api = {
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-    return res.json();
+    return handleResponse(res);
   },
 
   async delete(endpoint: string) {
@@ -42,7 +55,6 @@ export const api = {
       method: 'DELETE',
       headers: getHeaders(),
     });
-    if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-    return res.json();
+    return handleResponse(res);
   },
 };

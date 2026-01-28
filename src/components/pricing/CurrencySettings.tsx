@@ -2,77 +2,84 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CURRENCIES, DEFAULT_PRICING, type PricingPrefs, type CurrencyCode } from '../../pricing/types';
 import { roundAmount, formatCurrency } from '../../pricing/money';
-import { adminService } from '../../services/adminService';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { adminService } from '../../services/adminService';
+import { toast } from 'react-hot-toast';
 
-export default function CurrencySettings({ adminId }:{ adminId: string }){
+export default function CurrencySettings({ adminId }: { adminId: string }) {
   const { t, isRTL } = useLanguage();
+  const { refreshPrefs, prefs: globalPrefs } = useCurrency(); // Use global prefs
 
+  // Initialize local state from global prefs to allow editing before save
   const [prefs, setPrefs] = useState<PricingPrefs>(DEFAULT_PRICING);
-  const [loading, setLoading] = useState(true);
+
+  // Sync with global prefs on mount/change
+  useEffect(() => {
+    if (globalPrefs) {
+      // Ensure we have valid defaults if some keys are missing
+      setPrefs({ ...DEFAULT_PRICING, ...globalPrefs });
+    }
+  }, [globalPrefs]);
+
+  const [loading, setLoading] = useState(false); // Global handles initial load usually
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  useEffect(()=>{
-    let mounted = true;
-    (async ()=>{
-      setLoading(true);
-      try{
-        const settings = await adminService.getAdminMonetarySettings(adminId);
-        const incoming = settings?.pricing_prefs;
-        setPrefs(incoming && Object.keys(incoming).length ? incoming : DEFAULT_PRICING);
-        setDirty(false);
-      }catch(e){ console.error(e); setPrefs(DEFAULT_PRICING);} finally{ if(mounted) setLoading(false); }
-    })();
-    return ()=>{ mounted=false };
-  },[adminId]);
-
   const onBaseChange = (code: CurrencyCode) => {
-    setPrefs(p=>({ ...p, baseCurrency: code, exchangeRates: { ...p.exchangeRates, [code]: 1 } }));
+    setPrefs(p => ({ ...p, baseCurrency: code }));
     setDirty(true);
   };
 
   const toggleEnabled = (code: CurrencyCode) => {
-    setPrefs(p=>{
-      const on = new Set(p.enabledCurrencies);
-      on.has(code) ? on.delete(code) : on.add(code);
-      return { ...p, enabledCurrencies: Array.from(on) as CurrencyCode[] };
+    setPrefs(p => {
+      const start = p.enabledCurrencies;
+      if (start.includes(code)) {
+        return { ...p, enabledCurrencies: start.filter(c => c !== code) };
+      }
+      return { ...p, enabledCurrencies: [...start, code] };
     });
     setDirty(true);
   };
 
-  const setRate = (code: CurrencyCode, v: number) => {
-    setPrefs(p=>({ ...p, exchangeRates: { ...p.exchangeRates, [code]: Math.max(0, v) } }));
+  const setRate = (code: CurrencyCode, rate: number) => {
+    setPrefs(p => ({
+      ...p,
+      exchangeRates: { ...p.exchangeRates, [code]: rate }
+    }));
     setDirty(true);
   };
 
-  const save = async()=>{
+  const save = async () => {
     setSaving(true);
-    try{
+    try {
       await adminService.savePricingPrefs(adminId, prefs);
+      await refreshPrefs(); // Update global context immediately
       setDirty(false);
-    }catch(e:any){
-      alert((t('common.error') || 'Error') + ': ' + (e?.message || ''));
-    }finally{ setSaving(false); }
+      toast.success(t('pricing.saved') || 'Settings saved successfully');
+    } catch (e: any) {
+      console.error(e);
+      toast.error((t('common.error') || 'Error') + ': ' + (e?.message || 'Failed to save settings'));
+    } finally { setSaving(false); }
   };
 
   // helper to localize currency names (falls back to english name)
   const currencyName = (code: CurrencyCode) =>
-    t(`pricing.currencies.${code}`) || (CURRENCIES.find(c=>c.code===code)?.name ?? code);
+    t(`pricing.currencies.${code}`) || (CURRENCIES.find(c => c.code === code)?.name ?? code);
 
-  const preview = useMemo(()=>{
+  const preview = useMemo(() => {
     const base = 100; // sample price
-    const cur = CURRENCIES.find(c=>c.code===prefs.baseCurrency)!;
+    const cur = CURRENCIES.find(c => c.code === prefs.baseCurrency) || CURRENCIES[0];
     const list = CURRENCIES
-      .filter(c=>prefs.enabledCurrencies.includes(c.code))
-      .map(c=>{
-        const rate = c.code===prefs.baseCurrency ? 1 : (prefs.exchangeRates[c.code]||0);
+      .filter(c => prefs.enabledCurrencies.includes(c.code))
+      .map(c => {
+        const rate = c.code === prefs.baseCurrency ? 1 : (prefs.exchangeRates[c.code] || 0);
         const raw = base * rate;
         const rounded = roundAmount(raw, prefs.rounding);
         return { code: c.code, label: currencyName(c.code as CurrencyCode), value: formatCurrency(rounded, c.code as CurrencyCode, c.symbol, prefs.priceDisplay) };
       });
     return { base: formatCurrency(base, cur.code as CurrencyCode, cur.symbol, prefs.priceDisplay), list };
-  },[prefs]);
+  }, [prefs]);
 
   if (loading) {
     return <div className="p-6 rounded-xl border bg-white">{t('pricing.loading') || 'Loading…'}</div>;
@@ -95,9 +102,9 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
       <div className="space-y-2">
         <h4 className="font-medium text-slate-800">{t('pricing.baseCurrency') || 'Base currency'}</h4>
         <div className="flex flex-wrap gap-3">
-          {CURRENCIES.map(c=> (
+          {CURRENCIES.map(c => (
             <label key={c.code} className="inline-flex items-center gap-2 border rounded-lg px-3 py-2">
-              <input type="radio" name="baseCurrency" checked={prefs.baseCurrency===c.code} onChange={()=>onBaseChange(c.code as CurrencyCode)} />
+              <input type="radio" name="baseCurrency" checked={prefs.baseCurrency === c.code} onChange={() => onBaseChange(c.code as CurrencyCode)} />
               <span className="text-sm">{currencyName(c.code as CurrencyCode)} ({c.code})</span>
             </label>
           ))}
@@ -109,13 +116,13 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
         <h4 className="font-medium text-slate-800">{t('pricing.enabledRatesTitle') || 'Enabled currencies & rates'}</h4>
         <p className="text-slate-500 text-sm">{ratesHint}</p>
         <div className="grid md:grid-cols-2 gap-3">
-          {CURRENCIES.map(c=> (
+          {CURRENCIES.map(c => (
             <div key={c.code} className="flex items-center justify-between border rounded-lg p-3">
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={prefs.enabledCurrencies.includes(c.code as CurrencyCode)}
-                  onChange={()=>toggleEnabled(c.code as CurrencyCode)}
+                  onChange={() => toggleEnabled(c.code as CurrencyCode)}
                 />
                 {currencyName(c.code as CurrencyCode)} ({c.code})
               </label>
@@ -126,7 +133,7 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
                   step={0.0001}
                   className="w-28 border rounded-md px-2 py-1 text-right"
                   value={prefs.exchangeRates[c.code as CurrencyCode] ?? 0}
-                  onChange={e=>setRate(c.code as CurrencyCode, Number(e.target.value||0))}
+                  onChange={e => setRate(c.code as CurrencyCode, Number(e.target.value || 0))}
                 />
               </div>
             </div>
@@ -143,8 +150,8 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
               <input
                 type="radio"
                 name="priceDisplay"
-                checked={prefs.priceDisplay==='symbol'}
-                onChange={()=>{setPrefs(p=>({...p, priceDisplay:'symbol'})); setDirty(true);}}
+                checked={prefs.priceDisplay === 'symbol'}
+                onChange={() => { setPrefs(p => ({ ...p, priceDisplay: 'symbol' })); setDirty(true); }}
               />
               {t('pricing.priceDisplaySymbol') || 'Symbol'}
             </label>
@@ -152,8 +159,8 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
               <input
                 type="radio"
                 name="priceDisplay"
-                checked={prefs.priceDisplay==='code'}
-                onChange={()=>{setPrefs(p=>({...p, priceDisplay:'code'})); setDirty(true);}}
+                checked={prefs.priceDisplay === 'code'}
+                onChange={() => { setPrefs(p => ({ ...p, priceDisplay: 'code' })); setDirty(true); }}
               />
               {t('pricing.priceDisplayCode') || 'Code'}
             </label>
@@ -165,7 +172,7 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
           <select
             className="border rounded-md px-2 py-1"
             value={prefs.rounding}
-            onChange={e=>{setPrefs(p=>({...p, rounding: e.target.value as any})); setDirty(true);}}
+            onChange={e => { setPrefs(p => ({ ...p, rounding: e.target.value as any })); setDirty(true); }}
           >
             <option value="none">{t('pricing.roundingNone') || 'none'}</option>
             <option value="nearest-0.05">{t('pricing.rounding005') || 'nearest 0.05'}</option>
@@ -180,7 +187,7 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
             <input
               type="checkbox"
               checked={prefs.taxInclusive}
-              onChange={e=>{setPrefs(p=>({...p, taxInclusive: e.target.checked})); setDirty(true);}}
+              onChange={e => { setPrefs(p => ({ ...p, taxInclusive: e.target.checked })); setDirty(true); }}
             />
             {t('pricing.taxInclusive') || 'Item prices include VAT'}
           </label>
@@ -191,7 +198,7 @@ export default function CurrencySettings({ adminId }:{ adminId: string }){
       <div className="space-y-2">
         <h4 className="font-medium text-slate-800">{previewTitle}</h4>
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {preview.list.map(row=> (
+          {preview.list.map(row => (
             <div key={row.code} className="border rounded-lg p-3">
               <div className="text-slate-500 text-xs">{row.code}</div>
               <div className="font-medium">{row.value}</div>

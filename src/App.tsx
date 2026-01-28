@@ -13,6 +13,7 @@ import { useAuth } from "./providers/AuthProvider";
 import { useLanguage } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { adminService } from "./services/adminService";
 import { tableService } from "./services/tableService";
 import { menuService } from "./services/menuService";
@@ -87,70 +88,72 @@ function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <Router>
-          <Routes>
-            {/* Customer Menu Routes */}
-            <Route path="/menu" element={<CustomerMenu />} />
-            <Route path="/ar/menu" element={<CustomerMenu />} />
-            <Route path="/en/menu" element={<CustomerMenu />} />
-            <Route path="/menu/:lang" element={<CustomerMenu />} />
+        <CurrencyProvider>
+          <Router>
+            <Routes>
+              {/* Customer Menu Routes */}
+              <Route path="/menu" element={<CustomerMenu />} />
+              <Route path="/ar/menu" element={<CustomerMenu />} />
+              <Route path="/en/menu" element={<CustomerMenu />} />
+              <Route path="/menu/:lang" element={<CustomerMenu />} />
 
-            {/* Super Admin Routes */}
-            <Route path="/super-admin/login" element={<SuperAdminLogin />} />
-            <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+              {/* Super Admin Routes */}
+              <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+              <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
 
-            {/* Main Admin Route */}
-            <Route
-              path="/"
-              element={user ? <AdminDashboard /> : <AuthForm />}
-            />
-          </Routes>
-        </Router>
+              {/* Main Admin Route */}
+              <Route
+                path="/"
+                element={user ? <AdminDashboard /> : <AuthForm />}
+              />
+            </Routes>
+          </Router>
 
-        {/* 🔔 Toast messages rendered globally */}
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              padding: "12px 16px",
-              fontSize: "0.875rem",
-              borderRadius: "0.75rem",
-              background: "#ffffff",
-              color: "#0f172a",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
-            },
-            success: {
-              iconTheme: {
-                primary: "#10b981", // emerald-500
-                secondary: "#d1fae5", // emerald-100
-              },
+          {/* 🔔 Toast messages rendered globally */}
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              duration: 4000,
               style: {
-                background: "#ecfdf5",
-                color: "#065f46",
-                borderLeft: "4px solid #10b981",
+                padding: "12px 16px",
+                fontSize: "0.875rem",
+                borderRadius: "0.75rem",
+                background: "#ffffff",
+                color: "#0f172a",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
               },
-            },
-            error: {
-              iconTheme: {
-                primary: "#ef4444", // red-500
-                secondary: "#fee2e2", // red-100
+              success: {
+                iconTheme: {
+                  primary: "#10b981", // emerald-500
+                  secondary: "#d1fae5", // emerald-100
+                },
+                style: {
+                  background: "#ecfdf5",
+                  color: "#065f46",
+                  borderLeft: "4px solid #10b981",
+                },
               },
-              style: {
-                background: "#fef2f2",
-                color: "#991b1b",
-                borderLeft: "4px solid #ef4444",
+              error: {
+                iconTheme: {
+                  primary: "#ef4444", // red-500
+                  secondary: "#fee2e2", // red-100
+                },
+                style: {
+                  background: "#fef2f2",
+                  color: "#991b1b",
+                  borderLeft: "4px solid #ef4444",
+                },
               },
-            },
-            loading: {
-              style: {
-                background: "#f0fdfa",
-                color: "#0891b2",
-                borderLeft: "4px solid #06b6d4", // cyan-500
+              loading: {
+                style: {
+                  background: "#f0fdfa",
+                  color: "#0891b2",
+                  borderLeft: "4px solid #06b6d4", // cyan-500
+                },
               },
-            },
-          }}
-        />
+            }}
+          />
+        </CurrencyProvider>
       </LanguageProvider>
     </ThemeProvider>
   );

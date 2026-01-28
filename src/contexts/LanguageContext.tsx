@@ -12,9 +12,11 @@ interface LanguageContextType {
   getLocalizedDayName: (date: Date, format?: 'short' | 'long') => string;
 }
 
-
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 // Translation keys and values
+// -----------------------------------------------------
+// 1) ENGLISH (en)
+// -----------------------------------------------------
 const translations: Record<Language, any> = {
   en: {
     common: {
@@ -95,6 +97,13 @@ const translations: Record<Language, any> = {
       item: "item",
       min: "min",
       undo: "Undo",
+      sunday: "Sun",
+      monday: "Mon",
+      tuesday: "Tue",
+      wednesday: "Wed",
+      thursday: "Thu",
+      friday: "Fri",
+      saturday: "Sat",
     },
     errors: {
       general: {
@@ -119,11 +128,24 @@ const translations: Record<Language, any> = {
         tooMany: "You can’t add more than this 🤷‍♂️",
         updateFailed: "Couldn’t update the order 🙁… try again.",
       },
-      upload: {
-        failed: "Upload failed 😅… try a smaller image.",
-        tooLarge: "Image is too big 📸… please resize it.",
-        unsupported: "File type not supported 🚫",
-      }
+    },
+    // Upload errors moved to top-level 'upload' section for UI labels
+    upload: {
+      failed: "Upload failed 😅… try a smaller image.",
+      tooLarge: "Image is too big 📸… please resize it.",
+      unsupported: "File type not supported 🚫",
+      label: "Restaurant Logo",
+      preview: "Logo preview",
+      change: "Change Logo",
+      dragDrop: "Click to upload or drag and drop",
+      formats: "PNG, JPG, WebP, or SVG (max 2MB)",
+      errorType: "Please upload a valid image (JPG, PNG, WebP, or SVG)",
+      errorSize: "Image must be less than 2MB",
+      errorRead: "Failed to read image file",
+      success: "Logo uploaded successfully!",
+      removed: "Logo removed",
+      recommendation: "Recommended: 400x400px",
+      helper: "Your logo will appear in the customer menu and admin panel",
     },
     cart: {
       viewOrder: "View order 🧾",
@@ -184,6 +206,7 @@ const translations: Record<Language, any> = {
       juice: "Fresh juice 🥤",
     },
     auth: {
+      signedInAs: "Signed in as",
       welcome: "Welcome Back",
       createAccount: "Create Account",
       signIn: "Sign In",
@@ -280,6 +303,7 @@ const translations: Record<Language, any> = {
         dietary: "Dietary",
       },
       none: "none",
+      quickAdd: "Quick add ✨",
     },
     compare: {
       compare: "Compare",
@@ -525,7 +549,25 @@ const translations: Record<Language, any> = {
       darkMode: "Dark mode 🌙",
       darkModeDescription: "Switch between light and dark",
       colorPresets: "Color presets",
+      classyPresets: "Classy Palettes", // NEW
       customColors: "Custom colors",
+      // NEW Theme Customizer strings
+      livePreview: "Live Preview",
+      brand: "Restaurant Brand",
+      menu: "Menu",
+      reserve: "Reserve",
+      signatureDish: "Signature Dish",
+      chefsPick: "Chef’s Pick",
+      dishDesc: "A refined balance of texture and flavor, plated with elegance.",
+      halal: "Halal",
+      gf: "GF",
+      addToCart: "Add to Cart",
+      copyCss: "Copy CSS",
+      copied: "Copied!",
+      copyHint: "Paste into a global stylesheet or Tailwind CSS vars.",
+      cancel: "Cancel",
+      reset: "Reset",
+      apply: "Apply",
       primary: "Primary",
       secondary: "Secondary",
       accent: "Accent",
@@ -672,6 +714,13 @@ const translations: Record<Language, any> = {
       item: "عنصر",
       min: "دقيقة",
       undo: "تراجع",
+      sunday: "أحد",
+      monday: "إثنين",
+      tuesday: "ثلاثاء",
+      wednesday: "أربعاء",
+      thursday: "خميس",
+      friday: "جمعة",
+      saturday: "سبت",
     },
     errors: {
       general: {
@@ -696,11 +745,23 @@ const translations: Record<Language, any> = {
         tooMany: "ما بنقدر نضيف أكتر من هيك 🤷‍♂️",
         updateFailed: "ما قدرنا نحدّث الطلب 🙁… جرّب كمان مرة.",
       },
-      upload: {
-        failed: "الرفع ما زبط 😅… جرب صورة أصغر أو صيغة تانية.",
-        tooLarge: "الصورة كبيرة كتير 📸… صغّرها شوي.",
-        unsupported: "نوع الملف مش مدعوم 🚫",
-      }
+    },
+    upload: {
+      failed: "الرفع ما زبط 😅… جرب صورة أصغر أو صيغة تانية.",
+      tooLarge: "الصورة كبيرة كتير 📸… صغّرها شوي.",
+      unsupported: "نوع الملف مش مدعوم 🚫",
+      label: "شعار المطعم",
+      preview: "معاينة الشعار",
+      change: "غيّر الشعار",
+      dragDrop: "اضغط للرفع أو اسحب الصورة لهون",
+      formats: "PNG, JPG, WebP, أو SVG (حد أقصى 2MB)",
+      errorType: "صيغة الملف غلط، جرب (JPG, PNG, WebP, SVG)",
+      errorSize: "حجم الصورة لازم يكون أقل من 2MB",
+      success: "تم رفع الشعار ✔️",
+      removed: "انشال الشعار",
+      errorRead: "ما قدرنا نقرأ ملف الصورة",
+      recommendation: "بننصح بحجم: 400x400px",
+      helper: "الشعار راح يبين في قائمة الزبائن ولوحة الإدارة",
     },
     badges: {
       spicy: "حرّ 🌶️",
@@ -722,6 +783,7 @@ const translations: Record<Language, any> = {
       juice: "عصير طبيعي 🥤",
     },
     auth: {
+      signedInAs: "مسجّل الدخول كـ",
       welcome: "أهلًا برجعتك",
       createAccount: "إنشاء حساب جديد",
       signIn: "تسجيل الدخول",
@@ -858,6 +920,7 @@ const translations: Record<Language, any> = {
         dietary: "نمط غذائي",
       },
       none: "بدون",
+      quickAdd: "إضافة سريعة ✨",
     },
     compare: {
       compare: "قارن",
@@ -1103,7 +1166,25 @@ const translations: Record<Language, any> = {
       darkMode: "الوضع الداكن 🌙",
       darkModeDescription: "بدّل بين الفاتح والداكن",
       colorPresets: "ألوان جاهزة",
+      classyPresets: "باليتات أنيقة", // NEW
       customColors: "ألوان مخصّصة",
+      // AR Theme Customizer
+      livePreview: "معاينة حية",
+      brand: "اسم المطعم",
+      menu: "القائمة",
+      reserve: "حجز",
+      signatureDish: "طبق مميز",
+      chefsPick: "اختيار الشيف",
+      dishDesc: "توازن راقي بين النكهات والقوام، بتقديم أنيق.",
+      halal: "حلال",
+      gf: "خالي من الجلوتين",
+      addToCart: "أضف للسلة",
+      copyCss: "نسخ الـ CSS",
+      copied: "تم النسخ!",
+      copyHint: "الصقه في ملف التنسيق العام أو متغيرات Tailwind.",
+      cancel: "إلغاء",
+      reset: "إعادة تعيين",
+      apply: "تطبيق",
       primary: "لون أساسي",
       secondary: "لون ثانوي",
       accent: "لون مميّز",
@@ -1122,6 +1203,8 @@ const translations: Record<Language, any> = {
       title: "لوحة التحليلات",
       subtitle: "تابع الأداء والرؤى 📊",
       description: "شوف أداء مطعمك بكل وضوح",
+      busiestHours: "أوقات الذروة",
+      heatmapDescription: "تكرار الطلب حسب اليوم والساعة",
       totalRevenue: "الإيرادات الكليّة 💰",
       totalOrders: "عدد الطلبات",
       avgOrderValue: "متوسط قيمة الطلب",

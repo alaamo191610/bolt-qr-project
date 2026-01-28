@@ -13,7 +13,6 @@ interface QRGeneratorProps {
 }
 
 const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
-  const [selectedTable, setSelectedTable] = useState<string>('');
   const [qrSize, setQrSize] = useState(200);
   const [copiedTable, setCopiedTable] = useState<string>('');
 
@@ -36,7 +35,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
   const copyToClipboard = async (tableNumber: string) => {
     const baseURL = window.location.origin;
     const menuURL = `${baseURL}/menu?table=${tableNumber}`;
-    
+
     try {
       await navigator.clipboard.writeText(menuURL);
       setCopiedTable(tableNumber);
@@ -84,7 +83,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
             max="400"
             value={qrSize}
             onChange={(e) => setQrSize(Number(e.target.value))}
-            className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer"
+            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
             style={{
               background: `linear-gradient(to right, var(--color-primary) 0%, var(--color-primary) ${((qrSize - 150) / (400 - 150)) * 100}%, #e2e8f0 ${((qrSize - 150) / (400 - 150)) * 100}%, #e2e8f0 100%)`
             }}
@@ -126,7 +125,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                   type="text"
                   value={`${window.location.origin}/menu?table=${table.number}`}
                   readOnly
-                  className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 <button
                   onClick={() => copyToClipboard(table.number)}

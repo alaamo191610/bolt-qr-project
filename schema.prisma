@@ -92,20 +92,93 @@ model Menu {
   category         Category?        @relation(fields: [category_id], references: [id])
   menu_ingredients MenuIngredient[]
   order_items      OrderItem[]
+  menu_modifier_groups MenuModifierGroup[]
+  combo_items          ComboGroupItem[]
 
   @@index([user_id])
   @@map("menus")
 }
 
 model MenuIngredient {
-  menu_id       Int
-  ingredient_id Int
+  menu_id              Int
+  ingredient_id        Int
+  removable            Boolean @default(true)
+  extra_available      Boolean @default(false)
+  max_extra            Int     @default(0)
+  extra_price_override Decimal? @db.Decimal(10, 2)
 
   menu       Menu       @relation(fields: [menu_id], references: [id], onDelete: Cascade)
   ingredient Ingredient @relation(fields: [ingredient_id], references: [id], onDelete: Cascade)
 
   @@id([menu_id, ingredient_id])
   @@map("menu_ingredients")
+}
+
+model ModifierGroup {
+  id             Int      @id @default(autoincrement())
+  name_en        String
+  name_ar        String?
+  selection_type String?  @default("single")
+  min_select     Int?     @default(0)
+  max_select     Int?     @default(1)
+  required       Boolean? @default(false)
+  created_at     DateTime @default(now()) @db.Timestamptz
+
+  modifier_options      ModifierOption[]
+  menu_modifier_groups MenuModifierGroup[]
+
+  @@map("modifier_groups")
+}
+
+model ModifierOption {
+  id          Int      @id @default(autoincrement())
+  group_id    Int
+  name_en     String
+  name_ar     String?
+  price_delta Decimal  @default(0) @db.Decimal(10, 2)
+  max_qty     Int?     @default(1)
+  is_default  Boolean? @default(false)
+  created_at  DateTime @default(now()) @db.Timestamptz
+
+  modifier_group ModifierGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@map("modifier_options")
+}
+
+model MenuModifierGroup {
+  menu_id  Int
+  group_id Int
+
+  menu           Menu          @relation(fields: [menu_id], references: [id], onDelete: Cascade)
+  modifier_group ModifierGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@id([menu_id, group_id])
+  @@map("menu_modifier_groups")
+}
+
+model ComboGroup {
+  id         Int      @id @default(autoincrement())
+  menu_id    Int
+  min_select Int?     @default(1)
+  max_select Int?     @default(1)
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  combo_group_items ComboGroupItem[]
+
+  @@map("combo_groups")
+}
+
+model ComboGroupItem {
+  id                  Int      @id @default(autoincrement())
+  group_id            Int
+  child_menu_id       Int
+  upgrade_price_delta Decimal  @default(0) @db.Decimal(10, 2)
+  is_default          Boolean? @default(false)
+
+  combo_group ComboGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  menus       Menu       @relation(fields: [child_menu_id], references: [id], onDelete: Cascade)
+
+  @@map("combo_group_items")
 }
 
 model Table {

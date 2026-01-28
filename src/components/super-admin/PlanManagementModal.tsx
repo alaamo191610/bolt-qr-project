@@ -118,8 +118,8 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
                                         key={plan.value}
                                         onClick={() => setSelectedPlan(plan.value)}
                                         className={`relative p-4 rounded-xl border-2 transition-all text-left ${isSelected
-                                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg'
-                                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                                             }`}
                                     >
                                         {isSelected && (
@@ -165,8 +165,8 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
                                         key={status.value}
                                         onClick={() => setSelectedStatus(status.value)}
                                         className={`px-4 py-3 rounded-lg font-medium text-sm transition-all ${isSelected
-                                                ? status.color + ' ring-2 ring-offset-2 ring-purple-500'
-                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                            ? status.color + ' ring-2 ring-offset-2 ring-purple-500'
+                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                                             }`}
                                     >
                                         {status.label}
@@ -187,7 +187,7 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
                             onChange={(e) => setEndDate(e.target.value)}
                             min={new Date().toISOString().split('T')[0]}
                             placeholder={defaultEndDateStr}
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900"
                         />
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                             Leave empty for no expiration. Default is 30 days from now.

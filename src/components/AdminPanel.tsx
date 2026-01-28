@@ -1,4 +1,4 @@
-import React, { useMemo, useState, Suspense } from "react";
+import React, { useMemo, useState, Suspense, useEffect } from "react";
 import { Settings } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import CurrencySettings from "../components/pricing/CurrencySettings";
@@ -9,6 +9,9 @@ import { Palette } from "lucide-react";
 // ⬅️ your PanelCard component (adjust import path if different)
 import PanelCard from "../components/ui/PanelCard";
 import CollapsiblePanelCard from "../components/ui/CollapsiblePanelCard";
+import LogoUpload from "../components/ui/LogoUpload"; // [NEW] Import LogoUpload
+import { adminService } from "../services/adminService"; // [NEW] Import adminService
+import { toast } from "react-hot-toast"; // [NEW] Import toast
 
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from "../components/ui/Tabs";
 // ⬅️ lazy-load client components (avoid SSR issues)
@@ -24,6 +27,7 @@ type AdminSettings = {
   phone: string;
   address: string;
   description: string;
+  logo_url?: string | null; // [NEW] Add logo_url
 };
 
 const DEFAULTS: AdminSettings = {
@@ -32,6 +36,7 @@ const DEFAULTS: AdminSettings = {
   address: "123 Main Street, City, State 12345",
   description:
     "Fine dining experience with fresh, locally sourced ingredients and exceptional service.",
+  logo_url: null,
 };
 
 type Props = { adminId: string };
@@ -39,26 +44,80 @@ type Props = { adminId: string };
 const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   const { t, isRTL } = useLanguage();
   const [form, setForm] = useState<AdminSettings>(DEFAULTS);
+  const [loading, setLoading] = useState(true); // [NEW] Loading state
   const [saving, setSaving] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const dirty = useMemo(
+  const isDirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(DEFAULTS),
     [form]
   );
 
+  // [NEW] Fetch data on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        const profile = await adminService.getAdminProfile(adminId);
+        // Map backend profile to form state
+        if (profile) {
+          setForm({
+            restaurant_name: profile.restaurant_name || DEFAULTS.restaurant_name,
+            phone: profile.phone || DEFAULTS.phone,
+            address: profile.address || DEFAULTS.address,
+            description: profile.description || DEFAULTS.description,
+            logo_url: profile.logo_url || null,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+        toast.error("Failed to load restaurant profile");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProfile();
+  }, [adminId]);
+
   const onChange =
     <K extends keyof AdminSettings>(key: K) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setForm((prev) => ({ ...prev, [key]: e.target.value }));
+      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const onSave = async () => {
     try {
       setSaving(true);
-      // await adminService.updateAdminProfile(adminId, form);
+      await adminService.updateAdminProfile(adminId, form);
+
+      // [NEW] Update local cache to reflect changes globally
+      const CACHE_KEY = 'monetary:v1';
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        const cache = raw ? JSON.parse(raw) : {};
+        const newCache = {
+          ...cache,
+          restaurantName: form.restaurant_name,
+          logoUrl: form.logo_url,
+          ts: Date.now()
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(newCache));
+        // Dispatch a storage event to potentially update other tabs or listeners
+        window.dispatchEvent(new Event('storage'));
+      } catch (e) {
+        console.error("Failed to update local cache", e);
+      }
+
+      toast.success(t("admin.saved") || "Settings saved successfully");
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+      toast.error(t("admin.saveFailed") || "Failed to save settings");
     } finally {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-500">Loading settings...</div>;
+  }
 
   return (
     <div
@@ -99,11 +158,20 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             </div>
           }
         >
+          {/* [NEW] Logo Upload Section */}
+          <div className="mb-8 border-b border-slate-100 pb-8">
+            <LogoUpload
+              currentLogo={form.logo_url}
+              onLogoChange={(base64) => setForm(prev => ({ ...prev, logo_url: base64 || undefined }))}
+              restaurantName={form.restaurant_name}
+            />
+          </div>
+
           <form
             className="grid grid-cols-1 md:grid-cols-2 gap-6"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!saving && dirty) onSave();
+              if (!saving && isDirty) onSave();
             }}
           >
             <div>
@@ -155,12 +223,12 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
               />
             </div>
           </form>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mt-6">
             <button
               type="button"
               onClick={() => setForm(DEFAULTS)}
               className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
-              disabled={!dirty || saving}
+              disabled={!isDirty || saving}
             >
               {t("common.reset") || "Reset"}
             </button>
@@ -168,12 +236,11 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             <button
               type="button"
               onClick={onSave}
-              disabled={!dirty || saving}
-              className={`px-4 py-2 text-white rounded-lg ${
-                !dirty || saving
-                  ? "bg-emerald-400 cursor-not-allowed"
-                  : "bg-emerald-600 hover:bg-emerald-700"
-              }`}
+              disabled={!isDirty || saving}
+              className={`px-4 py-2 text-white rounded-lg ${!isDirty || saving
+                ? "bg-emerald-400 cursor-not-allowed"
+                : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
             >
               {saving
                 ? t("admin.saving") || "Saving…"

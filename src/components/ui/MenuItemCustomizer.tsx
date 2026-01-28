@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { X, Plus, Minus, ChevronDown } from "lucide-react";
+import { menuService } from "../../services/menuService";
 
 /**
  * MenuItemCustomizer
@@ -107,46 +108,13 @@ function useMenuConfig(menuId: string) {
       setLoading(true);
       setError(null);
       try {
-        // 1) menu
-        const { data: menuData, error: mErr } = await supabase
-          .from("menus")
-          .select("id, name_en, name_ar, price")
-          .eq("id", menuId)
-          .single();
-        if (mErr) throw mErr;
-
-        // 2) ingredients (with joined ingredient names + base extra price)
-        const { data: miData, error: miErr } = await supabase
-          .from("menu_ingredients")
-          .select(
-            "menu_id, ingredient_id, removable, extra_available, max_extra, extra_price_override, ingredients(id, name_en, name_ar, extra_price)"
-          )
-          .eq("menu_id", menuId);
-        if (miErr) throw miErr;
-
-        // 3) modifier groups + options attached to this menu
-        const { data: mmgData, error: mmgErr } = await supabase
-          .from("menu_modifier_groups")
-          .select(
-            "menu_id, modifier_groups(id, name_en, name_ar, selection_type, min_select, max_select, required, modifier_options(id, name_en, name_ar, price_delta, max_qty, is_default))"
-          )
-          .eq("menu_id", menuId);
-        if (mmgErr) throw mmgErr;
-
-        // 4) combo groups (allowed children)
-        const { data: comboData, error: cgErr } = await supabase
-          .from("combo_groups")
-          .select(
-            "id, menu_id, min_select, max_select, combo_group_items(child_menu_id, is_default, upgrade_price_delta, menus(id, name_en, price))"
-          )
-          .eq("menu_id", menuId);
-        if (cgErr) throw cgErr;
+        const data = await menuService.getMenuConfig(menuId);
 
         if (!active) return;
-        setMenu(menuData);
-        setMI(miData as any);
-        setMMG(mmgData as any);
-        setCombo(comboData as any);
+        setMenu(data.menu);
+        setMI(data.ingredients);
+        setMMG(data.modifierGroups);
+        setCombo(data.comboGroups);
       } catch (e: any) {
         if (!active) return;
         setError(e.message || String(e));
@@ -172,9 +140,9 @@ function useMenuConfig(menuId: string) {
       }
     >();
     for (const row of mi) {
-      const name = row.ingredients?.name_en || "ingredient";
+      const name = row.ingredient?.name_en || "ingredient";
       const eff = (row.extra_price_override ??
-        row.ingredients?.extra_price ??
+        row.ingredient?.extra_price ??
         0) as number;
       byId.set(row.ingredient_id, {
         name,
@@ -188,7 +156,7 @@ function useMenuConfig(menuId: string) {
   }, [mi]);
 
   const groups = useMemo(
-    () => (mmg || []).map((x) => x.modifier_groups),
+    () => (mmg || []).map((x) => x.modifier_group),
     [mmg]
   );
 
@@ -224,9 +192,8 @@ function TriState({
   return (
     <div className="flex items-center gap-2">
       <button
-        className={`px-2 py-1 rounded-xl border ${
-          value === "remove" ? "bg-red-50 border-red-300" : "border-zinc-300"
-        }`}
+        className={`px-2 py-1 rounded-xl border ${value === "remove" ? "bg-red-50 border-red-300" : "border-zinc-300"
+          }`}
         onClick={() => onChange(value === "remove" ? "default" : "remove")}
         disabled={disabledRemove}
         title={disabledRemove ? "Not removable" : "Remove"}
@@ -234,11 +201,10 @@ function TriState({
         no
       </button>
       <button
-        className={`px-2 py-1 rounded-xl border ${
-          value === "extra"
-            ? "bg-emerald-50 border-emerald-300"
-            : "border-zinc-300"
-        }`}
+        className={`px-2 py-1 rounded-xl border ${value === "extra"
+          ? "bg-emerald-50 border-emerald-300"
+          : "border-zinc-300"
+          }`}
         onClick={() => onChange(value === "extra" ? "default" : "extra", qty)}
         disabled={disabledExtra}
         title={disabledExtra ? "No extra allowed" : "Extra"}
@@ -246,9 +212,8 @@ function TriState({
         extra
       </button>
       <div
-        className={`flex items-center gap-1 ${
-          value === "extra" ? "opacity-100" : "opacity-50"
-        }`}
+        className={`flex items-center gap-1 ${value === "extra" ? "opacity-100" : "opacity-50"
+          }`}
       >
         <button
           className="p-1 rounded border"
@@ -545,11 +510,10 @@ export default function MenuItemCustomizer({
                     return (
                       <div
                         key={o.id}
-                        className={`flex items-center justify-between rounded-lg border p-2 ${
-                          selQty > 0
-                            ? "border-emerald-300 bg-emerald-50"
-                            : "border-zinc-200"
-                        }`}
+                        className={`flex items-center justify-between rounded-lg border p-2 ${selQty > 0
+                          ? "border-emerald-300 bg-emerald-50"
+                          : "border-zinc-200"
+                          }`}
                       >
                         <div>
                           <div className="text-sm">{o.name_en}</div>
@@ -561,11 +525,10 @@ export default function MenuItemCustomizer({
                         <div className="flex items-center gap-2">
                           {single ? (
                             <button
-                              className={`px-2 py-1 rounded border ${
-                                selQty
-                                  ? "bg-emerald-500 text-white border-emerald-500"
-                                  : "border-zinc-300"
-                              }`}
+                              className={`px-2 py-1 rounded border ${selQty
+                                ? "bg-emerald-500 text-white border-emerald-500"
+                                : "border-zinc-300"
+                                }`}
                               onClick={() =>
                                 setOptState((s) => {
                                   const next = { ...s };
@@ -643,11 +606,10 @@ export default function MenuItemCustomizer({
                     return (
                       <button
                         key={ci.child_menu_id}
-                        className={`text-left rounded-lg border p-2 ${
-                          selected
-                            ? "border-emerald-400 bg-emerald-50"
-                            : "border-zinc-200"
-                        }`}
+                        className={`text-left rounded-lg border p-2 ${selected
+                          ? "border-emerald-400 bg-emerald-50"
+                          : "border-zinc-200"
+                          }`}
                         onClick={() =>
                           setChildrenState((s) => ({
                             ...s,
@@ -747,11 +709,10 @@ export default function MenuItemCustomizer({
         <button
           disabled={!canAdd}
           onClick={() => onAdd(cartLine)}
-          className={`px-4 py-2 rounded-xl text-white ${
-            canAdd
-              ? "bg-emerald-600 hover:bg-emerald-700"
-              : "bg-zinc-400 cursor-not-allowed"
-          }`}
+          className={`px-4 py-2 rounded-xl text-white ${canAdd
+            ? "bg-emerald-600 hover:bg-emerald-700"
+            : "bg-zinc-400 cursor-not-allowed"
+            }`}
         >
           Add · <Money value={pricing.total} />
         </button>

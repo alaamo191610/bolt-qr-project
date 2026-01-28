@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Menu, X, Search, User } from "lucide-react";
+import { Menu, X, Search, User, LogOut } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import LanguageToggle from "./LanguageToggle";
@@ -98,13 +98,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
       {/* Sidebar (mobile only) */}
       <div
-        className={`fixed inset-y-0 ${
-          isRTL ? "right-0" : "left-0"
-        } z-50 w-64 bg-white dark:bg-slate-800 shadow-xl transform transition-transform duration-300 ease-in-out
-          ${
-            sidebarOpen
-              ? "translate-x-0"
-              : isRTL
+        className={`fixed inset-y-0 ${isRTL ? "right-0" : "left-0"
+          } z-50 w-64 bg-white dark:bg-slate-800 shadow-xl transform transition-transform duration-300 ease-in-out
+          ${sidebarOpen
+            ? "translate-x-0"
+            : isRTL
               ? "translate-x-full"
               : "-translate-x-full"
           } lg:hidden`}
@@ -152,18 +150,16 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                 onClick={() => {
                   handleTabChange(item.id);
                 }}
-                className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${
-                  isRTL ? "text-right" : "text-left"
-                } px-4 py-3 rounded-xl transition-all duration-200 group ${
-                  isActive
+                className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${isRTL ? "text-right" : "text-left"
+                  } px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
                     ? "text-white shadow-lg transform scale-[1.02]"
                     : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
-                }`}
+                  }`}
                 style={
                   isActive
                     ? {
-                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                      }
+                      background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                    }
                     : {}
                 }
               >
@@ -193,9 +189,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             {onSignOut && (
               <button
                 onClick={onSignOut}
-                className={`w-full mt-3 px-4 py-2 text-sm text-red-600 hover:text-red-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors duration-200 ${
-                  isRTL ? "text-right" : "text-left"
-                }`}
+                className={`w-full mt-3 px-4 py-2 text-sm text-red-600 hover:text-red-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors duration-200 ${isRTL ? "text-right" : "text-left"
+                  }`}
               >
                 {t("auth.signOut")}
               </button>
@@ -255,16 +250,15 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                       onClick={() => {
                         handleTabChange(item.id);
                       }}
-                      className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${
-                        isActive
-                          ? "text-white shadow-sm"
-                          : "text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white"
-                      }`}
+                      className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${isActive
+                        ? "text-white shadow-sm"
+                        : "text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white"
+                        }`}
                       style={
                         isActive
                           ? {
-                              background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                            }
+                            background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                          }
                           : {}
                       }
                     >
@@ -290,60 +284,72 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             {/* Right side: language, bell, user info */}
             <div
               className="flex relative float-right items-center space-x-4 rtl:space-x-reverse"
-              style={{ right: "5%" }}
             >
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">
-                  <div>
-                    <DropdownMenu.Button className="flex rounded-full bg-slate-100 dark:bg-slate-700 p-1 hover:ring-2 hover:ring-offset-2 hover:ring-emerald-500 focus:outline-none">
-                      <span className="sr-only">Open user menu</span>
-                      <div className="w-9 h-9 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center">
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                    </DropdownMenu.Button>
-                  </div>
+                  <DropdownMenu.Button className="flex items-center gap-2 rounded-full bg-white dark:bg-slate-800 p-1 pl-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[100px] truncate hidden sm:block">
+                      {userInfo.name.split(" ")[0]}
+                    </span>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+                      <span className="text-sm font-bold text-white">
+                        {userInfo.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  </DropdownMenu.Button>
 
                   <Transition
                     as={Fragment}
-                    enter="transition ease-out duration-100"
-                    enterFrom="transform opacity-0 scale-95"
-                    enterTo="transform opacity-100 scale-100"
-                    leave="transition ease-in duration-75"
-                    leaveFrom="transform opacity-100 scale-100"
-                    leaveTo="transform opacity-0 scale-95"
+                    enter="transition ease-out duration-200"
+                    enterFrom="transform opacity-0 scale-95 translate-y-2"
+                    enterTo="transform opacity-100 scale-100 translate-y-0"
+                    leave="transition ease-in duration-150"
+                    leaveFrom="transform opacity-100 scale-100 translate-y-0"
+                    leaveTo="transform opacity-0 scale-95 translate-y-2"
                   >
                     <DropdownMenu.Items
-                      className={`absolute z-50 mt-2 w-72 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${
-                        isRTL ? "left-0" : "right-0"
-                      }  `}
+                      className={`absolute z-50 mt-3 w-64 rounded-xl bg-white dark:bg-slate-800 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none divide-y divide-slate-100 dark:divide-slate-700 ${isRTL ? "left-0 origin-top-left" : "right-0 origin-top-right"
+                        }`}
                     >
-                      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                        <p className="text-sm font-medium text-slate-900 dark:text-white">
+                      <div className="px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                          {t("auth.signedInAs") || "Signed in as"}
+                        </p>
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
                           {userInfo.name}
                         </p>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                           {userInfo.email}
                         </p>
                       </div>
-                      <LanguageToggle />
-                      {/* <button className="relative p-2">
-                        <Bell className="w-5 h-5" />
-                        <span className="absolute top-1 right-1 rtl:right-auto rtl:left-1 w-2 h-2 bg-red-500 rounded-full" />
-                      </button> */}
+
+                      <div className="p-2">
+                        {/* Wrappers for consistent item sizing */}
+                        <div className="px-2 py-1">
+                          <LanguageToggle />
+                        </div>
+                      </div>
+
                       {onSignOut && (
-                        <DropdownMenu.Item>
-                          {({ active }) => (
-                            <button
-                              onClick={onSignOut}
-                              className={`${
-                                active ? "bg-slate-100 dark:bg-slate-700" : ""
-                              } w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400`}
-                            >
-                              {t("auth.signOut")}
-                            </button>
-                          )}
-                        </DropdownMenu.Item>
+                        <div className="p-2">
+                          <DropdownMenu.Item>
+                            {({ active }) => (
+                              <button
+                                onClick={onSignOut}
+                                className={`${active
+                                  ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                                  : "text-red-600 dark:text-red-400"
+                                  } group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors`}
+                              >
+                                <LogOut
+                                  className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isRTL ? 'scale-x-[-1] group-hover:-translate-x-0.5' : ''}`}
+                                />
+                                {t("auth.signOut")}
+                              </button>
+                            )}
+                          </DropdownMenu.Item>
+                        </div>
                       )}
                     </DropdownMenu.Items>
                   </Transition>

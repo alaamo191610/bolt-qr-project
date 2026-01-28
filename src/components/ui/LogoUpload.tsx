@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface LogoUploadProps {
     currentLogo?: string | null;
@@ -13,6 +14,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
     onLogoChange,
     restaurantName
 }) => {
+    const { t } = useLanguage();
     const [preview, setPreview] = useState<string | null>(currentLogo || null);
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,13 +27,13 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
 
         // Validate file type
         if (!ALLOWED_TYPES.includes(file.type)) {
-            toast.error('Please upload a valid image (JPG, PNG, WebP, or SVG)');
+            toast.error(t('upload.errorType') || 'Please upload a valid image (JPG, PNG, WebP, or SVG)');
             return;
         }
 
         // Validate file size
         if (file.size > MAX_FILE_SIZE) {
-            toast.error('Image must be less than 2MB');
+            toast.error(t('upload.errorSize') || 'Image must be less than 2MB');
             return;
         }
 
@@ -41,10 +43,10 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
             const base64 = reader.result as string;
             setPreview(base64);
             onLogoChange(base64);
-            toast.success('Logo uploaded successfully!');
+            toast.success(t('upload.success') || 'Logo uploaded successfully!');
         };
         reader.onerror = () => {
-            toast.error('Failed to read image file');
+            toast.error(t('upload.errorRead') || 'Failed to read image file');
         };
         reader.readAsDataURL(file);
     };
@@ -74,13 +76,13 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
-        toast.success('Logo removed');
+        toast.success(t('upload.removed') || 'Logo removed');
     };
 
     return (
         <div className="space-y-4">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Restaurant Logo
+                {t('upload.label') || 'Restaurant Logo'}
             </label>
 
             {/* Preview or Upload Area */}
@@ -98,14 +100,14 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
                                 {restaurantName || 'Your Restaurant'}
                             </p>
                             <p className="text-sm text-slate-500 dark:text-slate-400">
-                                Logo preview
+                                {t('upload.preview') || 'Logo preview'}
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={handleRemove}
                             className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition text-red-600 dark:text-red-400"
-                            title="Remove logo"
+                            title={t('common.remove') || "Remove logo"}
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -117,7 +119,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
                         onClick={() => fileInputRef.current?.click()}
                         className="mt-2 w-full px-4 py-2 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-lg hover:border-emerald-500 dark:hover:border-emerald-500 transition text-sm text-slate-700 dark:text-slate-300"
                     >
-                        Change Logo
+                        {t('upload.change') || 'Change Logo'}
                     </button>
                 </div>
             ) : (
@@ -128,8 +130,8 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
                     onDragLeave={handleDragLeave}
                     onClick={() => fileInputRef.current?.click()}
                     className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${isDragging
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                            : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400 dark:hover:border-emerald-500 bg-slate-50 dark:bg-slate-800'
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-300 hover:border-emerald-400 bg-slate-50'
                         }`}
                 >
                     <div className="flex flex-col items-center gap-3">
@@ -143,15 +145,15 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
 
                         <div>
                             <p className="text-sm font-medium text-slate-900 dark:text-white">
-                                Click to upload or drag and drop
+                                {t('upload.dragDrop') || 'Click to upload or drag and drop'}
                             </p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                PNG, JPG, WebP, or SVG (max 2MB)
+                                {t('upload.formats') || 'PNG, JPG, WebP, or SVG (max 2MB)'}
                             </p>
                         </div>
 
                         <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-                            <span>Recommended: 400x400px</span>
+                            <span>{t('upload.recommendation') || 'Recommended: 400x400px'}</span>
                         </div>
                     </div>
                 </div>
@@ -167,7 +169,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({
             />
 
             <p className="text-xs text-slate-500 dark:text-slate-400">
-                Your logo will appear in the customer menu and admin panel
+                {t('upload.helper') || 'Your logo will appear in the customer menu and admin panel'}
             </p>
         </div>
     );

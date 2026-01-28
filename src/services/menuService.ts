@@ -63,12 +63,7 @@ export const menuService = {
   // Update menu item
   async updateMenuItem(id: string, updates: Partial<MenuItem>) {
     try {
-      const res = await fetch(`http://localhost:3000/api/menus/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      return await res.json();
+      return await api.put(`/menus/${id}`, updates);
     } catch (error) {
       console.error('Error updating menu item:', error)
       throw error
@@ -78,8 +73,7 @@ export const menuService = {
   // Soft delete menu item
   async deleteMenuItem(id: string) {
     try {
-      const res = await fetch(`http://localhost:3000/api/menus/${id}`, { method: 'DELETE' });
-      return await res.json();
+      return await api.delete(`/menus/${id}`);
     } catch (error) {
       console.error('Error deleting menu item:', error)
       throw error
@@ -102,6 +96,16 @@ export const menuService = {
       return await api.put(`/menus/${id}`, { available });
     } catch (error) {
       console.error('Error toggling availability:', error)
+      throw error
+    }
+  },
+
+  // Get detailed menu configuration for customization (public)
+  async getMenuConfig(menuId: string) {
+    try {
+      return await api.get(`/public/menus/${menuId}/config`);
+    } catch (error) {
+      console.error('Error fetching menu config:', error)
       throw error
     }
   }
