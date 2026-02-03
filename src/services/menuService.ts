@@ -5,8 +5,10 @@ export const menuService = {
   // Get all menu items with categories
   async getMenuItems(adminId?: string) {
     try {
-      // The backend handles the joins and filtering
-      const items = await api.get('/menus', adminId ? { adminId } : undefined);
+      // Use public endpoint if adminId is provided (Customer View), otherwise protected endpoint (Admin View)
+      const endpoint = adminId ? `/public/menus?adminId=${adminId}` : '/menus';
+      const items = await api.get(endpoint);
+
       return (items || []).map((item: any) => ({
         ...item,
         price: Number(item.price) || 0
@@ -71,11 +73,21 @@ export const menuService = {
   },
 
   // Soft delete menu item
-  async deleteMenuItem(id: string) {
+  async deleteMenuItem(id: string, hard: boolean = false) {
     try {
-      return await api.delete(`/menus/${id}`);
+      return await api.delete(`/menus/${id}${hard ? '?hard=true' : ''}`);
     } catch (error) {
       console.error('Error deleting menu item:', error)
+      throw error
+    }
+  },
+
+  // Clear all menu data (Hard Delete All)
+  async clearAllMenuData() {
+    try {
+      return await api.delete('/admin/reset-menu');
+    } catch (error) {
+      console.error('Error clearing menu data:', error)
       throw error
     }
   },

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Menu, X, Search, User, LogOut } from "lucide-react";
-import { useTheme } from "../contexts/ThemeContext";
-import { useLanguage } from "../contexts/LanguageContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 import LanguageToggle from "./LanguageToggle";
 import { Menu as DropdownMenu, Transition } from "@headlessui/react";
 import { Fragment } from "react";

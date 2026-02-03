@@ -55,6 +55,12 @@ interface IngredientRow {
     name_ar: string | null;
     extra_price: number | null;
   };
+  ingredient?: { // Fix: Match usage (row.ingredient) and schema
+    id: string;
+    name_en: string | null;
+    name_ar: string | null;
+    extra_price: number | null;
+  };
 }
 interface ModifierOptionRow {
   id: string;
@@ -76,7 +82,7 @@ interface ModifierGroupRow {
 }
 interface MenuModifierGroupRow {
   menu_id: string;
-  modifier_groups: ModifierGroupRow;
+  modifier_group: ModifierGroupRow; // Fix: Match usage (row.modifier_group)
 }
 interface ComboGroupItemRow {
   child_menu_id: string;
@@ -707,11 +713,21 @@ export default function MenuItemCustomizer({
           </button>
         )}
         <button
-          disabled={!canAdd}
-          onClick={() => onAdd(cartLine)}
+          onClick={() => {
+            if (!canAdd) {
+              if (optionErrors.length > 0) {
+                // Show the specific validation error
+                import("react-hot-toast").then((mod) => {
+                  mod.default.error(optionErrors[0]);
+                });
+              }
+              return;
+            }
+            onAdd(cartLine);
+          }}
           className={`px-4 py-2 rounded-xl text-white ${canAdd
             ? "bg-emerald-600 hover:bg-emerald-700"
-            : "bg-zinc-400 cursor-not-allowed"
+            : "bg-emerald-600/50 hover:bg-emerald-600/60" // Valid visual cue but still clickable
             }`}
         >
           Add · <Money value={pricing.total} />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Clock, CheckCircle, AlertCircle, User, DollarSign, ChevronRight, ArrowRight, ArrowLeft } from 'lucide-react';
-import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 
 interface Order {
   id: number;
@@ -9,21 +9,28 @@ interface Order {
   items: { name: string; price: number; quantity: number }[];
   total: number;
   status: 'pending' | 'preparing' | 'ready' | 'served';
-  timestamp: string | Date;
+  timestamp: Date;
 }
 
 interface OrderManagementProps {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  onStatusChange?: (orderId: number, newStatus: Order['status']) => void;
 }
 
-const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders }) => {
+const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, onStatusChange }) => {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
 
   const updateOrderStatus = (orderId: number, newStatus: Order['status']) => {
+    // Optimistic update
     setOrders(prev =>
       prev.map(o => (o.id === orderId ? { ...o, status: newStatus } : o))
     );
+
+    // Call parent to persist
+    if (onStatusChange) {
+      onStatusChange(orderId, newStatus);
+    }
   };
 
   const getStatusColor = (status: Order['status']) => {
@@ -98,7 +105,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders }) 
           </div>
           <div className="bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 p-3 sm:p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <div className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-300">
-              ${list.reduce((sum, o) => sum + o.total, 0).toFixed(2)}
+              ${list.reduce((sum, o) => sum + (Number(o.total) || 0), 0).toFixed(2)}
             </div>
             <div className="text-xs sm:text-sm text-gray-700 dark:text-gray-400">Total Sales</div>
           </div>
@@ -207,7 +214,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-lg sm:text-xl font-bold text-emerald-600 dark:text-emerald-400">${order.total.toFixed(2)}</div>
+            <div className="text-lg sm:text-xl font-bold text-emerald-600 dark:text-emerald-400">${Number(order.total).toFixed(2)}</div>
           </div>
         </div>
 

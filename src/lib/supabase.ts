@@ -80,7 +80,8 @@ export interface Table {
 
 export interface Admin {
   id: string
-  email?: string
+  email: string
+  restaurant_name?: string
   name?: string
   logo_url?: string
   theme_color?: string
@@ -88,4 +89,5 @@ export interface Admin {
   number_of_tables?: number
   show_order_status?: boolean
   preferred_language?: string
+  created_at: string
 }

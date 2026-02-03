@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Save, ChevronDown, ChevronUp } from "lucide-react";
-import { api } from "../services/api";
+import { api } from "../../services/api";
 
 /**
  * AdminOptionsPanel
@@ -149,15 +149,15 @@ export default function AdminOptionsPanel({
       setCombo(
         grp
           ? {
-              id: grp.id,
-              min_select: grp.min_select,
-              max_select: grp.max_select,
-              items: (grp.combo_group_items || []).map((it: any) => ({
-                child_menu_id: it.child_menu_id,
-                upgrade_price_delta: Number(it.upgrade_price_delta || 0),
-                is_default: !!it.is_default,
-              })),
-            }
+            id: grp.id,
+            min_select: grp.min_select,
+            max_select: grp.max_select,
+            items: (grp.combo_group_items || []).map((it: any) => ({
+              child_menu_id: it.child_menu_id,
+              upgrade_price_delta: Number(it.upgrade_price_delta || 0),
+              is_default: !!it.is_default,
+            })),
+          }
           : { items: [] }
       );
     } catch (e: any) {
@@ -173,15 +173,15 @@ export default function AdminOptionsPanel({
       list.find((x) => x.ingredient_id === ingredient_id)
         ? list.filter((x) => x.ingredient_id !== ingredient_id)
         : [
-            ...list,
-            {
-              ingredient_id,
-              removable: true,
-              extra_available: true,
-              max_extra: 1,
-              extra_price_override: null,
-            },
-          ]
+          ...list,
+          {
+            ingredient_id,
+            removable: true,
+            extra_available: true,
+            max_extra: 1,
+            extra_price_override: null,
+          },
+        ]
     );
   };
 
@@ -214,9 +214,9 @@ export default function AdminOptionsPanel({
       g.map((gr, idx) =>
         idx === gi
           ? {
-              ...gr,
-              options: [...gr.options, { name_en: "Option", price_delta: 0 }],
-            }
+            ...gr,
+            options: [...gr.options, { name_en: "Option", price_delta: 0 }],
+          }
           : gr
       )
     );
@@ -266,17 +266,16 @@ export default function AdminOptionsPanel({
           <button
             key={k}
             onClick={() => setTab(k)}
-            className={`px-3 py-1.5 rounded-xl text-sm border ${
-              tab === k
-                ? "bg-emerald-600 text-white border-emerald-600"
-                : "border-slate-300"
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-sm border ${tab === k
+              ? "bg-emerald-600 text-white border-emerald-600"
+              : "border-slate-300"
+              }`}
           >
             {k === "ingredients"
               ? "Ingredients"
               : k === "options"
-              ? "Modifier Groups"
-              : "Combo"}
+                ? "Modifier Groups"
+                : "Combo"}
           </button>
         ))}
       </div>
@@ -340,7 +339,7 @@ export default function AdminOptionsPanel({
                   <input
                     type="number"
                     min={0}
-                    className="w-16 px-2 py-1 rounded border"
+                    className="w-16 px-2 py-1 rounded border bg-white text-slate-900"
                     disabled={!row}
                     value={row?.max_extra ?? 0}
                     onChange={(e) =>
@@ -359,7 +358,7 @@ export default function AdminOptionsPanel({
                   <input
                     type="number"
                     step="0.01"
-                    className="w-24 px-2 py-1 rounded border"
+                    className="w-24 px-2 py-1 rounded border bg-white text-slate-900"
                     disabled={!row}
                     value={row?.extra_price_override ?? ""}
                     onChange={(e) =>
@@ -367,12 +366,12 @@ export default function AdminOptionsPanel({
                         list.map((r) =>
                           r.ingredient_id === ing.id
                             ? {
-                                ...r,
-                                extra_price_override:
-                                  e.target.value === ""
-                                    ? null
-                                    : Number(e.target.value),
-                              }
+                              ...r,
+                              extra_price_override:
+                                e.target.value === ""
+                                  ? null
+                                  : Number(e.target.value),
+                            }
                             : r
                         )
                       )
@@ -400,7 +399,7 @@ export default function AdminOptionsPanel({
             <div key={gi} className="rounded-lg border p-3">
               <div className="flex items-center gap-2">
                 <input
-                  className="px-2 py-1 rounded border flex-1"
+                  className="px-2 py-1 rounded border flex-1 bg-white text-slate-900"
                   value={g.name_en}
                   onChange={(e) =>
                     setGroups((list) =>
@@ -411,18 +410,18 @@ export default function AdminOptionsPanel({
                   }
                 />
                 <select
-                  className="px-2 py-1 rounded border"
+                  className="px-2 py-1 rounded border bg-white text-slate-900"
                   value={g.selection_type}
                   onChange={(e) =>
                     setGroups((list) =>
                       list.map((x, i) =>
                         i === gi
                           ? {
-                              ...x,
-                              selection_type: e.target.value as any,
-                              max_select:
-                                e.target.value === "single" ? 1 : x.max_select,
-                            }
+                            ...x,
+                            selection_type: e.target.value as any,
+                            max_select:
+                              e.target.value === "single" ? 1 : x.max_select,
+                          }
                           : x
                       )
                     )
@@ -456,7 +455,7 @@ export default function AdminOptionsPanel({
                 <label className="text-xs">
                   min
                   <select
-                    className="ml-2 px-2 py-1 rounded border"
+                    className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
                     value={g.min_select ?? 0}
                     onChange={(e) =>
                       setGroups((list) =>
@@ -478,7 +477,7 @@ export default function AdminOptionsPanel({
                 <label className="text-xs">
                   max
                   <select
-                    className="ml-2 px-2 py-1 rounded border"
+                    className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
                     value={
                       g.max_select ?? (g.selection_type === "single" ? 1 : 1)
                     }
@@ -509,20 +508,20 @@ export default function AdminOptionsPanel({
                       className="grid grid-cols-12 items-center gap-2"
                     >
                       <input
-                        className="col-span-4 px-2 py-1 rounded border"
+                        className="col-span-4 px-2 py-1 rounded border bg-white text-slate-900"
                         value={o.name_en}
                         onChange={(e) =>
                           setGroups((list) =>
                             list.map((x, i) =>
                               i === gi
                                 ? {
-                                    ...x,
-                                    options: x.options.map((oo, j) =>
-                                      j === oi
-                                        ? { ...oo, name_en: e.target.value }
-                                        : oo
-                                    ),
-                                  }
+                                  ...x,
+                                  options: x.options.map((oo, j) =>
+                                    j === oi
+                                      ? { ...oo, name_en: e.target.value }
+                                      : oo
+                                  ),
+                                }
                                 : x
                             )
                           )
@@ -531,25 +530,25 @@ export default function AdminOptionsPanel({
                       <input
                         type="number"
                         step="0.01"
-                        className="col-span-3 px-2 py-1 rounded border"
+                        className="col-span-3 px-2 py-1 rounded border bg-white text-slate-900"
                         value={o.price_delta ?? 0}
                         onChange={(e) =>
                           setGroups((list) =>
                             list.map((x, i) =>
                               i === gi
                                 ? {
-                                    ...x,
-                                    options: x.options.map((oo, j) =>
-                                      j === oi
-                                        ? {
-                                            ...oo,
-                                            price_delta: Number(
-                                              e.target.value || 0
-                                            ),
-                                          }
-                                        : oo
-                                    ),
-                                  }
+                                  ...x,
+                                  options: x.options.map((oo, j) =>
+                                    j === oi
+                                      ? {
+                                        ...oo,
+                                        price_delta: Number(
+                                          e.target.value || 0
+                                        ),
+                                      }
+                                      : oo
+                                  ),
+                                }
                                 : x
                             )
                           )
@@ -560,26 +559,26 @@ export default function AdminOptionsPanel({
                         <input
                           type="number"
                           min={1}
-                          className="ml-2 w-20 px-2 py-1 rounded border"
+                          className="ml-2 w-20 px-2 py-1 rounded border bg-white text-slate-900"
                           value={o.max_qty ?? ""}
                           onChange={(e) =>
                             setGroups((list) =>
                               list.map((x, i) =>
                                 i === gi
                                   ? {
-                                      ...x,
-                                      options: x.options.map((oo, j) =>
-                                        j === oi
-                                          ? {
-                                              ...oo,
-                                              max_qty:
-                                                e.target.value === ""
-                                                  ? null
-                                                  : Number(e.target.value),
-                                            }
-                                          : oo
-                                      ),
-                                    }
+                                    ...x,
+                                    options: x.options.map((oo, j) =>
+                                      j === oi
+                                        ? {
+                                          ...oo,
+                                          max_qty:
+                                            e.target.value === ""
+                                              ? null
+                                              : Number(e.target.value),
+                                        }
+                                        : oo
+                                    ),
+                                  }
                                   : x
                               )
                             )
@@ -627,7 +626,7 @@ export default function AdminOptionsPanel({
             <label className="text-xs">
               min
               <select
-                className="ml-2 px-2 py-1 rounded border"
+                className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
                 value={combo.min_select ?? 0}
                 onChange={(e) =>
                   setCombo((c) => ({
@@ -646,7 +645,7 @@ export default function AdminOptionsPanel({
             <label className="text-xs">
               max
               <select
-                className="ml-2 px-2 py-1 rounded border"
+                className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
                 value={combo.max_select ?? 1}
                 onChange={(e) =>
                   setCombo((c) => ({
@@ -667,7 +666,7 @@ export default function AdminOptionsPanel({
             {combo.items.map((it, idx) => (
               <div key={idx} className="grid grid-cols-12 items-center gap-2">
                 <select
-                  className="col-span-6 px-2 py-1 rounded border"
+                  className="col-span-6 px-2 py-1 rounded border bg-white text-slate-900"
                   value={it.child_menu_id}
                   onChange={(e) =>
                     setCombo((c) => ({
@@ -690,7 +689,7 @@ export default function AdminOptionsPanel({
                 <input
                   type="number"
                   step="0.01"
-                  className="col-span-4 px-2 py-1 rounded border"
+                  className="col-span-4 px-2 py-1 rounded border bg-white text-slate-900"
                   value={it.upgrade_price_delta ?? 0}
                   onChange={(e) =>
                     setCombo((c) => ({
@@ -698,9 +697,9 @@ export default function AdminOptionsPanel({
                       items: c.items.map((x, i) =>
                         i === idx
                           ? {
-                              ...x,
-                              upgrade_price_delta: Number(e.target.value || 0),
-                            }
+                            ...x,
+                            upgrade_price_delta: Number(e.target.value || 0),
+                          }
                           : x
                       ),
                     }))

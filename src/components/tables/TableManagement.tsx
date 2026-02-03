@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Users, Plus, Trash2, MapPin } from "lucide-react";
-import { tableService } from "../services/tableService";
+import { tableService } from "../../services/tableService";
 import toast from "react-hot-toast";
 
 interface Table {

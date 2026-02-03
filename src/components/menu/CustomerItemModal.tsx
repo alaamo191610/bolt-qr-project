@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import MenuItemCustomizer, {
   type CartLine,
-} from "../components/ui/MenuItemCustomizer";
+} from "../ui/MenuItemCustomizer";
 
 /**
  * CustomerItemModal (Portal)

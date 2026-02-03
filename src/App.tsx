@@ -19,19 +19,20 @@ import { tableService } from "./services/tableService";
 import { menuService } from "./services/menuService";
 import { orderService } from "./services/orderService";
 import AuthForm from "./components/Auth/AuthForm";
-import ResponsiveLayout from "./components/ResponsiveLayout";
-import ThemeCustomizer from "./components/ThemeCustomizer";
-import QRGenerator from "./components/QRGenerator";
-import DigitalMenu from "./components/DigitalMenu";
-import OrderManagement from "./components/OrderManagement";
-import TableManagement from "./components/TableManagement";
-import UserManagement from "./components/UserManagement";
+import ResponsiveLayout from "./components/common/ResponsiveLayout";
+import ThemeCustomizer from "./components/common/ThemeCustomizer";
+import QRGenerator from "./components/tables/QRGenerator";
+import DigitalMenu from "./components/menu/DigitalMenu";
+import OrderManagement from "./components/orders/OrderManagement";
+import TableManagement from "./components/tables/TableManagement";
+import UserManagement from "./components/admin/UserManagement";
 import Analytics from "./components/Analytics";
-import AdminPanel from "./components/AdminPanel";
+import AdminPanel from "./components/admin/AdminPanel";
 import CustomerMenu from "./pages/CustomerMenu";
 import SuperAdminLogin from "./components/super-admin/SuperAdminLogin";
 import SuperAdminDashboard from "./components/super-admin/SuperAdminDashboard";
 import { Toaster, toast } from "react-hot-toast";
+import { socket, joinAdminRoom } from "./services/socket";
 // Define interfaces for the component state
 interface Table {
   id: number;
@@ -42,6 +43,7 @@ interface Table {
 
 interface Order {
   id: number;
+  order_number?: number;
   tableNumber: string;
   items: Array<{
     name: string;
@@ -49,7 +51,7 @@ interface Order {
     quantity: number;
   }>;
   total: number;
-  status: string;
+  status: 'pending' | 'preparing' | 'ready' | 'served';
   timestamp: Date;
 }
 
@@ -169,38 +171,67 @@ const AdminDashboard: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
-  const idMapRef = React.useRef(new Map<string, number>());
-  const nextIdRef = React.useRef(1);
-  const numId = useCallback((uuid: string) => {
-    if (!idMapRef.current.has(uuid))
-      idMapRef.current.set(uuid, nextIdRef.current++);
-    return idMapRef.current.get(uuid)!;
-  }, []);
 
-  const loadAdminData = useCallback(async () => {
+  // Individual fetch functions
+  const fetchProfile = useCallback(async () => {
     if (!user) return;
     try {
-      const [profile, adminTables, adminMenuItems, adminOrders] =
-        await Promise.all([
-          adminService.getAdminProfile(user.id),
-          tableService.getTables(user.id),
-          menuService.getMenuItems(user.id),
-          orderService.getOrders(user.id),
-        ]);
-
+      const profile = await adminService.getAdminProfile(user.id);
       setAdminProfile(profile);
+    } catch (e) {
+      console.error("Error fetching profile:", e);
+    }
+  }, [user]);
+
+  const fetchTables = useCallback(async () => {
+    if (!user) return;
+    try {
+      const adminTables = await tableService.getTables(user.id);
       setTables(
         adminTables.map((table: any) => ({
-          id: numId(String(table.id)),
+          id: table.id,
           number: table.code,
           status: "available",
           capacity: 4,
         }))
       );
+    } catch (e) {
+      console.error("Error fetching tables:", e);
+    }
+  }, [user]);
 
+  const fetchOrders = useCallback(async () => {
+    if (!user) return;
+    try {
+      const adminOrders = await orderService.getOrders(user.id);
+      setOrders(
+        adminOrders.map((order: any) => ({
+          id: order.id,
+          order_number: order.order_number,
+          tableNumber: order.table?.code || order.table_id,
+          items:
+            order.order_items?.map((item: any) => ({
+              name: item.menu?.name_en || "Unknown Item",
+              price: item.price_at_order,
+              quantity: item.quantity,
+            })) || [],
+          total: order.total || 0,
+          status: order.status || "pending",
+          timestamp: new Date(order.created_at),
+        }))
+      );
+    } catch (e) {
+      console.error("Error fetching orders:", e);
+    }
+  }, [user]);
+
+  const fetchMenuItems = useCallback(async () => {
+    if (!user) return;
+    try {
+      const adminMenuItems = await menuService.getMenuItems(user.id);
       setMenuItems(
         adminMenuItems.map((item: any) => ({
-          id: numId(String(item.id)),
+          id: item.id,
           name: item.name_en,
           description: item.name_ar || item.name_en,
           price: item.price,
@@ -210,35 +241,76 @@ const AdminDashboard: React.FC = () => {
             "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=300",
         }))
       );
-
-      setOrders(
-        adminOrders.map((order: any) => ({
-          id: numId(order.id),
-          order_number: order.order_number,
-          tableNumber: order.table_id,
-          items:
-            order.order_items?.map((item: any) => ({
-              name: item.menus?.name_en || "Unknown Item",
-              price: item.price_at_order,
-              quantity: item.quantity,
-            })) || [],
-          total: order.total || 0,
-          status: order.status || "pending",
-          timestamp: new Date(order.created_at),
-        }))
-      );
-      setDataLoaded(true);
-    } catch (error) {
-      console.error("Error loading admin data:", error);
-      toast.error("Failed to load dashboard data");
+    } catch (e) {
+      console.error("Error fetching menu items:", e);
     }
-  }, [user, numId]);
+  }, [user]);
 
+  // Initial Data Load (Profile)
   useEffect(() => {
     if (user && !dataLoaded) {
-      loadAdminData();
+      fetchProfile();
+      setDataLoaded(true);
     }
-  }, [user, dataLoaded, loadAdminData]);
+  }, [user, dataLoaded, fetchProfile]);
+
+  // Tab-specific Data Loading
+  useEffect(() => {
+    if (!user) return;
+
+    // Always fetch profile on mount (handled above), but dependent data fetches:
+    switch (activeTab) {
+      case 'qr-generator':
+        fetchTables();
+        break;
+      case 'orders':
+        fetchOrders();
+        break;
+      case 'tables':
+        fetchTables();
+        break;
+      case 'analytics':
+        fetchOrders();
+        break;
+      case 'admin':
+        fetchMenuItems();
+        break;
+      // 'menu' loads its own data internally
+      // 'users' (future)
+    }
+  }, [activeTab, user, fetchTables, fetchOrders, fetchMenuItems]);
+
+  // Real-time Orders
+  useEffect(() => {
+    if (!user) return;
+
+    joinAdminRoom(user.id);
+
+    const handleNewOrder = (order: any) => {
+      const transformedOrder: Order = {
+        id: order.id,
+        order_number: order.order_number,
+        tableNumber: order.table?.code || order.table_id,
+        items: order.order_items?.map((item: any) => ({
+          name: item.menu?.name_en || "Unknown Item",
+          price: item.price_at_order,
+          quantity: item.quantity,
+        })) || [],
+        total: order.total || 0,
+        status: order.status || "pending",
+        timestamp: new Date(order.created_at),
+      };
+
+      setOrders((prev) => [transformedOrder, ...prev]);
+      toast.success(`New Order #${order.order_number || order.id} received!`);
+    };
+
+    socket.on("new-order", handleNewOrder);
+
+    return () => {
+      socket.off("new-order", handleNewOrder);
+    };
+  }, [user]);
 
   // Simple tab change handler
   const handleTabChange = (tabId: string) => {
@@ -278,13 +350,29 @@ const AdminDashboard: React.FC = () => {
       case "menu":
         return <DigitalMenu />;
       case "orders":
-        return <OrderManagement orders={orders} setOrders={setOrders} />;
+        return (
+          <OrderManagement
+            orders={orders}
+            setOrders={setOrders}
+            onStatusChange={async (orderId, newStatus) => {
+              try {
+                await orderService.updateOrderStatus(String(orderId), newStatus);
+                toast.success(`Order #${orderId} marked as ${newStatus}`);
+              } catch (error) {
+                console.error("Failed to update status:", error);
+                toast.error("Failed to update status");
+                // Revert local state if needed (or reload data)
+                fetchOrders();
+              }
+            }}
+          />
+        );
       case "tables":
         return (
           <TableManagement
             tables={tables}
             setTables={setTables}
-            onDataChange={loadAdminData}
+            onDataChange={fetchTables}
           />
         );
       case "users":

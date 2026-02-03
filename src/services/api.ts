@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:3000/api';
+// detect if running on localhost or network IP
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const API_URL = `http://${hostname}:3000/api`;
 
 const getHeaders = () => {
   const token = localStorage.getItem('auth_token');

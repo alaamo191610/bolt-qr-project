@@ -16,7 +16,7 @@ import { menuService } from "../services/menuService";
 import { orderService } from "../services/orderService";
 import { tableService } from "../services/tableService";
 import { trackMenuEvents } from "../lib/firebase";
-import LanguageToggle from "../components/LanguageToggle";
+import LanguageToggle from "../components/common/LanguageToggle";
 import CartDrawer from "../components/ui/CartDrawer";
 import CategoryFilter from "../components/ui/CategoryFilter";
 import MenuGrid from "../components/ui/MenuGrid";
@@ -27,6 +27,8 @@ import { HeaderCartPopover } from "../components/ui/Popover";
 import toast from "react-hot-toast";
 import { useAdminMonetary } from "../hooks/useAdminMonetary";
 import { formatPrice } from "../pricing/usePrice";
+import { socket, joinMenuRoom } from "../services/socket";
+import { LandingPage } from '../components/ui/LandingPage';
 
 interface Ingredient {
   id: string;
@@ -57,6 +59,7 @@ export interface MenuItem {
   tags?: string[]; // ["spicy", "vegan", "best_seller", "new", "popular"]
   is_featured?: boolean; // For stories section
   has_modifiers?: boolean; // Quick-add eligibility
+  user_id?: string;
 }
 interface CartItem extends MenuItem {
   quantity: number;
@@ -95,11 +98,10 @@ const CustomerMenu: React.FC = () => {
   // state
   const [loading, setLoading] = useState(true);
   const [isOrdering, setIsOrdering] = useState(false);
-  const [orderPlaced, setOrderPlaced] = useState(false);
-  const [error, setError] = useState<{
-    code: string;
-    params?: Record<string, any>;
-  } | null>(null);
+  const [orderType, setOrderType] = useState<'dine_in' | 'take_away' | null>(null);
+  const [error, setError] = useState<{ code: string; params?: any } | null>(null);
+  // NEW: Store the full active order, not just a boolean
+  const [activeOrder, setActiveOrder] = useState<any | null>(null);
 
   // 🆕 compare
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -308,6 +310,7 @@ const CustomerMenu: React.FC = () => {
           category_id: item.category_id,
           ingredients_details: item.ingredients_details || [],
           categories: item.categories || undefined,
+          has_modifiers: item.has_modifiers,
         } as MenuItem;
       });
 
@@ -327,6 +330,56 @@ const CustomerMenu: React.FC = () => {
       setLoading(false);
     }
   };
+
+
+
+  const [adminId, setAdminId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (menuItems.length > 0) {
+      console.log("CustomerMenu: First item:", menuItems[0]);
+      if (menuItems[0].user_id) {
+        console.log("CustomerMenu: Setting adminId:", menuItems[0].user_id);
+        setAdminId(menuItems[0].user_id);
+      } else {
+        console.warn("CustomerMenu: Item found but NO user_id!");
+      }
+    }
+  }, [menuItems]);
+
+  useEffect(() => {
+    if (adminId) {
+      console.log("Socket: Joining menu room for admin:", adminId);
+      joinMenuRoom(adminId);
+
+      const handleConnect = () => {
+        console.log("Socket: Connected, joining room:", adminId);
+        joinMenuRoom(adminId);
+      };
+
+      const handleMenuUpdate = (updatedItem: any) => {
+        console.log("Socket: Menu update received:", updatedItem);
+        setMenuItems((prev) =>
+          prev.map((item) => {
+            // Ensure both are strings for comparison
+            if (String(item.id) === String(updatedItem.id)) {
+              console.log(`Socket: Updating item ${item.id} availability to ${updatedItem.available}`);
+              return { ...item, available: updatedItem.available };
+            }
+            return item;
+          })
+        );
+      };
+
+      socket.on("connect", handleConnect);
+      socket.on("menu-updated", handleMenuUpdate);
+
+      return () => {
+        socket.off("connect", handleConnect);
+        socket.off("menu-updated", handleMenuUpdate);
+      };
+    }
+  }, [adminId]);
 
   // derived: featured items for stories
   const featuredItems = useMemo(() => {
@@ -475,15 +528,16 @@ const CustomerMenu: React.FC = () => {
         quantity: item.quantity,
         price_at_order: item.price,
       }));
-      await orderService.createOrder({
+      const newOrder = await orderService.createOrder({
         table_code: tableNumber,
         items: orderItems,
+        type: orderType || 'dine_in', // Pass the selected order type
       });
 
       // Track successful order
       trackMenuEvents.orderCompleted(tableNumber, cart, totalPrice);
 
-      setOrderPlaced(true);
+      setActiveOrder(newOrder); // Set the full active order
       setShowCart(false);
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber)); // clear persisted cart
@@ -495,12 +549,12 @@ const CustomerMenu: React.FC = () => {
     }
   };
 
-  // auto-hide order confirmation
-  useEffect(() => {
-    if (!orderPlaced) return;
-    const id = window.setTimeout(() => setOrderPlaced(false), 5000);
-    return () => clearTimeout(id);
-  }, [orderPlaced]);
+  // REMOVED: Auto-hide timeout for order confirmation
+  // useEffect(() => {
+  //   if (!orderPlaced) return;
+  //   const id = window.setTimeout(() => setOrderPlaced(false), 5000);
+  //   return () => clearTimeout(id);
+  // }, [orderPlaced]);
 
   // overlay positioning
   const getAnchorPosition = (offsetY = 8): OverlayPos | null => {
@@ -634,7 +688,17 @@ const CustomerMenu: React.FC = () => {
     );
   }
 
-  if (orderPlaced) return <OrderConfirmation tableNumber={tableNumber} />;
+  if (activeOrder) return (
+    <OrderConfirmation
+      order={activeOrder}
+      onStartNewOrder={() => setActiveOrder(null)}
+    />
+  );
+
+  // Show landing page if no order type is selected yet
+  if (!orderType) {
+    return <LandingPage onSelect={setOrderType} />;
+  }
 
   return (
     <div

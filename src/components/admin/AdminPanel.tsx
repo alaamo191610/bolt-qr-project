@@ -1,25 +1,25 @@
 import React, { useMemo, useState, Suspense, useEffect } from "react";
 import { Settings } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext";
-import CurrencySettings from "../components/pricing/CurrencySettings";
-import FeesTaxSettings from "../components/pricing/FeesTaxSettings";
-import PromotionsManager from "../components/pricing/PromotionsManager";
-import ThemeCustomizer from "../components/ThemeCustomizer";
+import { useLanguage } from "../../contexts/LanguageContext";
+import CurrencySettings from "../pricing/CurrencySettings";
+import FeesTaxSettings from "../pricing/FeesTaxSettings";
+import PromotionsManager from "../pricing/PromotionsManager";
+import ThemeCustomizer from "../common/ThemeCustomizer";
 import { Palette } from "lucide-react";
 // ⬅️ your PanelCard component (adjust import path if different)
-import PanelCard from "../components/ui/PanelCard";
-import CollapsiblePanelCard from "../components/ui/CollapsiblePanelCard";
-import LogoUpload from "../components/ui/LogoUpload"; // [NEW] Import LogoUpload
-import { adminService } from "../services/adminService"; // [NEW] Import adminService
+import PanelCard from "../ui/PanelCard";
+import CollapsiblePanelCard from "../ui/CollapsiblePanelCard";
+import LogoUpload from "../ui/LogoUpload"; // [NEW] Import LogoUpload
+import { adminService } from "../../services/adminService"; // [NEW] Import adminService
 import { toast } from "react-hot-toast"; // [NEW] Import toast
 
-import { Tabs, TabList, Tab, TabPanels, TabPanel } from "../components/ui/Tabs";
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from "../ui/Tabs";
 // ⬅️ lazy-load client components (avoid SSR issues)
 const OrderWorkflowRules = React.lazy(
-  () => import("../components/orders/OrderWorkflowRules")
+  () => import("../orders/OrderWorkflowRules")
 );
 const KDSSettings = React.lazy(
-  () => import("../components/orders/KDSSettings")
+  () => import("../orders/KDSSettings")
 );
 
 type AdminSettings = {

@@ -7,7 +7,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import toast from "react-hot-toast";
 import CompareChip from "./CompareChip";
-import CustomerItemModal from "../../components/CustomerItemModal";
+import CustomerItemModal from "../menu/CustomerItemModal";
 import { useAdminMonetary } from "../../hooks/useAdminMonetary";
 import { formatPrice } from "../../pricing/usePrice";
 import { MenuBadgeStack } from "./MenuBadge";
@@ -729,7 +729,19 @@ const MenuItemCard: React.FC<Props> = ({
                       {quantity}
                     </span>
                     <button
-                      onClick={onPlus}
+                      onClick={(e) => {
+                        // FIX: If item has modifiers, we MUST open the modal.
+                        // We cannot just `onPlus` because that adds a base item without options,
+                        // bypassing mandatory checks.
+                        if (item.has_modifiers) {
+                          e.stopPropagation();
+                          lastTriggerRef.current = e.currentTarget as HTMLElement;
+                          setOpenMenuId(item.id);
+                          track("item_modal_open", { id: item.id });
+                        } else {
+                          onPlus(e);
+                        }
+                      }}
                       disabled={!isAvailable}
                       className={`w-8 h-8 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
                         ? "bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -746,7 +758,17 @@ const MenuItemCard: React.FC<Props> = ({
                 ) : (
                   <div onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={onPlus}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // If item has modifiers, open the modal instead of quick-add
+                        if (item.has_modifiers) {
+                          lastTriggerRef.current = e.currentTarget as HTMLElement;
+                          setOpenMenuId(item.id);
+                          track("item_modal_open", { id: item.id });
+                        } else {
+                          onPlus(e as any);
+                        }
+                      }}
                       disabled={!isAvailable}
                       className={`w-10 h-10 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
                         ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-95"

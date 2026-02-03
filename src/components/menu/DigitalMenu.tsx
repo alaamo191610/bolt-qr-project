@@ -8,13 +8,14 @@ import {
   Edit,
   AlertTriangle,
 } from "lucide-react";
-import { useAuth } from "../providers/AuthProvider";
+import { useAuth } from "../../providers/AuthProvider";
 
-import { useLanguage } from "../contexts/LanguageContext";
-import { menuService } from "../services/menuService";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { menuService } from "../../services/menuService";
 import toast from "react-hot-toast";
 import { UploadCloud, Loader2, XCircle } from "lucide-react";
-import AdminOptionsPanel from "../components/AdminOptionsPanel"; // adjust path
+import AdminOptionsPanel from "../admin/AdminOptionsPanel"; // adjust path
+import { SeedDataButton } from "./SeedDataButton";
 
 interface Category {
   id: string;
@@ -989,6 +990,8 @@ const DigitalMenu: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <SeedDataButton userId={user?.id} onComplete={fetchItems} />
+
             <button
               onClick={() => setCategoryFormOpen(true)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
@@ -1203,7 +1206,7 @@ const DigitalMenu: React.FC = () => {
       {/* Menu Item Form Modal */}
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/30 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 shadow-xl w-full  sm:max-w-2xl sm:rounded-xl overflow-y-auto p-4 sm:p-6 md:h-[90vh]">
+          <div className="bg-white dark:bg-slate-800 shadow-xl w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-xl overflow-y-auto p-4 sm:p-6 md:h-auto">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">

@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
@@ -11,6 +13,37 @@ import { unlink } from 'fs/promises';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
 const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // In production, restrict this to your frontend domain
+    methods: ["GET", "POST", "PUT", "DELETE"]
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  socket.on('join-admin', (adminId) => {
+    socket.join(`admin_${adminId}`);
+    console.log(`Socket ${socket.id} joined admin_${adminId}`);
+  });
+
+  socket.on('join-menu', (adminId) => {
+    socket.join(`menu_${adminId}`);
+    console.log(`Socket ${socket.id} joined menu_${adminId}`);
+  });
+
+  socket.on('join-order', (orderId) => {
+    socket.join(`order_${orderId}`);
+    console.log(`Socket ${socket.id} joined order_${orderId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
 const upload = multer({ dest: 'uploads/' });
 
 app.use(cors());
@@ -133,15 +166,32 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
       }
       return menu;
     });
+
+    // Emit real-time update
+    io.to(`menu_${req.user.id}`).emit('menu-updated', result);
+
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/menus/:id', authenticate, async (req, res) => {
   try {
-    await prisma.menu.update({
-      where: { id: Number(req.params.id) },
-      data: { deleted_at: new Date() }
+    if (req.query.hard === 'true') {
+      await prisma.menu.delete({ where: { id: Number(req.params.id) } });
+    } else {
+      await prisma.menu.update({
+        where: { id: Number(req.params.id) },
+        data: { deleted_at: new Date() }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/reset-menu', authenticate, async (req, res) => {
+  try {
+    await prisma.menu.deleteMany({
+      where: { user_id: req.user.id }
     });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -378,19 +428,28 @@ app.get('/api/orders', authenticate, async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  const { tableCode, items, adminId } = req.body;
+  const { tableCode, items, adminId, type } = req.body; // Added type
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Get Table
-      const table = await tx.table.findFirst({
-        where: {
-          code: {
-            equals: tableCode,
-            mode: 'insensitive'
+      // 1. Get Table (if provided)
+      let table = null;
+      if (tableCode) {
+        table = await tx.table.findFirst({
+          where: {
+            code: {
+              equals: tableCode,
+              mode: 'insensitive'
+            }
           }
-        }
-      });
-      if (!table) throw new Error('Table not found');
+        });
+      }
+
+      const isTakeAway = type === 'take_away';
+
+      if (!table && !isTakeAway && tableCode) {
+        // Only throw if table was requested but not found, and it's not takeaway with optional table
+        throw new Error('Table not found');
+      }
 
       // 2. Get menu item prices from DB to ensure price integrity
       const menuIds = items.map(item => Number(item.menuId)).filter(id => !isNaN(id));
@@ -419,12 +478,17 @@ app.post('/api/orders', async (req, res) => {
       });
 
       // 3. Create Order
+      // Use table.admin_id if available, otherwise fallback (e.g. for takeaway without table, might need adminId passed explicitly)
+      // For now assuming table provides admin_id, OR adminId is passed in body for takeaway
+      const targetAdminId = table?.admin_id || adminId || 'da895696-3f74-42cb-847e-cb9983949f57'; // Remove fallback in prod
+
       const order = await tx.order.create({
         data: {
-          table_id: table.id,
-          admin_id: table.admin_id,
+          table_id: table ? table.id : null,
+          admin_id: targetAdminId,
           total: total, // Use calculated total
-          status: 'pending'
+          status: 'pending',
+          type: type || 'dine_in' // Save the type
         }
       });
 
@@ -439,11 +503,42 @@ app.post('/api/orders', async (req, res) => {
       }
       return order;
     });
+
+    // Emit real-time update to the admin
+    if (result && result.admin_id) {
+      // Re-fetch full order with includes to match GET /api/orders format for frontend convenience
+      const fullOrder = await prisma.order.findUnique({
+        where: { id: result.id },
+        include: {
+          table: true,
+          order_items: { include: { menu: true } }
+        }
+      });
+      io.to(`admin_${result.admin_id}`).emit('new-order', fullOrder);
+    }
+
     res.json(result);
   } catch (err) {
     console.error("Error creating order:", err);
     res.status(500).json({ error: err.message });
   }
+});
+
+app.put('/api/orders/:id/status', authenticate, async (req, res) => {
+  const { status } = req.body;
+  try {
+    const order = await prisma.order.update({
+      where: { id: Number(req.params.id) },
+      data: { status }
+    });
+    // Emit to customer tracking this order
+    io.to(`order_${order.id}`).emit('order-status-updated', { status });
+    // Emit to admin dashboard
+    if (order.admin_id) {
+      io.to(`admin_${order.admin_id}`).emit('order-updated', order);
+    }
+    res.json(order);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // --- Tables ---
@@ -567,6 +662,41 @@ app.get('/api/public/pricing', async (req, res) => {
     console.error('Public pricing error:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// 🆕 Public endpoint for customer menu (No auth required)
+app.get('/api/public/menus', async (req, res) => {
+  const adminId = req.query.adminId;
+  if (!adminId) {
+    return res.status(400).json({ error: 'Admin ID required' });
+  }
+
+  try {
+    const menus = await prisma.menu.findMany({
+      where: {
+        user_id: adminId,
+        deleted_at: null
+      },
+      orderBy: { created_at: 'desc' },
+      include: {
+        category: true,
+        menu_ingredients: {
+          include: { ingredient: true }
+        },
+        menu_modifier_groups: true // Include this to check for modifiers
+      }
+    });
+
+    const mapped = menus.map(m => ({
+      ...m,
+      categories: m.category,
+      ingredients_details: m.menu_ingredients,
+      // Dynamically compute has_modifiers since the DB field might be stale
+      has_modifiers: (m.menu_modifier_groups && m.menu_modifier_groups.length > 0) || m.has_modifiers
+    }));
+
+    res.json(mapped);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // --- Admin ---
@@ -949,4 +1079,4 @@ app.put('/api/super-admin/restaurants/:id/plan', authenticate, async (req, res) 
 
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`)); // 6. Start server

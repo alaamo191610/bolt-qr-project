@@ -80,6 +80,7 @@ export const orderService = {
     items: CreateOrderItemInput[]
     note?: string        // if you want this saved on orders, add handling in the Edge Function
     admin_id?: string
+    type?: 'dine_in' | 'take_away' // Added type
   }) {
     try {
       // Build function payload items
@@ -127,6 +128,7 @@ export const orderService = {
         tableCode: orderData.table_code,
         adminId: orderData.admin_id,
         items,
+        type: orderData.type // Pass type to backend
       });
     } catch (error: any) {
       console.error('invoke failed:', error?.message, error?.context);

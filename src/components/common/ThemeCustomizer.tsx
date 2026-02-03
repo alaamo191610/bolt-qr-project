@@ -1,9 +1,9 @@
 // src/components/ThemeCustomizer.tsx
 import React, { useMemo, useState, useEffect } from "react";
 import { Palette, Sun, Moon, RotateCcw, Check, X, Copy } from "lucide-react";
-import { useTheme } from "../contexts/ThemeContext";
-import { useLanguage } from "../contexts/LanguageContext";
-import { updateAdminTheme } from "../services/adminService";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { updateAdminTheme } from "../../services/adminService";
 
 const normalizeHex = (v: string) => {
   let s = v.trim().replace(/^#/, "");

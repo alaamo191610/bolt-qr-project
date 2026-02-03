@@ -31,6 +31,7 @@ const translations: Record<Language, any> = {
       search: "Search",
       filter: "Filter",
       total: "Total",
+      subtotal: "Subtotal", // Added common.subtotal
       status: "Status",
       actions: "Actions",
       name: "Name",
@@ -104,6 +105,12 @@ const translations: Record<Language, any> = {
       thursday: "Thu",
       friday: "Fri",
       saturday: "Sat",
+      markUnavailable: "Mark unavailable",
+      markAvailable: "Mark available",
+      itemNowAvailable: "Item is now available",
+      itemNowUnavailable: "Item is out of stock",
+      authError: "User not authenticated",
+      editItem: "Edit item",
     },
     errors: {
       general: {
@@ -128,6 +135,13 @@ const translations: Record<Language, any> = {
         tooMany: "You can’t add more than this 🤷‍♂️",
         updateFailed: "Couldn’t update the order 🙁… try again.",
       },
+    },
+    billing: {
+      total: "Total",
+      subtotal: "Subtotal",
+      discount: "Discount",
+      vat: "VAT",
+      serviceCharge: "Service Charge",
     },
     // Upload errors moved to top-level 'upload' section for UI labels
     upload: {
@@ -158,6 +172,7 @@ const translations: Record<Language, any> = {
       clear: "Clear cart",
       browseMenu: "Browse the menu",
       empty: "Your cart is empty",
+      preview: "Preview Order", // Added cart.preview
       edit: "Edit",
       removeItem: "Remove item",
       noteOptional: "Order note (optional)",
@@ -192,6 +207,12 @@ const translations: Record<Language, any> = {
       cheesy: "Cheesy 🧀",
       fresh: "Fresh & Refreshing 🍃",
       vegFriendly: "Veggie-friendly 🥗",
+    },
+    landing: {
+      welcome: "Welcome 👋",
+      dineIn: "Dine In 🍽️",
+      takeAway: "Take Away 🥡",
+      selectDiningMode: "How would you like to build your order?",
     },
 
     pairings: {
@@ -304,6 +325,9 @@ const translations: Record<Language, any> = {
       },
       none: "none",
       quickAdd: "Quick add ✨",
+      startNewOrder: "Start New Order",
+      addMoreItems: "Add More Items",
+      extras: "Extras", // Added menu.extras
     },
     compare: {
       compare: "Compare",
@@ -466,7 +490,6 @@ const translations: Record<Language, any> = {
       address: "Address",
       restaurantDescription: "Restaurant description",
       saveSettings: "Save changes",
-      editItem: "Edit item",
       saveChanges: "Save changes",
       adding: "Adding…",
       saving: "Saving…",
@@ -627,6 +650,12 @@ const translations: Record<Language, any> = {
       tryAgain: "Try again",
       failedToPlaceOrder: "Couldn’t place the order 🚫",
       placingOrder: "Placing your order… ⏳",
+      pending: "Pending ⌛",
+      preparing: "Preparing 🍳",
+      ready: "Ready ✅",
+      completed: "Completed 🎉",
+      current: "Current Status",
+      served: "Served ✔️",
     },
 
     language: {
@@ -648,6 +677,7 @@ const translations: Record<Language, any> = {
       search: "دوّر",
       filter: "فلتر",
       total: "المجموع",
+      subtotal: "الإجمالي الفرعي", // Added common.subtotal (AR)
       status: "الوضع",
       actions: "خيارات",
       name: "الاسم",
@@ -721,6 +751,12 @@ const translations: Record<Language, any> = {
       thursday: "خميس",
       friday: "جمعة",
       saturday: "سبت",
+      markUnavailable: "تعيين كغير متوفر",
+      markAvailable: "تعيين كمتوفر",
+      itemNowAvailable: "الصنف متوفر الآن",
+      itemNowUnavailable: "الصنف غير متوفر حالياً",
+      authError: "خطأ في المصادقة",
+      editItem: "تعديل الصنف",
     },
     errors: {
       general: {
@@ -770,7 +806,12 @@ const translations: Record<Language, any> = {
       fresh: "طازج ومنعِّش 🍃",
       vegFriendly: "بناسب النباتيين 🥗",
     },
-
+    landing: {
+      welcome: "أهلاً بك 👋",
+      dineIn: "بالمطعم 🍽️",
+      takeAway: "سفري 🥡",
+      selectDiningMode: "كيف بتحب نقدّملك الطلب؟",
+    },
     pairings: {
       garlicSauce: "صلصة ثوم 🧄",
       salad: "سلطة 🥗",
@@ -809,6 +850,7 @@ const translations: Record<Language, any> = {
       clear: "تفريغ السلة",
       browseMenu: "تصفح القائمة",
       empty: "سلة التسوق فارغة",
+      preview: "معاينة الطلب", // Added cart.preview (AR)
       edit: "تعديل",
       removeItem: "إزالة العنصر",
       noteOptional: "ملاحظة للطلب (اختياري)",
@@ -921,6 +963,9 @@ const translations: Record<Language, any> = {
       },
       none: "بدون",
       quickAdd: "إضافة سريعة ✨",
+      startNewOrder: "طلب جديد",
+      addMoreItems: "إضافة أصناف",
+      extras: "إضافات", // Added menu.extras (AR)
     },
     compare: {
       compare: "قارن",
@@ -1083,7 +1128,6 @@ const translations: Record<Language, any> = {
       address: "العنوان",
       restaurantDescription: "نبذة عن المطعم",
       saveSettings: "خزّن التعديلات",
-      editItem: "عدّل العنصر",
       saveChanges: "خزّن التغييرات",
       adding: "عم نضيف…",
       saving: "عم نخزّن…",
@@ -1246,6 +1290,12 @@ const translations: Record<Language, any> = {
       tryAgain: "جرّب مرّة ثانية",
       failedToPlaceOrder: "ما قدرنا نبعت الطلب 🚫",
       placingOrder: "عم نبعت الطلب… ⏳",
+      pending: "قيد الانتظار ⌛",
+      preparing: "جاري التحضير 🍳",
+      ready: "جاهز للاستلام ✅",
+      completed: "مكتمل 🎉",
+      current: "الوضع الحالي",
+      served: "اتقدّم ✔️",
     },
 
     language: {

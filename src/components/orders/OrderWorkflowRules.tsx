@@ -147,75 +147,103 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
           {flow.statuses.map((s, i) => (
             <div
               key={s.key}
-              className="grid grid-cols-12 gap-3 items-center p-3"
+              className="flex flex-col md:grid md:grid-cols-12 gap-3 items-start md:items-center p-4 border-b last:border-0 bg-slate-50/50 md:bg-white"
             >
-              <div className="col-span-2 flex items-center gap-2">
-                <button
-                  className="w-8 h-8 rounded-md border bg-white disabled:opacity-40"
-                  onClick={() => reorder(i, Math.max(0, i - 1))}
-                  disabled={i === 0}
-                  aria-label="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  className="w-8 h-8 rounded-md border bg-white disabled:opacity-40"
-                  onClick={() =>
-                    reorder(i, Math.min(flow.statuses.length - 1, i + 1))
-                  }
-                  disabled={i === flow.statuses.length - 1}
-                  aria-label="Move down"
-                >
-                  ↓
-                </button>
-                <Chip>{s.key}</Chip>
+              {/* Controls & Key */}
+              <div className="md:col-span-2 flex items-center gap-2 w-full md:w-auto justify-between md:justify-start">
+                <div className="flex items-center gap-1">
+                  <button
+                    className="w-8 h-8 flex items-center justify-center rounded-md border bg-white disabled:opacity-40 hover:bg-slate-50"
+                    onClick={() => reorder(i, Math.max(0, i - 1))}
+                    disabled={i === 0}
+                    aria-label="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="w-8 h-8 flex items-center justify-center rounded-md border bg-white disabled:opacity-40 hover:bg-slate-50"
+                    onClick={() =>
+                      reorder(i, Math.min(flow.statuses.length - 1, i + 1))
+                    }
+                    disabled={i === flow.statuses.length - 1}
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                </div>
+                <div className="font-medium text-slate-700 md:ml-2">
+                  <Chip className="bg-white shadow-sm border-slate-200">
+                    {s.key}
+                  </Chip>
+                </div>
               </div>
-              <div className="col-span-4 flex items-center gap-2">
-                <input
-                  className="w-full border rounded-md px-2 py-1"
-                  value={s.label_en}
-                  onChange={(e) =>
-                    updateStatus(s.key, { label_en: e.target.value })
-                  }
-                  placeholder="Label (EN)"
-                />
-                <input
-                  className="w-full border rounded-md px-2 py-1"
-                  value={s.label_ar}
-                  onChange={(e) =>
-                    updateStatus(s.key, { label_ar: e.target.value })
-                  }
-                  placeholder="Label (AR)"
-                />
+
+              {/* Labels (EN/AR) */}
+              <div className="md:col-span-4 grid grid-cols-2 gap-2 w-full">
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider md:hidden">
+                    English Label
+                  </span>
+                  <input
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                    value={s.label_en}
+                    onChange={(e) =>
+                      updateStatus(s.key, { label_en: e.target.value })
+                    }
+                    placeholder="Label (EN)"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider md:hidden">
+                    Arabic Label
+                  </span>
+                  <input
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-right bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                    value={s.label_ar}
+                    onChange={(e) =>
+                      updateStatus(s.key, { label_ar: e.target.value })
+                    }
+                    placeholder="Label (AR)"
+                    dir="rtl"
+                  />
+                </div>
               </div>
-              <div className="col-span-3 flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm">
+
+              {/* Flags (Visible/Notify) */}
+              <div className="md:col-span-3 flex flex-row items-center gap-4 w-full md:justify-center bg-white md:bg-transparent p-2 md:p-0 rounded-lg border md:border-0 border-slate-100">
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
                   <input
                     type="checkbox"
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300"
                     checked={!!s.customerVisible}
                     onChange={(e) =>
                       updateStatus(s.key, { customerVisible: e.target.checked })
                     }
                   />
-                  Customer visible
+                  <span>Visible</span>
                 </label>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
                   <input
                     type="checkbox"
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300"
                     checked={!!s.notify}
                     onChange={(e) =>
                       updateStatus(s.key, { notify: e.target.checked })
                     }
                   />
-                  Notify
+                  <span>Notify</span>
                 </label>
               </div>
-              <div className="col-span-3 flex items-center gap-2">
-                <span className="text-sm text-slate-600">SLA (min)</span>
+
+              {/* SLA */}
+              <div className="md:col-span-3 flex items-center justify-between md:justify-end gap-2 w-full">
+                <span className="text-sm text-slate-500 md:text-slate-600">
+                  SLA (min)
+                </span>
                 <input
                   type="number"
                   min={0}
-                  className="w-24 border rounded-md px-2 py-1 text-right"
+                  className="w-20 md:w-24 border border-slate-200 rounded-lg px-3 py-2 text-right text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                   value={s.slaMin ?? 0}
                   onChange={(e) =>
                     updateStatus(s.key, {
@@ -285,7 +313,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
           <input
             type="number"
             min={0}
-            className="w-28 border rounded-md px-2 py-1 text-right"
+            className="w-28 border rounded-md px-2 py-1 text-right bg-white text-slate-900"
             value={flow.autoCancelAfterMin ?? 0}
             onChange={(e) => {
               const v = Math.max(0, Number(e.target.value || 0));
@@ -300,11 +328,10 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
         <button
           onClick={save}
           disabled={!dirty || saving}
-          className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm ${
-            dirty
-              ? "bg-emerald-600 text-white border-emerald-700"
-              : "bg-slate-100 text-slate-500 border-slate-200"
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm ${dirty
+            ? "bg-emerald-600 text-white border-emerald-700"
+            : "bg-slate-100 text-slate-500 border-slate-200"
+            }`}
         >
           {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
         </button>

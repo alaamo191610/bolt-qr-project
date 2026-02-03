@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Globe, ChevronDown } from "lucide-react";
-import { useLanguage, Language } from "../contexts/LanguageContext";
+import { useLanguage, Language } from "../../contexts/LanguageContext";
 
 interface LanguageToggleProps {
   variant?: "button" | "dropdown";
@@ -36,9 +36,8 @@ const LanguageToggle: React.FC<LanguageToggleProps> = ({
       <button
         onClick={() => setLanguage(language === "en" ? "ar" : "en")}
         className={`flex items-center space-x-2 rtl:space-x-reverse w-full px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 ${className}`}
-        title={`${t("language.switchTo")} ${
-          language === "en" ? "العربية" : "English"
-        }`}
+        title={`${t("language.switchTo")} ${language === "en" ? "العربية" : "English"
+          }`}
       >
         <Globe className="w-4 h-4" />
         <span>{currentLanguage?.nativeName}</span>
@@ -55,9 +54,8 @@ const LanguageToggle: React.FC<LanguageToggleProps> = ({
         <Globe className="w-4 h-4" />
         <span>{currentLanguage?.nativeName}</span>
         <ChevronDown
-          className={`w-4 h-4 transition-transform duration-200 ${
-            isOpen ? "rotate-180" : ""
-          }`}
+          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""
+            }`}
         />
       </button>
 
@@ -78,11 +76,10 @@ const LanguageToggle: React.FC<LanguageToggleProps> = ({
                   setLanguage(lang.code);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-200 ${
-                  language === lang.code
+                className={`w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-200 ${language === lang.code
                     ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
                     : "text-slate-700 dark:text-slate-300"
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-3 rtl:space-x-reverse">
                   <span className="text-lg">{lang.flag}</span>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { UserCog, Plus, Trash2, Mail, Store } from "lucide-react";
-import { adminService } from "../services/adminService";
+import { adminService } from "../../services/adminService";
 import { toast } from "react-hot-toast";
-import type { Admin } from "../lib/supabase";
+import type { Admin } from "../../lib/supabase";
 
 const UserManagement: React.FC = () => {
   const [admins, setAdmins] = useState<Admin[]>([]);
