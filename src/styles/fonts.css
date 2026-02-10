@@ -7,22 +7,22 @@
 }
 
 .font-playpen-arabic {
-  font-family: var(--font-playpen-arabic);
+  font-family: var(--font-family, var(--font-playpen-arabic));
 }
 
 /* Language-specific fonts */
 html[lang="en"] {
-  font-family: var(--font-playpen-arabic);
+  font-family: var(--font-family, var(--font-playpen-arabic));
 }
 
 html[lang="ar"] {
-  font-family: var(--font-playpen-arabic);
+  font-family: var(--font-family, var(--font-playpen-arabic));
 }
 
 [dir="ltr"] {
-  font-family: var(--font-playpen-arabic);
+  font-family: var(--font-family, var(--font-playpen-arabic));
 }
 
 [dir="rtl"] {
-  font-family: var(--font-playpen-arabic);
+  font-family: var(--font-family, var(--font-playpen-arabic));
 }

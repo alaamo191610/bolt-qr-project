@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Menu, X, Search, User, LogOut } from "lucide-react";
+import { Menu, X, Search, LogOut } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useAdminMonetary } from "../../hooks/useAdminMonetary";
 import LanguageToggle from "./LanguageToggle";
 import { Menu as DropdownMenu, Transition } from "@headlessui/react";
 import { Fragment } from "react";
@@ -33,6 +34,10 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
   const { t, isRTL } = useLanguage();
+
+  // Extract admin ID from userInfo email to fetch branding
+  const adminId = userInfo?.email?.split('@')[0];
+  const { restaurantName, logoUrl } = useAdminMonetary(adminId);
 
   // Prevent component unmounting on tab switch
   useEffect(() => {
@@ -91,7 +96,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
       {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -99,7 +104,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
       {/* Sidebar (mobile only) */}
       <div
         className={`fixed inset-y-0 ${isRTL ? "right-0" : "left-0"
-          } z-50 w-64 bg-white dark:bg-slate-800 shadow-xl transform transition-transform duration-300 ease-in-out
+          } z-50 w-64 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 dark:border-slate-700
           ${sidebarOpen
             ? "translate-x-0"
             : isRTL
@@ -107,26 +112,31 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               : "-translate-x-full"
           } lg:hidden`}
       >
-        <div className="flex items-center justify-between h-16 px-6 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between h-20 px-6 border-b border-slate-200/50 dark:border-slate-700/50">
           {/* Branding */}
           <div className="flex items-center space-x-3 rtl:space-x-reverse">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
-              style={{
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-              }}
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
-              </svg>
-            </div>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={restaurantName || "Restaurant"}
+                className="w-10 h-10 rounded-xl object-cover shadow-lg"
+              />
+            ) : (
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                }}
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
+                </svg>
+              </div>
+            )}
             <div>
-              <h1 className="text-lg font-bold text-slate-900 dark:text-white">
-                RestaurantQR
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                {restaurantName || "RestaurantQR"}
               </h1>
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                Management System
-              </p>
             </div>
           </div>
 
@@ -135,7 +145,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             onClick={() => setSidebarOpen(false)}
             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
           >
-            <X className="w-5 h-5" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
@@ -151,9 +161,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                   handleTabChange(item.id);
                 }}
                 className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${isRTL ? "text-right" : "text-left"
-                  } px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                    ? "text-white shadow-lg transform scale-[1.02]"
-                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
+                  } px-4 py-3.5 rounded-xl transition-all duration-300 group font-medium ${isActive
+                    ? "text-white shadow-lg shadow-emerald-500/20 translate-x-1"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 style={
                   isActive
@@ -163,8 +173,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                     : {}
                 }
               >
-                <Icon className="w-5 h-5" />
-                <span className="font-medium">{item.name}</span>
+                <Icon className={`w-5 h-5 ${isActive ? 'animate-pulse' : ''}`} />
+                <span>{item.name}</span>
               </button>
             );
           })}
@@ -172,16 +182,16 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
         {/* User Info in Sidebar */}
         {userInfo && (
-          <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-            <div className="flex items-center space-x-3 rtl:space-x-reverse p-3 rounded-xl bg-slate-50 dark:bg-slate-700">
-              <div className="w-10 h-10 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-white" />
+          <div className="p-6 border-t border-slate-200/50 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
+            <div className="flex items-center space-x-3 rtl:space-x-reverse p-3 rounded-xl bg-white dark:bg-slate-700 shadow-sm border border-slate-100 dark:border-slate-600">
+              <div className="w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg flex items-center justify-center shadow-md">
+                <span className="text-white font-bold">{userInfo.name.charAt(0).toUpperCase()}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                   {userInfo.name}
                 </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {userInfo.email}
                 </p>
               </div>
@@ -189,7 +199,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             {onSignOut && (
               <button
                 onClick={onSignOut}
-                className={`w-full mt-3 px-4 py-2 text-sm text-red-600 hover:text-red-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors duration-200 ${isRTL ? "text-right" : "text-left"
+                className={`w-full mt-4 px-4 py-2.5 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors duration-200 shadow-lg ${isRTL ? "text-right" : "text-center"
                   }`}
               >
                 {t("auth.signOut")}
@@ -202,45 +212,50 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
       {/* Main Panel */}
       <div className="lg:pl-0 rtl:lg:pl-0 rtl:lg:pr-0">
         {/* Top Header */}
-        <header className="bg-white dark:bg-slate-800 border-b shadow-sm sticky top-0 z-30">
-          <div className="flex items-center justify-between h-16 px-4 sm:px-6">
-            <div className="flex items-center gap-4 flex-1">
+        <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 shadow-sm sticky top-0 z-30 supports-[backdrop-filter]:bg-white/60">
+          <div className="flex items-center justify-between h-20 px-4 sm:px-8 max-w-[1920px] mx-auto">
+            <div className="flex items-center gap-6 flex-1">
               {/* Sidebar toggle on mobile */}
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+                className="lg:hidden p-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-6 h-6" />
               </button>
 
               {/* Branding */}
               <div className="hidden lg:flex items-center space-x-3 rtl:space-x-reverse">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
-                  style={{
-                    background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                  }}
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={restaurantName || "Restaurant"}
+                    className="w-10 h-10 rounded-xl object-cover shadow-lg transform transition-transform hover:scale-105"
+                  />
+                ) : (
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transform transition-transform hover:scale-105"
+                    style={{
+                      background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                    }}
                   >
-                    <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
-                  </svg>
-                </div>
+                    <svg
+                      className="w-6 h-6"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
+                    </svg>
+                  </div>
+                )}
                 <div>
-                  <h1 className="text-lg font-bold text-slate-900 dark:text-white">
-                    RestaurantQR
+                  <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                    {restaurantName || "RestaurantQR"}
                   </h1>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Management System
-                  </p>
                 </div>
               </div>
 
               {/* Horizontal nav (desktop) */}
-              <div className="hidden lg:flex items-center space-x-2 rtl:space-x-reverse">
+              <div className="hidden lg:flex items-center space-x-1 rtl:space-x-reverse ml-4">
                 {navigation.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -250,9 +265,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                       onClick={() => {
                         handleTabChange(item.id);
                       }}
-                      className={`flex items-center space-x-2 rtl:space-x-reverse px-3 py-2 text-sm font-medium rounded-md transition ${isActive
-                        ? "text-white shadow-sm"
-                        : "text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-white"
+                      className={`flex items-center space-x-2 rtl:space-x-reverse px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 ${isActive
+                        ? "text-white shadow-lg shadow-emerald-500/20 scale-105"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800"
                         }`}
                       style={
                         isActive
@@ -263,36 +278,40 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                       }
                     >
                       <Icon className="w-4 h-4" />
-                      <span className="hidden sm:block">{item.name}</span>
+                      <span className="hidden xl:block">{item.name}</span>
                     </button>
                   );
                 })}
               </div>
 
               {/* Search bar (always visible) */}
-              <div className="flex items-center relative w-48 sm:w-64">
-                <Search className="absolute ltr:left-3 rtl:right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <div className="flex items-center relative w-full max-w-sm ml-auto mr-4 lg:mr-0">
+                <Search className="absolute ltr:left-4 rtl:right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
                   placeholder={t("common.search")}
-                  className="w-full py-2 pl-10 pr-4 rtl:pr-10 rtl:pl-4 bg-slate-100 dark:bg-slate-700 border-0 rounded-lg text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 transition-all duration-200"
-                  style={{ outlineColor: colors.primary }}
+                  className="w-full py-2.5 pl-11 pr-5 rtl:pr-11 rtl:pl-5 bg-slate-100/50 dark:bg-slate-700/50 border border-transparent focus:border-emerald-500/50 rounded-full text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all duration-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 />
               </div>
             </div>
 
             {/* Right side: language, bell, user info */}
             <div
-              className="flex relative float-right items-center space-x-4 rtl:space-x-reverse"
+              className="flex relative float-right items-center space-x-3 rtl:space-x-reverse ml-4"
             >
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">
-                  <DropdownMenu.Button className="flex items-center gap-2 rounded-full bg-white dark:bg-slate-800 p-1 pl-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[100px] truncate hidden sm:block">
-                      {userInfo.name.split(" ")[0]}
-                    </span>
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+                  <DropdownMenu.Button className="flex items-center gap-3 rounded-full bg-slate-50 dark:bg-slate-800/50 p-1.5 pl-4 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 group">
+                    <div className="text-right hidden sm:block">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">
+                        {userInfo.name.split(" ")[0]}
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
+                        Admin
+                      </p>
+                    </div>
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                       <span className="text-sm font-bold text-white">
                         {userInfo.name.charAt(0).toUpperCase()}
                       </span>
@@ -309,17 +328,17 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                     leaveTo="transform opacity-0 scale-95 translate-y-2"
                   >
                     <DropdownMenu.Items
-                      className={`absolute z-50 mt-3 w-64 rounded-xl bg-white dark:bg-slate-800 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none divide-y divide-slate-100 dark:divide-slate-700 ${isRTL ? "left-0 origin-top-left" : "right-0 origin-top-right"
+                      className={`absolute z-50 mt-4 w-72 rounded-2xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl ring-1 ring-black/5 focus:outline-none divide-y divide-slate-100 dark:divide-slate-700 ${isRTL ? "left-0 origin-top-left" : "right-0 origin-top-right"
                         }`}
                     >
-                      <div className="px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                      <div className="px-6 py-5">
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
                           {t("auth.signedInAs") || "Signed in as"}
                         </p>
-                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                        <p className="text-base font-bold text-slate-900 dark:text-white truncate">
                           {userInfo.name}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
                           {userInfo.email}
                         </p>
                       </div>
@@ -339,8 +358,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                                 onClick={onSignOut}
                                 className={`${active
                                   ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-                                  : "text-red-600 dark:text-red-400"
-                                  } group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors`}
+                                  : "text-slate-600 dark:text-slate-400"
+                                  } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200`}
                               >
                                 <LogOut
                                   className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isRTL ? 'scale-x-[-1] group-hover:-translate-x-0.5' : ''}`}
@@ -360,8 +379,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
         </header>
 
         {/* Page Content */}
-        <main className="p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <main className="p-4 sm:p-6 lg:p-8 max-w-[1920px] mx-auto min-h-[calc(100vh-5rem)]">
+          <div className="max-w-8xl mx-auto animate-fade-in">{children}</div>
         </main>
       </div>
     </div>

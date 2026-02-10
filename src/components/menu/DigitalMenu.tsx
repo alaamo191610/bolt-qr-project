@@ -89,14 +89,14 @@ const EmptyState = ({
   description: string;
   action?: React.ReactNode;
 }) => (
-  <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+  <div className="text-center p-16 bg-white/50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700 backdrop-blur-sm animate-fade-in">
+    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
       <Search className="w-8 h-8 text-slate-400" />
     </div>
-    <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
       {title}
     </h3>
-    <p className="text-slate-600 dark:text-slate-400 mb-4">{description}</p>
+    <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">{description}</p>
     {action}
   </div>
 );
@@ -126,23 +126,23 @@ const CategoryForm = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-scale-in border border-slate-100 dark:border-slate-700">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white">
             {t("common.addCategory")}
           </h3>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               {t("common.nameEn")}
             </label>
             <input
@@ -151,14 +151,14 @@ const CategoryForm = ({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name_en: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Category name in English"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+              placeholder="e.g. Desserts"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               {t("common.nameAr")}
             </label>
             <input
@@ -167,9 +167,10 @@ const CategoryForm = ({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name_ar: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="اسم الفئة بالعربية"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+              placeholder="مثال: حلويات"
               required
+              dir="rtl"
             />
           </div>
 
@@ -177,14 +178,14 @@ const CategoryForm = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 py-3 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
             >
               {loading ? t("common.adding") : t("common.add")}
             </button>
@@ -220,23 +221,23 @@ const IngredientForm = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-scale-in border border-slate-100 dark:border-slate-700">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white">
             {t("common.addIngredient")}
           </h3>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               {t("common.nameEn")}
             </label>
             <input
@@ -245,14 +246,14 @@ const IngredientForm = ({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name_en: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Ingredient name in English"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+              placeholder="e.g. Cheese"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               {t("common.nameAr")}
             </label>
             <input
@@ -261,9 +262,10 @@ const IngredientForm = ({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name_ar: e.target.value }))
               }
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="اسم المكون بالعربية"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+              placeholder="مثال: جبن"
               required
+              dir="rtl"
             />
           </div>
 
@@ -271,14 +273,14 @@ const IngredientForm = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 py-3 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
             >
               {loading ? t("common.adding") : t("common.add")}
             </button>
@@ -309,33 +311,35 @@ const DeleteConfirmModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden animate-scale-in border border-slate-100 dark:border-slate-700">
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8 text-rose-600 dark:text-rose-400" />
           </div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
             {title}
           </h3>
-        </div>
+          <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+            {message}
+          </p>
 
-        <p className="text-slate-600 dark:text-slate-400 mb-6">{message}</p>
-
-        <div className="flex space-x-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? t("common.deleting") : t("common.delete")}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
+            >
+              {loading ? t("common.deleting") : t("common.delete")}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -972,29 +976,29 @@ const DigitalMenu: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-        <div className="flex items-center justify-between mb-6 flex-col sm:flex-row">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center">
-              <Settings className="w-5 h-5 text-white" />
+      {/* Sticky Header */}
+      <div className="bg-white/90 dark:bg-slate-800/90 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-700/50 p-6 sticky top-4 z-20 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 transform hover:scale-105 transition-transform duration-300">
+              <Settings className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
                 {t("admin.title")}
               </h2>
-              <p className="text-slate-600 dark:text-slate-400">
+              <p className="text-slate-500 dark:text-slate-400 font-medium">
                 {t("admin.subtitle")}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             <SeedDataButton userId={user?.id} onComplete={fetchItems} />
 
             <button
               onClick={() => setCategoryFormOpen(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+              className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>{t("common.addCategory")}</span>
@@ -1002,7 +1006,7 @@ const DigitalMenu: React.FC = () => {
 
             <button
               onClick={() => setIngredientFormOpen(true)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+              className="px-4 py-2.5 bg-violet-50 hover:bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 dark:hover:bg-violet-900/50 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>{t("common.addIngredient")}</span>
@@ -1010,7 +1014,7 @@ const DigitalMenu: React.FC = () => {
 
             <button
               onClick={() => openForm()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>{t("common.addItem")}</span>
@@ -1020,45 +1024,48 @@ const DigitalMenu: React.FC = () => {
 
         {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+          <div className="relative flex-1 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-emerald-500 transition-colors" />
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-3 w-full border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none"
               placeholder={t("common.search")}
             />
           </div>
 
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="All">{t("menu.all")}</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={String(cat.id)}>
-                {getLocalizedName(cat)}
-              </option>
-            ))}
-          </select>
+          <div className="relative min-w-[200px]">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full appearance-none px-4 py-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none text-slate-700 dark:text-slate-200 cursor-pointer"
+            >
+              <option value="All">{t("menu.all")}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={String(cat.id)}>
+                  {getLocalizedName(cat)}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
         </div>
 
         {/* Bulk Actions */}
         {selectedItems.length > 0 && (
-          <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700">
-            <div className="flex items-center justify-between">
-              <span className="text-emerald-800 dark:text-emerald-300 font-medium">
-                {selectedItems.length} {t("common.itemsSelected")}
-              </span>
-              <button
-                onClick={() => setDeleteAllModalOpen(true)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>{t("common.deleteSelected")}</span>
-              </button>
-            </div>
+          <div className="mt-6 p-4 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 flex items-center justify-between animate-fade-in">
+            <span className="text-emerald-800 dark:text-emerald-400 font-bold px-2">
+              {selectedItems.length} {t("common.itemsSelected")}
+            </span>
+            <button
+              onClick={() => setDeleteAllModalOpen(true)}
+              className="px-4 py-2 bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-900/30 dark:hover:bg-rose-900/40 rounded-xl font-bold text-sm flex items-center space-x-2 transition-colors shadow-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{t("common.deleteSelected")}</span>
+            </button>
           </div>
         )}
       </div>
@@ -1082,56 +1089,69 @@ const DigitalMenu: React.FC = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredItems.map((item) => (
               <div
                 key={item.id}
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:shadow-md transition-shadow p-4"
+                className={`group relative bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border p-1 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${selectedItems.includes(item.id)
+                  ? "border-emerald-500 ring-2 ring-emerald-500/20"
+                  : "border-slate-200 dark:border-slate-700"
+                  }`}
               >
-                <div className="flex items-start space-x-3 mb-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.includes(item.id)}
-                    onChange={() => toggleItemSelection(item.id)}
-                    className="mt-1 w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
-                  />
-
-                  {item.image_url && (
-                    <img
-                      src={item.image_url}
-                      className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
-                      alt={getLocalizedName(item)}
-                    />
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate">
-                        {getLocalizedName(item)}
-                      </h3>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg ml-2">
-                        ${Number(item.price).toFixed(2)}
-                      </span>
+                <div className="p-5 flex flex-col h-full bg-white dark:bg-slate-800 rounded-[1.8rem]">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="relative shrink-0">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          className="w-20 h-20 object-cover rounded-2xl shadow-md"
+                          alt={getLocalizedName(item)}
+                        />
+                      ) : (
+                        <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center text-slate-400">
+                          <div className="w-8 h-8 opacity-50"><UploadCloud /></div>
+                        </div>
+                      )}
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.includes(item.id)}
+                        onChange={() => toggleItemSelection(item.id)}
+                        className="absolute -top-2 -left-2 w-6 h-6 text-emerald-600 border-white ring-2 ring-white rounded-lg shadow-sm focus:ring-emerald-500 cursor-pointer"
+                      />
                     </div>
 
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                      {item.categories
-                        ? getLocalizedName(item.categories)
-                        : t("common.noCategory")}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate pr-2">
+                          {getLocalizedName(item)}
+                        </h3>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">
+                          ${Number(item.price).toFixed(2)}
+                        </span>
+                      </div>
 
-                    <div className="flex items-center justify-between space-x-2 mb-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${item.available
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                          : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                          }`}
-                      >
-                        {item.available
-                          ? t("common.available")
-                          : t("common.unavailable")}
-                      </span>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                        {item.categories
+                          ? getLocalizedName(item.categories)
+                          : t("common.noCategory")}
+                      </p>
 
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${item.available
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                            : "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400"
+                            }`}
+                        >
+                          {item.available ? "In Stock" : "Out of Stock"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions & Toggles */}
+                  <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
                       {/* Quick Toggle Switch */}
                       <button
                         onClick={(e) => {
@@ -1139,46 +1159,35 @@ const DigitalMenu: React.FC = () => {
                           handleToggleAvailability(item.id, item.available);
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${item.available
-                          ? "bg-emerald-600"
+                          ? "bg-emerald-500"
                           : "bg-slate-300 dark:bg-slate-600"
                           }`}
-                        title={item.available ? t("common.markUnavailable") || "Mark unavailable" : t("common.markAvailable") || "Mark available"}
+                        title={item.available ? t("common.markUnavailable") : t("common.markAvailable")}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.available ? "translate-x-6" : "translate-x-1"
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${item.available ? "translate-x-6" : "translate-x-1"
                             }`}
                         />
                       </button>
+                      <span className="text-xs font-medium text-slate-500">
+                        {item.available ? "Available" : "Unavailable"}
+                      </span>
                     </div>
 
-                    {item.ingredients_details &&
-                      item.ingredients_details.length > 0 && (
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-                          {t("common.ingredients")}:{" "}
-                          {item.ingredients_details
-                            .map((i) =>
-                              i.ingredient ? getLocalizedName(i.ingredient) : ""
-                            )
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                      )}
-
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => openForm(item)}
-                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm flex items-center space-x-1 transition-colors"
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
+                        title={t("common.edit")}
                       >
                         <Edit className="w-4 h-4" />
-                        <span>{t("common.edit")}</span>
                       </button>
-
                       <button
                         onClick={() => handleDeleteItem(item.id)}
-                        className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm flex items-center space-x-1 transition-colors"
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors"
+                        title={t("common.delete")}
                       >
                         <Trash2 className="w-4 h-4" />
-                        <span>{t("common.delete")}</span>
                       </button>
                     </div>
                   </div>
@@ -1194,7 +1203,7 @@ const DigitalMenu: React.FC = () => {
           action={
             <button
               onClick={() => openForm()}
-              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center space-x-2 mx-auto transition-colors"
+              className="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 rounded-xl font-bold flex items-center space-x-2 mx-auto transition-all shadow-lg hover:shadow-xl hover:-translate-y-1"
             >
               <Plus className="w-5 h-5" />
               <span>{t("common.addFirstItem")}</span>
@@ -1205,218 +1214,246 @@ const DigitalMenu: React.FC = () => {
 
       {/* Menu Item Form Modal */}
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/30 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 shadow-xl w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-xl overflow-y-auto p-4 sm:p-6 md:h-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 shadow-2xl w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-2xl rounded-3xl overflow-hidden flex flex-col border border-slate-100 dark:border-slate-700 animate-scale-in">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                {form.id ? t("common.editItem") : t("common.addItem")}
-              </h3>
+            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/80 backdrop-blur-xl shrink-0">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                  {form.id ? t("common.editItem") : t("common.addItem")}
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Fill in the details below to {form.id ? "update" : "create"} your menu item.
+                </p>
+              </div>
               <button
                 onClick={() => setFormOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-400 hover:text-slate-600"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Form Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                {/* Name EN */}
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                    {t("common.nameEn")} *
-                  </label>
-                  <input
-                    ref={(el) => { fieldRefs.current.name_en = el; }}
-                    value={form.name_en}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name_en: e.target.value }))
-                    }
-                    placeholder={t("common.nameEn")}
-                    className={`w-full px-3 py-2 rounded-lg border ${errors.name_en
-                      ? "border-red-500"
-                      : "border-slate-300 dark:border-slate-600"
-                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  />
-                  {errors.name_en && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.name_en}
-                    </p>
-                  )}
-                </div>
-
-                {/* Name AR */}
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                    {t("common.nameAr")} *
-                  </label>
-                  <input
-                    ref={(el) => { fieldRefs.current.name_ar = el; }}
-                    value={form.name_ar}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name_ar: e.target.value }))
-                    }
-                    placeholder={t("common.nameAr")}
-                    className={`w-full px-3 py-2 rounded-lg border ${errors.name_ar
-                      ? "border-red-500"
-                      : "border-slate-300 dark:border-slate-600"
-                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  />
-                  {errors.name_ar && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.name_ar}
-                    </p>
-                  )}
-                </div>
-
-                {/* Price */}
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                    {t("common.price")} *
-                  </label>
-                  <input
-                    ref={(el) => { fieldRefs.current.price = el; }}
-                    type="number"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, price: e.target.value }))
-                    }
-                    placeholder="0.00"
-                    className={`w-full px-3 py-2 rounded-lg border ${errors.price
-                      ? "border-red-500"
-                      : "border-slate-300 dark:border-slate-600"
-                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  />
-                  {errors.price && (
-                    <p className="text-sm text-red-500 mt-1">{errors.price}</p>
-                  )}
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                    {t("common.category")} *
-                  </label>
-                  <select
-                    ref={(el) => { fieldRefs.current.category_id = el; }}
-                    value={form.category_id ?? " hjk"}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, category_id: e.target.value }))
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border ${errors.category_id
-                      ? "border-red-500"
-                      : "border-slate-300 dark:border-slate-600"
-                      } bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-                  >
-                    <option value="">{t("common.selectCategory")}</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={String(cat.id)}>
-                        {getLocalizedName(cat)}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.category_id && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.category_id}
-                    </p>
-                  )}
-                </div>
-
-                {/* Image Upload */}
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                    {t("common.image")}
-                  </label>
-                  <ImageUploadField
-                    value={form.image_url}
-                    onChange={(url) =>
-                      setForm((f) => ({ ...f, image_url: url }))
-                    }
-                    disableManualInput={Boolean(form.image_url)}
-                    uploadPrefix={user?.id ? `${user.id}/menu-items` : ""}
-                    fieldId={`menu-item-image-${form.id || "new"}`}
-                  />
-                </div>
-
-                {/* Available Checkbox */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {t("common.available")}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setForm((f) => ({ ...f, available: !f.available }))
-                    }
-                    className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors ${form.available ? "bg-emerald-500" : "bg-slate-300"
-                      }`}
-                  >
-                    <div
-                      className={`w-4 h-4 bg-white rounded-full shadow-md transform duration-300 ${form.available ? "translate-x-4" : "translate-x-0"
-                        }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              {/* Ingredients List */}
-              <div>
-                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                  {t("common.ingredients")}
-                </label>
-                <div className="max-h-64 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-lg p-3 space-y-2">
-                  {ingredients.map((ing) => (
-                    <label
-                      key={ing.id}
-                      className="flex items-center space-x-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.ingredients.includes(ing.id)}
-                        onChange={() =>
-                          setForm((f) => ({
-                            ...f,
-                            ingredients: f.ingredients.includes(ing.id)
-                              ? f.ingredients.filter((i) => i !== ing.id)
-                              : [...f.ingredients, ing.id],
-                          }))
-                        }
-                        className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
-                      />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {getLocalizedName(ing)}
-                      </span>
+            {/* Form Fields - Scrollable Content */}
+            <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  {/* Name EN */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.nameEn")} <span className="text-rose-500">*</span>
                     </label>
-                  ))}
+                    <input
+                      ref={(el) => { fieldRefs.current.name_en = el; }}
+                      value={form.name_en}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name_en: e.target.value }))
+                      }
+                      placeholder="e.g. Classic Burger"
+                      className={`w-full px-4 py-3 rounded-xl border ${errors.name_en
+                        ? "border-rose-500 focus:ring-rose-200"
+                        : "border-slate-200 dark:border-slate-600 focus:ring-emerald-100 dark:focus:ring-emerald-900/30"
+                        } bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:border-emerald-500 transition-all`}
+                    />
+                    {errors.name_en && (
+                      <p className="text-sm text-rose-500 mt-1 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {errors.name_en}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Name AR */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.nameAr")} <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      ref={(el) => { fieldRefs.current.name_ar = el; }}
+                      value={form.name_ar}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name_ar: e.target.value }))
+                      }
+                      placeholder="مثال: برجر كلاسيك"
+                      dir="rtl"
+                      className={`w-full px-4 py-3 rounded-xl border ${errors.name_ar
+                        ? "border-rose-500 focus:ring-rose-200"
+                        : "border-slate-200 dark:border-slate-600 focus:ring-emerald-100 dark:focus:ring-emerald-900/30"
+                        } bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:border-emerald-500 transition-all`}
+                    />
+                    {errors.name_ar && (
+                      <p className="text-sm text-rose-500 mt-1 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {errors.name_ar}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Price */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.price")} <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                      <input
+                        ref={(el) => { fieldRefs.current.price = el; }}
+                        type="number"
+                        step="0.01"
+                        value={form.price}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, price: e.target.value }))
+                        }
+                        placeholder="0.00"
+                        className={`w-full pl-8 pr-4 py-3 rounded-xl border ${errors.price
+                          ? "border-rose-500 focus:ring-rose-200"
+                          : "border-slate-200 dark:border-slate-600 focus:ring-emerald-100 dark:focus:ring-emerald-900/30"
+                          } bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:border-emerald-500 transition-all font-mono`}
+                      />
+                    </div>
+                    {errors.price && (
+                      <p className="text-sm text-rose-500 mt-1 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {errors.price}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.category")} <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        ref={(el) => { fieldRefs.current.category_id = el; }}
+                        value={form.category_id ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, category_id: e.target.value }))
+                        }
+                        className={`w-full appearance-none px-4 py-3 rounded-xl border ${errors.category_id
+                          ? "border-rose-500 focus:ring-rose-200"
+                          : "border-slate-200 dark:border-slate-600 focus:ring-emerald-100 dark:focus:ring-emerald-900/30"
+                          } bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:border-emerald-500 transition-all cursor-pointer`}
+                      >
+                        <option value="">{t("common.selectCategory")}</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={String(cat.id)}>
+                            {getLocalizedName(cat)}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                    </div>
+                    {errors.category_id && (
+                      <p className="text-sm text-rose-500 mt-1 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {errors.category_id}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Image Upload */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.image")}
+                    </label>
+                    <ImageUploadField
+                      value={form.image_url}
+                      onChange={(url) =>
+                        setForm((f) => ({ ...f, image_url: url }))
+                      }
+                      disableManualInput={Boolean(form.image_url)}
+                      uploadPrefix={user?.id ? `${user.id}/menu-items` : ""}
+                      fieldId={`menu-item-image-${form.id || "new"}`}
+                    />
+                  </div>
+
+                  {/* Available Checkbox */}
+                  <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                    <div>
+                      <span className="block text-sm font-bold text-slate-900 dark:text-white">
+                        {t("common.available")}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        Is this item currently in stock?
+                      </span>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setForm((f) => ({ ...f, available: !f.available }))
+                      }
+                      className={`w-12 h-7 flex items-center rounded-full p-1 transition-colors ${form.available ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                        }`}
+                    >
+                      <div
+                        className={`w-5 h-5 bg-white rounded-full shadow-md transform duration-300 ${form.available ? "translate-x-5" : "translate-x-0"
+                          }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Ingredients List */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.ingredients")}
+                    </label>
+                    <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/30 p-4 space-y-2 custom-scrollbar">
+                      {ingredients.length > 0 ? ingredients.map((ing) => (
+                        <label
+                          key={ing.id}
+                          className="flex items-center space-x-3 p-2 hover:bg-white dark:hover:bg-slate-600/50 rounded-lg cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.ingredients.includes(ing.id)}
+                            onChange={() =>
+                              setForm((f) => ({
+                                ...f,
+                                ingredients: f.ingredients.includes(ing.id)
+                                  ? f.ingredients.filter((i) => i !== ing.id)
+                                  : [...f.ingredients, ing.id],
+                              }))
+                            }
+                            className="w-5 h-5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 accent-emerald-500"
+                          />
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">
+                            {getLocalizedName(ing)}
+                          </span>
+                        </label>
+                      )) : (
+                        <p className="text-sm text-slate-400 text-center py-4">No ingredients added yet.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {form.id && (
+                <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700">
+                  <h4 className="text-lg font-bold mb-2">
+                    Advanced Options
+                  </h4>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Configure modifiers, add-ons, and variations.
+                  </p>
+                  <AdminOptionsPanel menuId={form.id} adminId={user?.id} />
+                </div>
+              )}
             </div>
-            {form.id && (
-              <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-                <h4 className="text-lg font-semibold mb-3">
-                  Advanced: Options & Combos
-                </h4>
-                <p className="text-sm text-slate-500 mb-3">
-                  Configure ingredient rules, modifier groups & options, and
-                  meal combos for this item.
-                </p>
-                <AdminOptionsPanel menuId={form.id} adminId={user?.id} />
-              </div>
-            )}
-            {/* Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+
+            {/* Footer Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 backdrop-blur-sm shrink-0">
               <button
                 onClick={() => setFormOpen(false)}
-                className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="flex-1 py-3.5 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               >
                 {t("common.cancel")}
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={formLoading}
-                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                className="flex-[2] py-3.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
               >
                 {formLoading
                   ? t("common.saving")

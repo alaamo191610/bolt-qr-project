@@ -23,9 +23,16 @@ interface ThemeColors {
   textSecondary: string;
 }
 
+interface ThemeFont {
+  family: string;
+  category: 'serif' | 'sans-serif' | 'display';
+}
+
 interface ThemeContextType {
   colors: ThemeColors;
   updateColors: (newColors: Partial<ThemeColors>) => void;
+  fontFamily: string;
+  updateFontFamily: (font: string) => void;
   isDark: boolean;
   toggleDarkMode: () => void;
   resetToDefault: () => void;
@@ -33,6 +40,8 @@ interface ThemeContextType {
 
 const THEME_KEY = "restaurant-theme:v2";
 const DARK_KEY = "restaurant-dark-mode";
+const FONT_KEY = "restaurant-font-family";
+const DEFAULT_FONT = "Inter, system-ui, -apple-system, sans-serif";
 
 const defaultLightColors: ThemeColors = {
   primary: "#059669", // emerald-600
@@ -133,6 +142,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   const { user, loading } = useAuth(); // 👈 use auth here
   const [isDark, setIsDark] = useState(false);
   const [colors, setColors] = useState<ThemeColors>(defaultLightColors);
+  const [fontFamily, setFontFamily] = useState<string>(DEFAULT_FONT);
 
   type Timeout = ReturnType<typeof setTimeout>;
   const saveTimer = useRef<Timeout | null>(null);
@@ -150,8 +160,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const savedTheme = localStorage.getItem(THEME_KEY);
     const savedIsDark = localStorage.getItem(DARK_KEY) === "true";
+    const savedFont = localStorage.getItem(FONT_KEY) || DEFAULT_FONT;
     if (savedTheme) setColors(JSON.parse(savedTheme));
     setIsDark(savedIsDark);
+    setFontFamily(savedFont);
     if (savedIsDark) document.documentElement.classList.add("dark");
   }, []);
 
@@ -225,12 +237,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     Object.entries(colors).forEach(([key, value]) => {
       root.style.setProperty(`--color-${key}`, value);
     });
-  }, [colors]);
+    root.style.setProperty('--font-family', fontFamily);
+  }, [colors, fontFamily]);
 
   const persistThemeJsonb = (c: ThemeColors) => {
     updateAdminTheme({
       theme: { primary: c.primary, secondary: c.secondary, accent: c.accent },
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   const updateColors = (newColors: Partial<ThemeColors>) => {
@@ -275,28 +288,38 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       Promise.allSettled([
         updateAdminTheme({ theme_mode: next ? "dark" : "light" }),
         (async () => persistThemeJsonb(reBased))(),
-      ]).catch(() => {});
+      ]).catch(() => { });
     } else {
-      updateAdminTheme({ theme_mode: next ? "dark" : "light" }).catch(() => {});
+      updateAdminTheme({ theme_mode: next ? "dark" : "light" }).catch(() => { });
     }
+  };
+
+  const updateFontFamily = (font: string) => {
+    setFontFamily(font);
+    localStorage.setItem(FONT_KEY, font);
+    // Persist to database
+    updateAdminTheme({ font_family: font }).catch(() => { });
   };
 
   const resetToDefault = () => {
     const base = isDark ? defaultDarkColors : defaultLightColors;
     setColors(base);
+    setFontFamily(DEFAULT_FONT);
     localStorage.setItem(THEME_KEY, JSON.stringify(base));
+    localStorage.setItem(FONT_KEY, DEFAULT_FONT);
     updateAdminTheme({
       theme: {
         primary: base.primary,
         secondary: base.secondary,
         accent: base.accent,
       },
-    }).catch(() => {});
+      font_family: DEFAULT_FONT,
+    }).catch(() => { });
   };
 
   return (
     <ThemeContext.Provider
-      value={{ colors, updateColors, isDark, toggleDarkMode, resetToDefault }}
+      value={{ colors, updateColors, fontFamily, updateFontFamily, isDark, toggleDarkMode, resetToDefault }}
     >
       {children}
     </ThemeContext.Provider>

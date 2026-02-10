@@ -311,6 +311,7 @@ const CustomerMenu: React.FC = () => {
           ingredients_details: item.ingredients_details || [],
           categories: item.categories || undefined,
           has_modifiers: item.has_modifiers,
+          user_id: item.user_id,
         } as MenuItem;
       });
 

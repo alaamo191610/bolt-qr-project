@@ -23,6 +23,7 @@ model Admin {
   theme              Json?    @default("{}")
   theme_mode         String?  @default("light")
   theme_color        String?
+  font_family        String?  @default("Inter")
   preferred_language String?  @default("en")
   created_at         DateTime @default(now()) @db.Timestamptz
 

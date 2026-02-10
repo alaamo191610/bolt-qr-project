@@ -26,6 +26,10 @@
     /* slate-900 */
     --color-textSecondary: #64748B;
     /* slate-500/600 */
+
+    /* Typography */
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+
     --radius-xl: 1rem;
     --radius-2xl: 1.25rem;
 
@@ -82,7 +86,7 @@
     @apply text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-family: var(--font-playpen-arabic, system-ui, ui-sans-serif);
+    font-family: var(--font-family, var(--font-playpen-arabic, system-ui, ui-sans-serif));
     text-rendering: optimizeLegibility;
     -webkit-tap-highlight-color: transparent;
   }
@@ -162,6 +166,20 @@
     @apply text-white shadow-md;
   }
 
+  .btn-accent {
+    background: var(--color-accent);
+    @apply text-white shadow-md;
+  }
+
+  .btn-accent:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
   /* Inputs */
   .input {
     @apply w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none;
@@ -228,6 +246,19 @@
     background: rgba(2, 6, 23, 0.35);
     /* slate-950/35 */
     border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Color utilities */
+  .bg-primary {
+    background: var(--color-primary);
+  }
+
+  .bg-secondary {
+    background: var(--color-secondary);
+  }
+
+  .bg-accent {
+    background: var(--color-accent);
   }
 }
 
@@ -407,6 +438,40 @@
 
   .animate-pulse-slow {
     animation: pulse 2s var(--ease-standard) infinite;
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s var(--ease-standard);
+  }
+
+  /* Custom scrollbar for specific containers */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
   }
 
   /* Motion safety */

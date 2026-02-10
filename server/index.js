@@ -482,14 +482,23 @@ app.post('/api/orders', async (req, res) => {
       // For now assuming table provides admin_id, OR adminId is passed in body for takeaway
       const targetAdminId = table?.admin_id || adminId || 'da895696-3f74-42cb-847e-cb9983949f57'; // Remove fallback in prod
 
+      const orderData = {
+        total: total,
+        status: 'pending',
+        type: type || 'dine_in'
+      };
+
+      if (table) {
+        orderData.table = { connect: { id: table.id } };
+        // Admin is implicitly linked via table if we wanted, but safer to link explicitly
+      }
+
+      if (targetAdminId) {
+        orderData.admin = { connect: { id: targetAdminId } };
+      }
+
       const order = await tx.order.create({
-        data: {
-          table_id: table ? table.id : null,
-          admin_id: targetAdminId,
-          total: total, // Use calculated total
-          status: 'pending',
-          type: type || 'dine_in' // Save the type
-        }
+        data: orderData
       });
 
       // 4. Create Order Items
@@ -596,7 +605,18 @@ app.put('/api/tables/:id', authenticate, async (req, res) => {
 
 app.delete('/api/tables/:id', authenticate, async (req, res) => {
   try {
-    await prisma.table.delete({ where: { id: Number(req.params.id) } });
+    const tableId = Number(req.params.id);
+    const table = await prisma.table.findUnique({ where: { id: tableId } });
+
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+
+    if (table.status === 'occupied') {
+      return res.status(400).json({ error: 'Cannot delete an occupied table' });
+    }
+
+    await prisma.table.delete({ where: { id: tableId } });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -634,7 +654,7 @@ app.get('/api/public/pricing', async (req, res) => {
           mode: 'insensitive'
         }
       },
-      select: { admin_id: true }
+      select: { id: true, admin_id: true, status: true }
     });
 
     if (!table || !table.admin_id) {
@@ -655,6 +675,20 @@ app.get('/api/public/pricing', async (req, res) => {
 
     if (!admin) {
       return res.status(404).json({ error: 'Restaurant settings not found' });
+    }
+
+    // 🆕 Update table status to occupied if available
+    if (table.status === 'available') {
+      await prisma.table.update({
+        where: { id: table.id },
+        data: { status: 'occupied' }
+      });
+
+      // Emit real-time update to admin
+      io.to(`admin_${table.admin_id}`).emit('table-updated', {
+        ...table,
+        status: 'occupied'
+      });
     }
 
     res.json(admin);
@@ -911,11 +945,11 @@ app.put('/api/admin/settings/kds-prefs', authenticate, async (req, res) => {
 });
 
 app.put('/api/admin/theme', authenticate, async (req, res) => {
-  const { id, theme, theme_mode, theme_color } = req.body;
+  const { id, theme, theme_mode, theme_color, font_family } = req.body;
   try {
     const updated = await prisma.admin.update({
       where: { id },
-      data: { theme, theme_mode, theme_color }
+      data: { theme, theme_mode, theme_color, font_family }
     });
     res.json(updated);
   } catch (err) { res.status(500).json({ error: err.message }); }

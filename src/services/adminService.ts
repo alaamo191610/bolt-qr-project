@@ -176,6 +176,7 @@ export async function fetchAdminTheme(): Promise<AdminThemeRow> {
 export async function updateAdminTheme(patch: {
   theme?: { primary: string; secondary: string; accent: string };
   theme_mode?: 'light' | 'dark' | 'system';
+  font_family?: string;
 }) {
   const id = (await api.get('/admin/profile')).id;
   const data = await api.put('/admin/theme', { id, ...patch });
