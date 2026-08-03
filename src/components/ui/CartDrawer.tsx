@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus, ShoppingCart, Clock, X, Info } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, X, Info } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAdminMonetary } from '../../hooks/useAdminMonetary';
 import { computeTotals } from '../../pricing/totals';
@@ -205,7 +205,7 @@ const CartDrawer: React.FC<Props> = ({
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white grid place-items-center">
+              <div className="w-9 h-9 rounded-xl bg-primary text-white grid place-items-center shadow-lg shadow-primary/20">
                 <ShoppingCart className="w-4 h-4" />
               </div>
               <div className="leading-tight">
@@ -219,8 +219,8 @@ const CartDrawer: React.FC<Props> = ({
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50"
-              >
+              className="px-4 py-2 rounded-lg bg-primary text-white text-sm hover:opacity-90 transition shadow-md shadow-primary/20 disabled:opacity-50"
+            >
               {t('cart.keepBrowsing')}
             </button>
             {/* <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
@@ -323,7 +323,7 @@ const CartDrawer: React.FC<Props> = ({
                               </span>
                               <button
                                 onClick={() => { onAdd(item); setFlashMsg(`+1 ${isRTL ? (item.name_ar || item.name_en) : item.name_en}`); }}
-                                className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white grid place-items-center transition active:scale-95 shadow"
+                                className="w-9 h-9 rounded-full bg-primary hover:opacity-90 text-white grid place-items-center transition active:scale-95 shadow-md shadow-primary/20"
                                 aria-label={t('common.increase') || 'Increase'}
                               >
                                 <Plus className="w-4 h-4" />
@@ -345,10 +345,10 @@ const CartDrawer: React.FC<Props> = ({
                                 <span
                                   key={x.id + x.action}
                                   className={`text-[11px] px-2 py-0.5 rounded-full border ${x.action === 'no'
-                                      ? 'border-red-300 text-red-700 bg-red-50 dark:bg-red-900/20 dark:border-red-700/40 dark:text-red-200'
-                                      : x.action === 'extra'
-                                        ? 'border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/40 dark:text-amber-200'
-                                        : 'border-slate-300 text-slate-600 bg-slate-50 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200'
+                                    ? 'border-red-300 text-red-700 bg-red-50 dark:bg-red-900/20 dark:border-red-700/40 dark:text-red-200'
+                                    : x.action === 'extra'
+                                      ? 'border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/40 dark:text-amber-200'
+                                      : 'border-slate-300 text-slate-600 bg-slate-50 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200'
                                     }`}
                                 >
                                   {nameForIng(item, x.id) ? `${nameForIng(item, x.id)} — ` : ''}
@@ -401,7 +401,7 @@ const CartDrawer: React.FC<Props> = ({
                         key={p}
                         onClick={() => { setTipPercent(p); setCustomTip(String(p || '')); }}
                         className={`px-3 py-1.5 rounded-lg border text-sm ${tipPercent === p
-                          ? 'border-emerald-600 text-emerald-700 dark:text-emerald-300'
+                          ? 'border-[var(--color-primary)] text-[var(--color-primary)] bg-primary/5'
                           : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/40'}`}
                       >
                         {p}%
@@ -455,7 +455,7 @@ const CartDrawer: React.FC<Props> = ({
                         } finally { setPromoLoading(false); }
                       }}
                       disabled={promoLoading}
-                      className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50"
+                      className="px-4 py-2 rounded-lg bg-primary text-white text-sm hover:opacity-90 disabled:opacity-50 shadow-md shadow-primary/20"
                     >
                       {promoLoading ? (isRTL ? 'جاري التحقق…' : 'Checking…') : (isRTL ? 'تطبيق' : 'Apply')}
                     </button>
@@ -497,7 +497,7 @@ const CartDrawer: React.FC<Props> = ({
                     <span className="text-sm text-slate-600 dark:text-slate-300">
                       {t('billing.discount') || (isRTL ? 'خصم' : 'Discount')}
                     </span>
-                    <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    <span className="text-sm font-medium text-[var(--color-primary)]">
                       -{fmt(breakdown.discount)}
                     </span>
                   </div>
@@ -600,10 +600,10 @@ const CartDrawer: React.FC<Props> = ({
                   <button
                     onClick={onPlaceOrder}
                     disabled={isOrdering || cart.length === 0 || moneyLoading}
-                    className="rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-3 px-6 font-semibold shadow-lg hover:from-emerald-700 hover:to-emerald-800 active:scale-[.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-xl bg-primary text-white py-4 px-6 font-bold text-lg shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                     title={t('menu.placeOrder')}
                   >
-                    {isOrdering ? (t('status.placingOrder') || 'Placing…') : `🍽️ ${t('menu.placeOrder')}`}
+                    {isOrdering ? (t('status.placingOrder') || 'Placing…') : `🚀 ${t('menu.placeOrder')}`}
                   </button>
                 </div>
               </div>

@@ -1,6 +1,6 @@
-// detect if running on localhost or network IP
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const API_URL = `http://${hostname}:3000/api`;
+const fallbackProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+const API_URL = (import.meta.env.VITE_API_URL || `${fallbackProtocol}//${hostname}:3000/api`).replace(/\/$/, '');
 
 const getHeaders = () => {
   const token = localStorage.getItem('auth_token');
@@ -56,6 +56,16 @@ export const api = {
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'DELETE',
       headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async upload(endpoint: string, body: FormData) {
+    const token = localStorage.getItem('auth_token');
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body,
     });
     return handleResponse(res);
   },

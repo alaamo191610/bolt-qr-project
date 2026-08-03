@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { X, Plus, Minus, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X, Plus, Minus } from "lucide-react";
 import { menuService } from "../../services/menuService";
 
 /**
@@ -41,6 +41,7 @@ interface MenuRow {
   name_en: string | null;
   name_ar: string | null;
   price: number | null;
+  image_url: string | null;
 }
 interface IngredientRow {
   menu_id: string;
@@ -422,316 +423,371 @@ export default function MenuItemCustomizer({
     };
   }, [menuId, qty, note, ingState, groups, optState, combo, childrenState]);
 
-  if (loading) return <div className="p-4">Loading…</div>;
-  if (error) return <div className="p-4 text-red-600">{error}</div>;
-  if (!menu) return <div className="p-4">Item not found.</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center p-12">
+      <div className="text-center">
+        <div className="inline-block w-12 h-12 border-4 border-slate-200 dark:border-slate-700 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-600 dark:text-slate-400 text-sm">Loading menu details…</p>
+      </div>
+    </div>
+  );
+  if (error) return (
+    <div className="p-6">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0">
+            <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">Error Loading Item</h3>
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+  if (!menu) return (
+    <div className="p-6">
+      <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center">
+        <p className="text-slate-600 dark:text-slate-400">Item not found.</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="max-w-2xl w-full p-4 md:p-6">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h2 className="text-xl font-semibold">{menu.name_en}</h2>
-          <div className="text-sm text-zinc-600">
-            Base: <Money value={Number(menu.price || 0)} />
-          </div>
+
+    <div className="h-full flex flex-col bg-white dark:bg-slate-800">
+      {/* Sticky Navbar */}
+      <div className="sticky top-0 z-20 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/50 px-4 h-14 flex items-center justify-between">
+        <div className="opacity-0 transition-opacity duration-300 font-semibold" id="sticky-title">
+          {/* Title fades in on scroll - simple implementation: just hide for now or show always if we want. 
+               Let's show the Name always for context, it's safer UX. */}
+          {menu.name_en}
         </div>
-        {onCancel && (
-          <button
-            className="p-2 rounded-lg hover:bg-zinc-100"
-            onClick={onCancel}
-          >
-            <X />
-          </button>
-        )}
+        <button
+          onClick={onCancel}
+          className="ml-auto p-2 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          aria-label="Close"
+        >
+          <X size={20} className="text-slate-600 dark:text-slate-300" />
+        </button>
       </div>
 
-      {/* Ingredients (remove / extra) */}
-      {ingredients.length > 0 && (
-        <section className="mb-6">
-          <h3 className="font-medium mb-2">Ingredients</h3>
-          <div className="space-y-3">
-            {ingredients.map((row) => {
-              const cfg = ingredientConfig.get(row.ingredient_id);
-              const st = ingState[row.ingredient_id] || {
-                mode: "default" as const,
-              };
-              return (
-                <div
-                  key={row.ingredient_id}
-                  className="flex items-center justify-between rounded-xl border p-3"
-                >
-                  <div>
-                    <div className="text-sm font-medium">
-                      {cfg?.name || "ingredient"}
-                    </div>
-                    <div className="text-xs text-zinc-500">
-                      {cfg?.extra
-                        ? `extra +${(cfg?.effPrice || 0).toFixed(2)}`
-                        : "no extra"}
-                      {cfg?.maxExtra ? ` · max ${cfg.maxExtra}` : ""}
-                      {cfg?.removable ? "" : " · not removable"}
-                    </div>
-                  </div>
-                  <TriState
-                    value={st.mode}
-                    onChange={(mode, q) =>
-                      setIngState((s) => ({
-                        ...s,
-                        [row.ingredient_id]: { mode, qty: q },
-                      }))
-                    }
-                    disabledRemove={!cfg?.removable}
-                    disabledExtra={!cfg?.extra}
-                    maxExtra={cfg?.maxExtra}
-                  />
-                </div>
-              );
-            })}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto" style={{ scrollPaddingTop: '3.5rem' }}>
+
+        {/* Hero Image */}
+        {menu.image_url && (
+          <div className="relative w-full h-64 sm:h-72">
+            <img
+              src={menu.image_url}
+              alt={menu.name_en || 'Menu Item'}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
           </div>
-        </section>
-      )}
-
-      {/* Modifier groups */}
-      {groups.length > 0 && (
-        <section className="mb-6">
-          <h3 className="font-medium mb-2">Options</h3>
-          <div className="space-y-4">
-            {groups.map((g) => (
-              <div key={g.id} className="rounded-xl border p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">
-                    {g.name_en || "Group"}
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    {g.selection_type === "single"
-                      ? "choose 1"
-                      : `choose up to ${g.max_select ?? "…"}`}
-                    {g.required ? " · required" : ""}
-                  </div>
-                </div>
-                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {(g.modifier_options || []).map((o) => {
-                    const selQty = optState[o.id] ?? 0;
-                    const single = g.selection_type === "single";
-                    return (
-                      <div
-                        key={o.id}
-                        className={`flex items-center justify-between rounded-lg border p-2 ${selQty > 0
-                          ? "border-emerald-300 bg-emerald-50"
-                          : "border-zinc-200"
-                          }`}
-                      >
-                        <div>
-                          <div className="text-sm">{o.name_en}</div>
-                          <div className="text-xs text-zinc-500">
-                            {Number(o.price_delta || 0) >= 0 ? "+" : ""}
-                            <Money value={Number(o.price_delta || 0)} />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {single ? (
-                            <button
-                              className={`px-2 py-1 rounded border ${selQty
-                                ? "bg-emerald-500 text-white border-emerald-500"
-                                : "border-zinc-300"
-                                }`}
-                              onClick={() =>
-                                setOptState((s) => {
-                                  const next = { ...s };
-                                  // clear other options in this group
-                                  for (const other of g.modifier_options || [])
-                                    next[other.id] = 0;
-                                  next[o.id] = selQty ? 0 : 1;
-                                  return next;
-                                })
-                              }
-                            >
-                              {selQty ? "Selected" : "Select"}
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <button
-                                className="p-1 rounded border"
-                                onClick={() =>
-                                  setOptState((s) => ({
-                                    ...s,
-                                    [o.id]: Math.max(0, (s[o.id] || 0) - 1),
-                                  }))
-                                }
-                              >
-                                <Minus size={14} />
-                              </button>
-                              <span className="min-w-5 text-center text-sm">
-                                {selQty}
-                              </span>
-                              <button
-                                className="p-1 rounded border"
-                                onClick={() =>
-                                  setOptState((s) => ({
-                                    ...s,
-                                    [o.id]: Math.min(
-                                      o.max_qty || 99,
-                                      (s[o.id] || 0) + 1
-                                    ),
-                                  }))
-                                }
-                              >
-                                <Plus size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {optionErrors.length > 0 && (
-              <div className="text-xs text-red-600">{optionErrors[0]}</div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Combo groups (choose child items) */}
-      {combo.length > 0 && (
-        <section className="mb-6">
-          <h3 className="font-medium mb-2">Make it a meal</h3>
-          <div className="space-y-4">
-            {combo.map((cg) => (
-              <div key={cg.id} className="rounded-xl border p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">
-                    Choose: {cg.min_select ?? 0}–{cg.max_select ?? 1}
-                  </div>
-                </div>
-                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {(cg.combo_group_items || []).map((ci) => {
-                    const selected = childrenState[cg.id] === ci.child_menu_id;
-                    return (
-                      <button
-                        key={ci.child_menu_id}
-                        className={`text-left rounded-lg border p-2 ${selected
-                          ? "border-emerald-400 bg-emerald-50"
-                          : "border-zinc-200"
-                          }`}
-                        onClick={() =>
-                          setChildrenState((s) => ({
-                            ...s,
-                            [cg.id]: selected ? "" : ci.child_menu_id,
-                          }))
-                        }
-                      >
-                        <div className="text-sm font-medium">
-                          {ci.menus?.name_en || "Item"}
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          Upgrade +
-                          <Money value={Number(ci.upgrade_price_delta || 0)} />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Notes & Quantity */}
-      <section className="mb-4">
-        <label className="text-sm font-medium">Notes</label>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Add special instructions"
-          className="mt-1 w-full rounded-xl border p-2"
-          rows={2}
-        />
-      </section>
-
-      <section className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <button
-            className="p-2 rounded border"
-            onClick={() => setQty(Math.max(1, qty - 1))}
-          >
-            <Minus />
-          </button>
-          <span className="w-8 text-center font-medium">{qty}</span>
-          <button
-            className="p-2 rounded border"
-            onClick={() => setQty(qty + 1)}
-          >
-            <Plus />
-          </button>
-        </div>
-        <div className="text-sm text-zinc-600">
-          <span className="mr-3">
-            Base <Money value={pricing.base} />
-          </span>
-          <span className="mr-3">
-            Options <Money value={pricing.optionsDelta} />
-          </span>
-          <span className="mr-3">
-            Extras <Money value={pricing.extrasDelta} />
-          </span>
-          {pricing.childrenDelta !== 0 && (
-            <span>
-              Upgrades <Money value={pricing.childrenDelta} />
-            </span>
-          )}
-        </div>
-      </section>
-
-      {/* Snapshot */}
-      <section className="mb-6">
-        <div className="rounded-xl border p-3">
-          <div className="flex items-center justify-between">
-            <div className="font-medium">Summary</div>
-            <div className="text-emerald-700 font-semibold">
-              Unit <Money value={pricing.unit} /> · Total{" "}
-              <Money value={pricing.total} />
-            </div>
-          </div>
-          <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700 space-y-1">
-            {snapshot.length ? (
-              snapshot.map((s, i) => <li key={i}>{s}</li>)
-            ) : (
-              <li>No customizations</li>
-            )}
-          </ul>
-        </div>
-      </section>
-
-      <div className="flex items-center gap-3">
-        {onCancel && (
-          <button className="px-4 py-2 rounded-xl border" onClick={onCancel}>
-            Cancel
-          </button>
         )}
-        <button
-          onClick={() => {
-            if (!canAdd) {
-              if (optionErrors.length > 0) {
-                // Show the specific validation error
-                import("react-hot-toast").then((mod) => {
-                  mod.default.error(optionErrors[0]);
-                });
+
+        <div className="px-5 py-6">
+          {/* Header Info */}
+          <div className="mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2 leading-tight">
+              {menu.name_en}
+            </h1>
+            <div className="flex items-center gap-2 text-lg font-medium text-emerald-600 dark:text-emerald-400">
+              <Money value={Number(menu.price || 0)} />
+              <span className="text-sm font-normal text-slate-500 dark:text-slate-400">base price</span>
+            </div>
+            {/* If we had a description, it would go here */}
+          </div>
+
+          <div className="h-px bg-slate-100 dark:bg-slate-700/50 mb-8" />
+
+
+          {/* Ingredients (remove / extra) */}
+          {ingredients.length > 0 && (
+            <section className="mb-8">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Ingredients</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {ingredients.map((row) => {
+                  const cfg = ingredientConfig.get(row.ingredient_id);
+                  const st = ingState[row.ingredient_id] || { mode: "default" as const };
+                  return (
+                    <div
+                      key={row.ingredient_id}
+                      className="flex flex-col p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{cfg?.name || "Ingredient"}</span>
+                        {cfg?.extra && <span className="text-xs font-semibold text-emerald-600">+<Money value={cfg.effPrice} /></span>}
+                      </div>
+
+                      <TriState
+                        value={st.mode}
+                        onChange={(mode, q) =>
+                          setIngState((s) => ({ ...s, [row.ingredient_id]: { mode, qty: q } }))
+                        }
+                        disabledRemove={!cfg?.removable}
+                        disabledExtra={!cfg?.extra}
+                        maxExtra={cfg?.maxExtra}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Modifier groups */}
+          {groups.length > 0 && (
+            <section className="mb-8">
+              <div className="space-y-8">
+                {groups.map((g) => {
+                  const currentSelectionCount = (g.modifier_options || []).reduce((acc, o) => acc + (optState[o.id] || 0), 0);
+                  const isSatisfied = (!g.required) || (currentSelectionCount >= (g.min_select || 0));
+
+                  return (
+                    <div key={g.id}>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{g.name_en || "Options"}</h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            {g.selection_type === "single" ? "Select 1" : `Select up to ${g.max_select}`}
+                          </p>
+                        </div>
+                        {g.required && (
+                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${isSatisfied ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                            {isSatisfied ? 'Completed' : 'Required'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        {(g.modifier_options || []).map((o) => {
+                          const selQty = optState[o.id] ?? 0;
+                          const isSelected = selQty > 0;
+                          const single = g.selection_type === "single";
+
+                          return (
+                            <div
+                              key={o.id}
+                              onClick={() => {
+                                if (single) {
+                                  setOptState((s) => {
+                                    const next = { ...s };
+                                    for (const other of g.modifier_options || []) next[other.id] = 0;
+                                    next[o.id] = 1; // Toggle off not allowed for required single? usually radio behavior.
+                                    // Actually for single, clicking usually selects it. 
+                                    // If not required, maybe toggle? Let's stick to standard Select behavior.
+                                    return next;
+                                  })
+                                } else {
+                                  // Multi select: toggle on/off (1 or 0) for simple, or stepper if max_qty > 1?
+                                  // The previous UI had steppers for multi. Let's keep that logic but simplify the tap interaction.
+                                  // If max_qty is 1 (checkbox behavior), tap toggles.
+                                  // If max_qty > 1, tap increments?
+
+                                  // Let's keep the stepper UI for multi-qty items, but improve visual.
+                                  if (o.max_qty && o.max_qty > 1) {
+                                    // Use stepper logic
+                                    // Don't toggle on main click if it has complex controls.
+                                  } else {
+                                    // Toggle behavior
+                                    setOptState((s) => ({
+                                      ...s,
+                                      [o.id]: isSelected ? 0 : 1
+                                    }))
+                                  }
+                                }
+                              }}
+                              className={`group relative flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer ${isSelected
+                                ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10 dark:border-emerald-500/50"
+                                : "border-transparent bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${isSelected
+                                  ? "bg-emerald-500 border-emerald-500"
+                                  : "border-slate-300 dark:border-slate-600"
+                                  }`}>
+                                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className={`font-medium ${isSelected ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-700 dark:text-slate-300'}`}>
+                                    {o.name_en}
+                                  </span>
+                                  {Number(o.price_delta) > 0 && (
+                                    <span className="text-sm text-slate-500">
+                                      +<Money value={Number(o.price_delta)} />
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Controls for multi-qty items */}
+                              {!single && o.max_qty && o.max_qty > 1 && (
+                                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    onClick={() => setOptState(s => ({ ...s, [o.id]: Math.max(0, (s[o.id] || 0) - 1) }))}
+                                  >
+                                    <Minus size={14} />
+                                  </button>
+                                  <span className="w-4 text-center font-medium">{selQty}</span>
+                                  <button
+                                    className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60"
+                                    onClick={() => setOptState(s => ({ ...s, [o.id]: Math.min(o.max_qty || 99, (s[o.id] || 0) + 1) }))}
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {optionErrors.length > 0 && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm font-medium">
+                    ⚠️ {optionErrors[0]}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Combo groups (choose child items) */}
+          {combo.length > 0 && (
+            <section className="mb-8">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Make it a meal</h3>
+              <div className="space-y-3">
+                {combo.map((cg) => (
+                  <div key={cg.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="mb-3">
+                      <span className="font-medium text-slate-900 dark:text-white">Choose item</span>
+                      <span className="text-sm text-slate-500 ml-2">(Optional)</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {(cg.combo_group_items || []).map((ci) => {
+                        const selected = childrenState[cg.id] === ci.child_menu_id;
+                        return (
+                          <button
+                            key={ci.child_menu_id}
+                            className={`text-left relative flex items-center justify-between p-3 rounded-lg border-2 transition-all ${selected
+                              ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
+                              : "border-transparent bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
+                              }`}
+                            onClick={() =>
+                              setChildrenState((s) => ({
+                                ...s,
+                                [cg.id]: selected ? "" : ci.child_menu_id,
+                              }))
+                            }
+                          >
+                            <div>
+                              <div className={`font-medium ${selected ? 'text-purple-900 dark:text-purple-200' : 'text-slate-700 dark:text-slate-300'}`}>
+                                {ci.menus?.name_en || "Item"}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                +<Money value={Number(ci.upgrade_price_delta || 0)} />
+                              </div>
+                            </div>
+                            {selected && (
+                              <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
+                                <div className="w-2 h-2 bg-white rounded-full" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Notes */}
+          <section className="mb-8">
+            <label className="text-lg font-bold text-slate-900 dark:text-white block mb-3">Special Instructions</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add a note for the kitchen (e.g. no onions, extra sauce)..."
+              className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              rows={3}
+            />
+          </section>
+
+          {/* Receipt / Summary */}
+          <section className="mb-8 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 border-dashed">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium text-slate-500 dark:text-slate-400">Subtotal</span>
+              <span className="font-medium text-slate-900 dark:text-white"><Money value={pricing.total} /></span>
+            </div>
+            {snapshot.length > 0 && (
+              <div className="pt-2 border-t border-slate-200/50 dark:border-slate-700/50 mt-2">
+                <ul className="text-sm text-slate-500 dark:text-slate-400 space-y-1">
+                  {snapshot.map((s, i) => <li key={i}>• {s}</li>)}
+                </ul>
+              </div>
+            )}
+          </section>
+
+          {/* Spacer for sticky footer */}
+          <div className="h-10" />
+
+        </div>
+      </div>
+
+      {/* Sticky Footer */}
+      <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+        <div className="flex items-center gap-4 max-w-lg mx-auto w-full">
+          {/* Quantity Stepper */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-full p-1">
+            <button
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white disabled:opacity-50"
+              onClick={() => setQty(Math.max(1, qty - 1))}
+              disabled={qty <= 1}
+            >
+              <Minus size={18} />
+            </button>
+            <span className="w-12 text-center font-bold text-lg text-slate-900 dark:text-white">{qty}</span>
+            <button
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white"
+              onClick={() => setQty(qty + 1)}
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+
+          {/* Add Button */}
+          <button
+            onClick={() => {
+              if (!canAdd) {
+                if (optionErrors.length > 0) {
+                  import("react-hot-toast").then((mod) => {
+                    mod.default.error(optionErrors[0]);
+                  });
+                }
+                return;
               }
-              return;
-            }
-            onAdd(cartLine);
-          }}
-          className={`px-4 py-2 rounded-xl text-white ${canAdd
-            ? "bg-emerald-600 hover:bg-emerald-700"
-            : "bg-emerald-600/50 hover:bg-emerald-600/60" // Valid visual cue but still clickable
-            }`}
-        >
-          Add · <Money value={pricing.total} />
-        </button>
+              onAdd(cartLine);
+            }}
+            disabled={!canAdd}
+            className={`flex-1 h-12 rounded-full font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-between px-6 ${canAdd
+              ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30"
+              : "bg-slate-400 cursor-not-allowed"
+              }`}
+          >
+            <span>Add to Order</span>
+            <span><Money value={pricing.total} /></span>
+          </button>
+        </div>
       </div>
     </div>
   );

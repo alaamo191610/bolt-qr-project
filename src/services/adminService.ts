@@ -10,9 +10,9 @@ export const adminService = {
 
   // Get admin profile
   async getAdminProfile(adminId?: string) {
+    void adminId;
     try {
-      // If adminId is provided, fetch that profile. Otherwise, backend will use the token user.
-      return await api.get('/admin/profile', adminId ? { id: adminId } : {});
+      return await api.get('/admin/profile');
     } catch (error) {
       console.error('Error fetching admin profile:', error);
       throw error;
@@ -21,9 +21,9 @@ export const adminService = {
 
   // Update admin profile
   async updateAdminProfile(adminId: string | undefined, updates: Partial<Admin>) {
+    void adminId;
     try {
-      const id = adminId || (await api.get('/admin/profile')).id; // Get self if no ID
-      const data = await api.put('/admin/profile', { id, ...updates });
+      const data = await api.put('/admin/profile', updates);
       return data;
     } catch (error) {
       console.error('Error updating admin profile:', error);
@@ -33,9 +33,9 @@ export const adminService = {
 
   // Update admin language preference
   async updateAdminLanguage(adminId: string | undefined, language: 'en' | 'ar') {
+    void adminId;
     try {
-      const id = adminId || (await api.get('/admin/profile')).id;
-      const data = await api.put('/admin/profile', { id, preferred_language: language });
+      const data = await api.put('/admin/profile', { preferred_language: language });
       return data;
     } catch (error) {
       console.error('Error updating admin language:', error);
@@ -45,9 +45,9 @@ export const adminService = {
 
   // Get restaurant analytics
   async getAnalytics(adminId: string | undefined, days: number = 30) {
+    void adminId;
     try {
-      const id = adminId || (await api.get('/admin/profile')).id;
-      const orders = await api.get('/admin/analytics', { adminId: id, days: String(days) });
+      const orders = await api.get('/admin/analytics', { days: String(days) });
 
       const totalRevenue = orders?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
       const totalOrders = orders?.length || 0;
@@ -81,53 +81,53 @@ export const adminService = {
 
   // -------- Order workflow & KDS --------
   async getAdminSettings(adminId?: string) {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    return await api.get('/admin/settings', { id });
+    void adminId;
+    return await api.get('/admin/settings');
   },
 
   async saveOrderRules(adminId: string | undefined, order_rules: OrderFlowRules) {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    await api.post('/admin/settings/order-rules', { id, order_rules }); // Changed to POST/PUT in backend
+    void adminId;
+    await api.put('/admin/settings/order-rules', { order_rules });
   },
 
   async saveKDSPrefs(adminId: string | undefined, kds_prefs: KDSPrefs) {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    await api.post('/admin/settings/kds-prefs', { id, kds_prefs });
+    void adminId;
+    await api.put('/admin/settings/kds-prefs', { kds_prefs });
   },
 
   // -------- Pricing / Billing --------
   async getAdminMonetarySettings(adminId?: string) {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    return await api.get('/admin/monetary', { adminId: id });
+    void adminId;
+    return await api.get('/admin/monetary');
   },
 
   async savePricingPrefs(adminId: string | undefined, pricing_prefs: PricingPrefs) {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    await api.put('/admin/pricing', { id, pricing_prefs });
+    void adminId;
+    await api.put('/admin/pricing', { pricing_prefs });
   },
 
   async saveBillingSettings(adminId: string | undefined, billing_settings: BillingSettings) {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    await api.put('/admin/billing', { id, billing_settings });
+    void adminId;
+    await api.put('/admin/billing', { billing_settings });
   },
 
   // -------- Promotions --------
   async listPromotions(adminId?: string): Promise<Promotion[]> {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    const data = await api.get('/promotions', { adminId: id });
+    void adminId;
+    const data = await api.get('/promotions');
     return (data || []) as Promotion[];
   },
 
   async upsertPromotion(promo: Promotion, adminId?: string): Promise<Promotion> {
-    const id = adminId || (await api.get('/admin/profile')).id;
-    const payload = { ...promo, admin_id: id };
+    void adminId;
+    const payload: Partial<Promotion> = { ...promo };
+    delete payload.admin_id;
     const data = await api.post('/promotions', payload);
     return data as Promotion;
   },
 
   async setPromotionActive(adminId: string | undefined, id: string, active: boolean) {
-    // We don't strictly need adminId here if the backend checks ownership, 
-    // but for now we just pass the ID to the endpoint
+    void adminId;
     await api.put(`/promotions/${id}/active`, { active });
   },
 
@@ -163,8 +163,7 @@ export type AdminThemeRow = {
 };
 
 export async function fetchAdminTheme(): Promise<AdminThemeRow> {
-  const id = (await api.get('/admin/profile')).id;
-  const data = await api.get('/admin/profile', { id });
+  const data = await api.get('/admin/profile');
 
   return {
     theme: data?.theme ?? null,
@@ -178,8 +177,7 @@ export async function updateAdminTheme(patch: {
   theme_mode?: 'light' | 'dark' | 'system';
   font_family?: string;
 }) {
-  const id = (await api.get('/admin/profile')).id;
-  const data = await api.put('/admin/theme', { id, ...patch });
+  const data = await api.put('/admin/theme', patch);
 
   return {
     theme: data?.theme ?? null,

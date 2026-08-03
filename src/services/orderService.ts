@@ -91,7 +91,7 @@ export const orderService = {
 
         // map tri-state ingredients -> picks for the function
         const ingredients =
-          (it.custom_ingredients ?? []).map((c) => {
+          (it.custom_ingredients ?? []).flatMap((c) => {
             if (c.action === 'no') return [{ ingredientId: c.id, action: 'remove' as const }]
             if (c.action === 'extra') return [{ ingredientId: c.id, action: 'extra' as const, qty: 1 }]
             return []

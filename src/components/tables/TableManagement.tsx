@@ -10,6 +10,7 @@ interface Table {
   number: string;
   status: string;
   capacity: number;
+  adminId: string;
 }
 
 interface TableManagementProps {
@@ -68,6 +69,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
         number: createdTable.code,
         status: "available",
         capacity: newTable.capacity,
+        adminId: createdTable.admin_id || user?.id || '',
       };
 
       setTables((prev) => [...prev, uiTable]);
@@ -236,7 +238,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Digital Menu</span>
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                      `${window.location.origin}/menu?table=${table.number}`
+                      `${window.location.origin}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`
                     )}&color=64748b`}
                     alt={`QR ${table.number}`}
                     className="w-10 h-10 rounded-lg opacity-50 grayscale group-hover/qr:grayscale-0 group-hover/qr:opacity-100 transition-all duration-300"

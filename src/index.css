@@ -456,6 +456,22 @@
     animation: slideInRight 0.3s var(--ease-standard);
   }
 
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s var(--ease-standard);
+  }
+
   /* Custom scrollbar for specific containers */
   .custom-scrollbar::-webkit-scrollbar {
     width: 8px;

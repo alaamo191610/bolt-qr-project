@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 import { UploadCloud, Loader2, XCircle } from "lucide-react";
 import AdminOptionsPanel from "../admin/AdminOptionsPanel"; // adjust path
 import { SeedDataButton } from "./SeedDataButton";
+import { api } from "../../services/api";
 
 interface Category {
   id: string;
@@ -387,13 +388,7 @@ const ImageUploadField = ({
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("http://localhost:3000/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
+      const data = await api.upload('/upload', formData);
       const imageUrl = data.url;
 
       onChange(imageUrl);

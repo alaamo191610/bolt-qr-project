@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { Suspense, useState, useEffect, useMemo, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import {
   QrCode,
@@ -7,7 +7,6 @@ import {
   Settings,
   Users,
   BarChart3,
-  UserCog,
 } from "lucide-react";
 import { useAuth } from "./providers/AuthProvider";
 import { useLanguage } from "./contexts/LanguageContext";
@@ -20,25 +19,32 @@ import { menuService } from "./services/menuService";
 import { orderService } from "./services/orderService";
 import AuthForm from "./components/Auth/AuthForm";
 import ResponsiveLayout from "./components/common/ResponsiveLayout";
-import ThemeCustomizer from "./components/common/ThemeCustomizer";
-import QRGenerator from "./components/tables/QRGenerator";
-import DigitalMenu from "./components/menu/DigitalMenu";
-import OrderManagement from "./components/orders/OrderManagement";
-import TableManagement from "./components/tables/TableManagement";
-import UserManagement from "./components/admin/UserManagement";
-import Analytics from "./components/Analytics";
-import AdminPanel from "./components/admin/AdminPanel";
-import CustomerMenu from "./pages/CustomerMenu";
-import SuperAdminLogin from "./components/super-admin/SuperAdminLogin";
-import SuperAdminDashboard from "./components/super-admin/SuperAdminDashboard";
 import { Toaster, toast } from "react-hot-toast";
 import { socket, joinAdminRoom } from "./services/socket";
+
+const ThemeCustomizer = React.lazy(() => import("./components/common/ThemeCustomizer"));
+const QRGenerator = React.lazy(() => import("./components/tables/QRGenerator"));
+const DigitalMenu = React.lazy(() => import("./components/menu/DigitalMenu"));
+const OrderManagement = React.lazy(() => import("./components/orders/OrderManagement"));
+const TableManagement = React.lazy(() => import("./components/tables/TableManagement"));
+const Analytics = React.lazy(() => import("./components/Analytics"));
+const AdminPanel = React.lazy(() => import("./components/admin/AdminPanel"));
+const CustomerMenu = React.lazy(() => import("./pages/CustomerMenu"));
+const SuperAdminLogin = React.lazy(() => import("./components/super-admin/SuperAdminLogin"));
+const SuperAdminDashboard = React.lazy(() => import("./components/super-admin/SuperAdminDashboard"));
+
+const PageFallback = () => (
+  <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+  </div>
+);
 // Define interfaces for the component state
 interface Table {
   id: number;
   number: string;
   status: string;
   capacity: number;
+  adminId: string;
 }
 
 interface Order {
@@ -92,23 +98,25 @@ function App() {
       <LanguageProvider>
         <CurrencyProvider>
           <Router>
-            <Routes>
-              {/* Customer Menu Routes */}
-              <Route path="/menu" element={<CustomerMenu />} />
-              <Route path="/ar/menu" element={<CustomerMenu />} />
-              <Route path="/en/menu" element={<CustomerMenu />} />
-              <Route path="/menu/:lang" element={<CustomerMenu />} />
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                {/* Customer Menu Routes */}
+                <Route path="/menu" element={<CustomerMenu />} />
+                <Route path="/ar/menu" element={<CustomerMenu />} />
+                <Route path="/en/menu" element={<CustomerMenu />} />
+                <Route path="/menu/:lang" element={<CustomerMenu />} />
 
-              {/* Super Admin Routes */}
-              <Route path="/super-admin/login" element={<SuperAdminLogin />} />
-              <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+                {/* Super Admin Routes */}
+                <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+                <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
 
-              {/* Main Admin Route */}
-              <Route
-                path="/"
-                element={user ? <AdminDashboard /> : <AuthForm />}
-              />
-            </Routes>
+                {/* Main Admin Route */}
+                <Route
+                  path="/"
+                  element={user ? <AdminDashboard /> : <AuthForm />}
+                />
+              </Routes>
+            </Suspense>
           </Router>
 
           {/* 🔔 Toast messages rendered globally */}
@@ -191,8 +199,9 @@ const AdminDashboard: React.FC = () => {
         adminTables.map((table: any) => ({
           id: table.id,
           number: table.code,
-          status: "available",
-          capacity: 4,
+          status: table.status || "available",
+          capacity: table.capacity || 4,
+          adminId: table.admin_id || user.id,
         }))
       );
     } catch (e) {
@@ -324,7 +333,6 @@ const AdminDashboard: React.FC = () => {
       { id: "orders", name: t("nav.orders"), icon: ShoppingCart },
       { id: "tables", name: t("nav.tables"), icon: Users },
       { id: "analytics", name: t("nav.analytics"), icon: BarChart3 },
-      { id: "users", name: "Users", icon: UserCog },
       { id: "admin", name: t("nav.admin"), icon: Settings },
     ],
     [t]
@@ -375,8 +383,6 @@ const AdminDashboard: React.FC = () => {
             onDataChange={fetchTables}
           />
         );
-      case "users":
-        return <UserManagement />;
       case "analytics":
         return <Analytics orders={orders} />;
       case "admin":
@@ -393,6 +399,7 @@ const AdminDashboard: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={handleTabChange}
         userInfo={{
+          id: user?.id || "",
           name:
             adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
           email: user?.email || "",

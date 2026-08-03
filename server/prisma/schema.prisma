@@ -41,6 +41,7 @@ model Admin {
   menus  Menu[]
   tables Table[]
   orders Order[]
+  promotions Promotion[]
 
   @@map("admins")
 }
@@ -192,6 +193,7 @@ model Table {
 
   admin  Admin?  @relation(fields: [admin_id], references: [id])
   orders Order[]
+  promotions Promotion[]
 
   @@unique([admin_id, code])
   @@map("tables")
@@ -229,6 +231,30 @@ model OrderItem {
   menu  Menu?  @relation(fields: [menu_id], references: [id])
 
   @@map("order_items")
+}
+
+model Promotion {
+  id          String    @id @default(uuid()) @db.Uuid
+  admin_id    String    @db.Uuid
+  code        String
+  type        String    @default("percent")
+  value       Decimal   @db.Decimal(10, 2)
+  min_order   Decimal?  @db.Decimal(10, 2)
+  start_at    DateTime? @db.Timestamptz
+  end_at      DateTime? @db.Timestamptz
+  usage_limit Int?
+  times_used  Int       @default(0)
+  active      Boolean   @default(true)
+  applies_to  String    @default("global")
+  table_id    Int?
+  created_at  DateTime  @default(now()) @db.Timestamptz
+
+  admin Admin  @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  table Table? @relation(fields: [table_id], references: [id], onDelete: SetNull)
+
+  @@unique([admin_id, code])
+  @@index([admin_id, active])
+  @@map("promotions")
 }
 
 // 🆕 Super Admin Model for platform management

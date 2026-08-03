@@ -27,6 +27,7 @@ interface Table {
   number: string;
   status: string;
   capacity: number;
+  adminId: string;
 }
 
 interface QRGeneratorProps {
@@ -62,6 +63,7 @@ const CORNER_STYLES: { label: string; value: CornerSquareType }[] = [
 // Helper component for rendering a single QR
 const SingleQRCode = ({
   tableNumber,
+  adminId,
   size,
   color,
   dotStyle,
@@ -69,6 +71,7 @@ const SingleQRCode = ({
   logo
 }: {
   tableNumber: string;
+  adminId: string;
   size: number;
   color: { value: string; gradient: string[] };
   dotStyle: DotType;
@@ -80,7 +83,7 @@ const SingleQRCode = ({
 
   useEffect(() => {
     const baseURL = window.location.origin;
-    const menuURL = `${baseURL}/menu?table=${tableNumber}`;
+    const menuURL = `${baseURL}/menu?table=${encodeURIComponent(tableNumber)}&restaurant=${encodeURIComponent(adminId)}`;
 
     const qrOptions = {
       width: size,
@@ -133,7 +136,7 @@ const SingleQRCode = ({
     } else {
       qrCodeRef.current.update(qrOptions);
     }
-  }, [tableNumber, size, color, dotStyle, cornerStyle, logo]);
+  }, [tableNumber, adminId, size, color, dotStyle, cornerStyle, logo]);
 
   return <div ref={ref} className="qr-container" />;
 };
@@ -148,9 +151,9 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
   const [showPreview, setShowPreview] = useState<Table | null>(null);
 
   // For the actual download method, we instantiate a temporary QR logic
-  const downloadQRCode = async (tableNumber: string, format: 'png' | 'svg' = 'png') => {
+  const downloadQRCode = async (table: Table, format: 'png' | 'svg' = 'png') => {
     const baseURL = window.location.origin;
-    const menuURL = `${baseURL}/menu?table=${tableNumber}`;
+    const menuURL = `${baseURL}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`;
 
     const qr = new QRCodeStyling({
       width: 1000, // High res
@@ -181,12 +184,12 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
       backgroundOptions: { color: "#ffffff" }
     });
 
-    await qr.download({ name: `Table-${tableNumber}-Menu-QR`, extension: format });
+    await qr.download({ name: `Table-${table.number}-Menu-QR`, extension: format });
   };
 
-  const copyToClipboard = async (tableNumber: string) => {
+  const copyToClipboard = async (table: Table) => {
     const baseURL = window.location.origin;
-    const menuURL = `${baseURL}/menu?table=${tableNumber}`;
+    const menuURL = `${baseURL}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`;
 
     try {
       // Try modern clipboard API first
@@ -210,12 +213,12 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
         }
       }
 
-      setCopiedTable(tableNumber);
+      setCopiedTable(table.number);
       setTimeout(() => setCopiedTable(''), 2000);
     } catch (err) {
       console.error('Failed to copy URL:', err);
       // Still show success message as the fallback might have worked
-      setCopiedTable(tableNumber);
+      setCopiedTable(table.number);
       setTimeout(() => setCopiedTable(''), 2000);
     }
   };
@@ -346,6 +349,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                   {/* Client-side QR Rendering */}
                   <SingleQRCode
                     tableNumber={table.number}
+                    adminId={table.adminId}
                     size={qrSize * 0.8} // Scale down slightly for card
                     color={accentColor}
                     dotStyle={dotStyle}
@@ -366,7 +370,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                 </button>
 
                 <button
-                  onClick={() => copyToClipboard(table.number)}
+                  onClick={() => copyToClipboard(table)}
                   className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-colors border border-slate-100 dark:border-slate-600"
                 >
                   {copiedTable === table.number ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
@@ -374,7 +378,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                 </button>
 
                 <button
-                  onClick={() => downloadQRCode(table.number)}
+                  onClick={() => downloadQRCode(table)}
                   className={`flex items-center justify-center gap-2 py-3 px-4 text-white rounded-xl font-bold text-sm transition-all shadow-md active:scale-95 hover:shadow-lg ${accentColor.class}`}
                 >
                   <Download className="w-4 h-4" />
@@ -429,6 +433,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                   <div className="bg-white p-4 rounded-2xl shadow-xl mb-6">
                     <SingleQRCode
                       tableNumber={showPreview.number}
+                      adminId={showPreview.adminId}
                       size={180}
                       color={accentColor}
                       dotStyle={dotStyle}
@@ -454,7 +459,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                 Cancel
               </button>
               <button
-                onClick={() => downloadQRCode(showPreview.number)}
+                onClick={() => downloadQRCode(showPreview)}
                 className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${accentColor.class}`}
               >
                 <Download className="w-5 h-5" />

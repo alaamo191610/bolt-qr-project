@@ -9,7 +9,9 @@ export const socket = io(URL, {
 });
 
 export const joinAdminRoom = (adminId: string) => {
-    socket.emit("join-admin", adminId);
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    socket.emit("join-admin", { adminId, token });
 };
 
 export const joinMenuRoom = (adminId: string) => {

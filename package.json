@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:5175": "vite --host --port 5175",
     "server": "nodemon server/index.js",
     "build": "vite build",
     "lint": "eslint .",
@@ -17,7 +18,9 @@
     "@prisma/client": "^5.22.0",
     "@react-pdf/renderer": "^4.3.0",
     "@supabase/supabase-js": "^2.53.0",
+    "baseline-browser-mapping": "^2.11.11",
     "bcryptjs": "^3.0.3",
+    "caniuse-lite": "^1.0.30001806",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",

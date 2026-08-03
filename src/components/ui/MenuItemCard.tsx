@@ -557,39 +557,34 @@ const MenuItemCard: React.FC<Props> = ({
   return (
     <>
       <div
-        className="relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden group h-full"
+        className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[2rem] shadow-[0_10px_15px_-3px_rgba(0,0,0,0.05),0_4px_6px_-2px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-300 overflow-hidden group h-full flex flex-col"
         role="group"
       >
         {/* Compare chip (top corner) */}
         {isAvailable && showCompareChip && onToggleCompare && (
-          <CompareChip
-            selected={!!compareSelected}
-            disabled={!!(!compareSelected && compareDisabled)}
-            onToggle={() => {
-              if (!compareSelected && compareDisabled) {
-                // Optional: toast using your i18n
-                toast.error(
-                  t("menu.compareLimit") ?? "You can compare up to 2 items",
-                  {
-                    position: "bottom-center",
-                    duration: 2000,
-                  }
-                );
-                return;
-              }
-              onToggleCompare(item.id);
-            }}
-            isRTL={isRTL}
-          />
+          <div className={`absolute top-4 z-20 ${isRTL ? "left-4" : "right-4"}`}>
+            <CompareChip
+              selected={!!compareSelected}
+              disabled={!!(!compareSelected && compareDisabled)}
+              onToggle={() => {
+                if (!compareSelected && compareDisabled) {
+                  toast.error(t("menu.compareLimit") ?? "You can compare up to 2 items");
+                  return;
+                }
+                onToggleCompare(item.id);
+              }}
+              isRTL={isRTL}
+            />
+          </div>
         )}
 
-        {/* Clickable row opens the page */}
+        {/* Clickable Area */}
         <div
           role="button"
           tabIndex={isAvailable ? 0 : -1}
           aria-disabled={!isAvailable || undefined}
           dir={isRTL ? "rtl" : "ltr"}
-          className="w-full outline-none text-start"
+          className="flex-1 w-full outline-none text-start flex flex-row p-4 sm:p-5 gap-4 sm:gap-6"
           onClick={(e) => {
             if (!isAvailable) return;
             lastTriggerRef.current = e.currentTarget as HTMLElement;
@@ -606,183 +601,113 @@ const MenuItemCard: React.FC<Props> = ({
             }
           }}
         >
-          <div className="flex items-start gap-3 sm:gap-5 p-3 sm:p-4 h-full">
-            {/* Image */}
-            <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner">
-              <img
-                src={item.image_url || FALLBACK_400}
-                srcSet={[
-                  `${(item.image_url || FALLBACK_400).replace(
-                    "w=400",
-                    "w=300"
-                  )} 300w`,
-                  `${(item.image_url || FALLBACK_400).replace(
-                    "w=400",
-                    "w=400"
-                  )} 400w`,
-                  `${(item.image_url || FALLBACK_400).replace(
-                    "w=400",
-                    "w=600"
-                  )} 600w`,
-                  `${(item.image_url || FALLBACK_400).replace(
-                    "w=400",
-                    "w=800"
-                  )} 800w`,
-                ].join(", ")}
-                sizes="(max-width: 640px) 128px, 128px"
-                alt={displayName}
-                loading="lazy"
-                decoding="async"
-                referrerPolicy="no-referrer"
-                className="absolute inset-0 w-full h-full object-cover transition-all duration-500 opacity-0 group-hover:scale-110"
-                onLoad={(e) => (e.currentTarget.style.opacity = "1")}
-              />
+          {/* Image Section */}
+          <div className="shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner">
+            <img
+              src={item.image_url || FALLBACK_400}
+              alt={displayName}
+              loading="lazy"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            />
 
-              {/* Badges Overlay */}
-              {item.tags && item.tags.length > 0 && (
-                <div className="absolute top-1.5 left-1.5 z-10">
-                  <MenuBadgeStack tags={item.tags} maxVisible={2} />
-                </div>
-              )}
+            {/* Unavailable Overlay on Image */}
+            {!isAvailable && (
+              <div className="absolute inset-0 bg-slate-900/40 z-10 grid place-items-center">
+                <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-black/50 rounded-full backdrop-blur-md">
+                  {isRTL ? "مباع" : "Sold Out"}
+                </span>
+              </div>
+            )}
 
-              {/* Quick-Add Button (only for simple items) */}
-              {isAvailable && !item.has_modifiers && quantity === 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPlus(e as any);
-                  }}
-                  className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-white dark:bg-slate-800 shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 z-10"
-                  aria-label={tt("menu.quickAdd", "Quick add")}
-                  title={tt("menu.quickAdd", "Quick add")}
-                >
-                  <Plus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                </button>
+            {/* Badges */}
+            {item.tags && item.tags.length > 0 && (
+              <div className="absolute top-2 left-2 z-10">
+                <MenuBadgeStack tags={item.tags} maxVisible={1} />
+              </div>
+            )}
+          </div>
+
+          {/* Content Section */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1">
+              <div className="flex justify-between items-start gap-2">
+                <h3 className={`text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-tight mb-2 line-clamp-2 ${showCompareChip ? (isRTL ? "pl-10" : "pr-10") : ""}`}>
+                  {displayName}
+                </h3>
+              </div>
+
+              {(displayDesc || (item.ingredients_details?.length || 0) > 0) && (
+                <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2 mb-3">
+                  {displayDesc || (item.ingredients_details || []).map(d => isRTL ? d.ingredient.name_ar : d.ingredient.name_en).join(", ")}
+                </p>
               )}
             </div>
 
-            {/* Content */}
-            <div className="min-w-0 flex-1 flex flex-col justify-between h-full">
-              <div className="min-w-0">
-                <h3
-                  dir="auto"
-                  lang={isRTL ? "ar" : "en"}
-                  style={{ unicodeBidi: "plaintext" as any }}
-                  className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight mb-1 line-clamp-2"
-                >
-                  {displayName}
-                </h3>
-
-                {displayDesc ? (
-                  <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2">
-                    {displayDesc}
-                  </p>
-                ) : (
-                  !!item.ingredients_details?.length && (
-                    <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed line-clamp-2">
-                      {(item.ingredients_details || [])
-                        .map(
-                          (d) =>
-                            (isRTL
-                              ? d.ingredient.name_ar
-                              : d.ingredient.name_en) || ""
-                        )
-                        .filter(Boolean)
-                        .slice(0, 5)
-                        .join(isRTL ? "، " : ", ")}
-                    </p>
-                  )
-                )}
+            {/* Action Footer */}
+            <div className={`flex items-end justify-between mt-2 pt-2 gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+              {/* Price */}
+              <div className="font-bold text-emerald-700 dark:text-emerald-400 text-lg sm:text-xl tabular-nums">
+                <span className={moneyLoading ? "opacity-0" : ""}>{fmt(Number(item.price) || 0)}</span>
               </div>
 
-              {/* Footer row item card */}
-              <div
-                className={`mt-2 pt-1 flex items-end justify-between ${isRTL ? "flex-row-reverse" : ""
-                  }`}
-              >
-                <div className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  <span className={moneyLoading ? "opacity-0" : ""}>
-                    {fmt(Number(item.price) || 0)}
-                  </span>
-                </div>
-
+              {/* Add / Qty Control */}
+              <div onClick={(e) => e.stopPropagation()}>
                 {quantity > 0 ? (
-                  <div
-                    className={`flex items-center ${isRTL ? "flex-row-reverse" : ""
-                      }`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-700/50 rounded-full p-1 shadow-inner">
                     <button
                       onClick={() => {
                         onRemove(item.id);
                         track("remove_from_cart", { item_id: item.id });
                       }}
-                      className="w-8 h-8 rounded-full bg-slate-200 text-white dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 dark:text-slate-100 grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
-                      style={{
-                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                      }}
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-slate-600 text-slate-700 dark:text-white shadow-sm hover:scale-105 transition-transform"
                       aria-label={tt("common.decrease", "Decrease")}
                     >
-                      <Minus className="w-4 h-4" />
+                      <Minus size={16} />
                     </button>
-                    <span className="min-w-[2ch] text-center font-bold text-slate-900 dark:text-white">
+                    <span className="w-8 text-center font-bold text-sm text-slate-900 dark:text-white tabular-nums">
                       {quantity}
                     </span>
                     <button
                       onClick={(e) => {
-                        // FIX: If item has modifiers, we MUST open the modal.
-                        // We cannot just `onPlus` because that adds a base item without options,
-                        // bypassing mandatory checks.
                         if (item.has_modifiers) {
-                          e.stopPropagation();
-                          lastTriggerRef.current = e.currentTarget as HTMLElement;
                           setOpenMenuId(item.id);
-                          track("item_modal_open", { id: item.id });
                         } else {
                           onPlus(e);
                         }
                       }}
-                      disabled={!isAvailable}
-                      className={`w-8 h-8 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                        : "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
-                        }`}
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-white shadow-sm hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"
                       style={{
                         background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                       }}
                       aria-label={tt("common.increase", "Increase")}
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus size={16} />
                     </button>
                   </div>
                 ) : (
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // If item has modifiers, open the modal instead of quick-add
-                        if (item.has_modifiers) {
-                          lastTriggerRef.current = e.currentTarget as HTMLElement;
-                          setOpenMenuId(item.id);
-                          track("item_modal_open", { id: item.id });
-                        } else {
-                          onPlus(e as any);
+                  <button
+                    onClick={(e) => {
+                      if (item.has_modifiers) {
+                        setOpenMenuId(item.id);
+                      } else {
+                        onPlus(e as any);
+                      }
+                    }}
+                    disabled={!isAvailable}
+                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 text-white ${!isAvailable ? "opacity-50 cursor-not-allowed grayscale" : ""
+                      }`}
+                    style={
+                      isAvailable
+                        ? {
+                          background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                          boxShadow: `0 10px 15px -3px ${colors.primary}40`,
                         }
-                      }}
-                      disabled={!isAvailable}
-                      className={`w-10 h-10 rounded-full grid place-items-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition ${isAvailable
-                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-95"
-                        : "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed"
-                        }`}
-                      style={{
-                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                      }}
-                      aria-label={tt("menu.addToCart", "Add to cart")}
-                      title={tt("menu.addToCart", "Add to cart")}
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
+                        : { backgroundColor: "#e2e8f0" }
+                    }
+                    aria-label={tt("menu.addToCart", "Add to cart")}
+                  >
+                    <Plus size={24} strokeWidth={2.5} />
+                  </button>
                 )}
               </div>
             </div>

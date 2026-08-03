@@ -1,5 +1,9 @@
 // Super Admin Service for API calls
 
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const fallbackProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+const API_URL = (import.meta.env.VITE_API_URL || `${fallbackProtocol}//${hostname}:3000/api`).replace(/\/$/, '');
+
 interface SuperAdminStats {
     totalRestaurants: number;
     activeRestaurants: number;
@@ -28,7 +32,7 @@ interface Restaurant {
 
 export const superAdminService = {
     async login(email: string, password: string) {
-        const response = await fetch('http://localhost:3000/api/super-admin/login', {
+        const response = await fetch(`${API_URL}/super-admin/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -43,7 +47,7 @@ export const superAdminService = {
     },
 
     async getRestaurants(token: string): Promise<Restaurant[]> {
-        const response = await fetch('http://localhost:3000/api/super-admin/restaurants', {
+        const response = await fetch(`${API_URL}/super-admin/restaurants`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
@@ -54,7 +58,7 @@ export const superAdminService = {
     },
 
     async getStats(token: string): Promise<SuperAdminStats> {
-        const response = await fetch('http://localhost:3000/api/super-admin/stats', {
+        const response = await fetch(`${API_URL}/super-admin/stats`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
@@ -71,7 +75,7 @@ export const superAdminService = {
         status?: string,
         subscription_end?: string
     ) {
-        const response = await fetch(`http://localhost:3000/api/super-admin/restaurants/${restaurantId}/plan`, {
+        const response = await fetch(`${API_URL}/super-admin/restaurants/${restaurantId}/plan`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,

@@ -44,9 +44,9 @@ export const tableService = {
   },
 
   // Get table by code
-  async getTableByCode(code: string) {
+  async getTableByCode(code: string, adminId?: string | null) {
     try {
-      return await api.get(`/tables/public/${code}`);
+      return await api.get(`/tables/public/${encodeURIComponent(code)}`, adminId ? { adminId } : undefined);
     } catch (error) {
       console.error('Error fetching table by code:', error)
       throw error

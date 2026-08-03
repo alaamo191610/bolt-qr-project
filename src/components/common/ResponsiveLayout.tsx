@@ -17,6 +17,7 @@ interface ResponsiveLayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userInfo?: {
+    id: string;
     name: string;
     email: string;
   };
@@ -35,8 +36,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   const { colors } = useTheme();
   const { t, isRTL } = useLanguage();
 
-  // Extract admin ID from userInfo email to fetch branding
-  const adminId = userInfo?.email?.split('@')[0];
+  const adminId = userInfo?.id;
   const { restaurantName, logoUrl } = useAdminMonetary(adminId);
 
   // Prevent component unmounting on tab switch

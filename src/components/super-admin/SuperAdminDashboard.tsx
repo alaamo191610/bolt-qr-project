@@ -35,7 +35,9 @@ const SuperAdminDashboard: React.FC = () => {
             setRestaurants(restaurantsData);
         } catch (error) {
             console.error('Error loading data:', error);
-            toast.error('Failed to load data');
+            localStorage.removeItem('superAdminToken');
+            toast.error('Your session expired. Please sign in again.');
+            navigate('/super-admin/login');
         } finally {
             setLoading(false);
         }
@@ -52,7 +54,6 @@ const SuperAdminDashboard: React.FC = () => {
 
         try {
             await superAdminService.updateRestaurantPlan(token, restaurantId, newPlan, status, endDate);
-            toast.success('Plan updated successfully');
             loadData(); // Reload data
         } catch (error) {
             toast.error('Failed to update plan');

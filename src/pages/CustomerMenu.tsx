@@ -9,7 +9,7 @@ import React, {
   useCallback,
   useDeferredValue,
 } from "react";
-import { Search, MapPin, Check } from "lucide-react";
+import { Search, MapPin, Check, SlidersHorizontal } from "lucide-react";
 import { BsBagHeart, BsQrCode } from "react-icons/bs";
 import { useLanguage } from "../contexts/LanguageContext";
 import { menuService } from "../services/menuService";
@@ -63,6 +63,10 @@ export interface MenuItem {
 }
 interface CartItem extends MenuItem {
   quantity: number;
+  price_delta?: number;
+  custom_ingredients?: { id: string; action: "normal" | "no" | "extra" }[];
+  selected_modifiers?: string[];
+  notes?: string;
 }
 
 type OverlayPos = { top: number; left?: number; right?: number };
@@ -199,9 +203,10 @@ const CustomerMenu: React.FC = () => {
     didInitRef.current = true;
 
     const urlParams = new URLSearchParams(window.location.search);
-    const table = (urlParams.get("table") || "T01").trim().toUpperCase();
+    const table = (urlParams.get("table") || "").trim().toUpperCase();
+    const restaurantId = urlParams.get("restaurant");
     setTableNumber(table);
-    loadMenuItems(table);
+    loadMenuItems(table, restaurantId);
 
     // optional: first view analytics at initial language
     if (table) trackMenuEvents.menuViewed(table, language);
@@ -268,7 +273,7 @@ const CustomerMenu: React.FC = () => {
     }
   }, [compareIds.length, prefersReducedMotion]);
   // fetch menu
-  const loadMenuItems = async (tableCode: string) => {
+  const loadMenuItems = async (tableCode: string, restaurantId?: string | null) => {
     if (!tableCode) {
       setError({ code: "status.tableNotFound" });
       return;
@@ -277,7 +282,7 @@ const CustomerMenu: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const table = await tableService.getTableByCode(tableCode);
+      const table = await tableService.getTableByCode(tableCode, restaurantId);
       if (!table) {
         setError({
           code: "status.tableNotFound",
@@ -285,6 +290,8 @@ const CustomerMenu: React.FC = () => {
         });
         return;
       }
+
+      setAdminId(table.admin_id);
 
       const items = await menuService.getMenuItems(table.admin_id);
       if (!items || items.length === 0) {
@@ -528,10 +535,15 @@ const CustomerMenu: React.FC = () => {
         menu_item_id: item.id,
         quantity: item.quantity,
         price_at_order: item.price,
+        price_delta: item.price_delta,
+        custom_ingredients: item.custom_ingredients,
+        selected_modifiers: item.selected_modifiers,
+        note: item.notes,
       }));
       const newOrder = await orderService.createOrder({
         table_code: tableNumber,
         items: orderItems,
+        admin_id: adminId || undefined,
         type: orderType || 'dine_in', // Pass the selected order type
       });
 
@@ -784,19 +796,25 @@ const CustomerMenu: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft border border-slate-200 dark:border-slate-700 p-4 mb-6 animate-slide-up">
           <div className="flex flex-col gap-4">
             {/* Search */}
-            <div className="relative">
-              <Search
-                className={`absolute ${isRTL ? "right-3" : "left-3"
-                  } top-3 w-5 h-5 text-slate-400 dark:text-slate-500`}
-              />
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                <Search className="w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+              </div>
               <input
                 type="text"
-                placeholder={t("menu.searchPlaceholder")}
+                placeholder={t("menu.searchPlaceholder") || "What are you craving?"}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"
-                  } py-3 border border-slate-200 rounded-xl bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent`}
+                className={`w-full py-4 pl-12 pr-12 bg-white dark:bg-slate-800 rounded-2xl border-none shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)] text-lg placeholder:text-slate-400 focus:ring-0 text-slate-900 dark:text-white transition-shadow`}
+                style={{
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
+                }}
               />
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center cursor-pointer hover:scale-105 transition-transform">
+                <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded-xl">
+                  <SlidersHorizontal className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+                </div>
+              </div>
             </div>
 
             {/* Category Filter (sticky under header while scrolling) */}

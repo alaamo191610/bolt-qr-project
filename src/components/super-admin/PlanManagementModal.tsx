@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Check, Crown, Zap, Rocket } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -28,6 +28,17 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
     const [selectedStatus, setSelectedStatus] = useState(restaurant?.subscription_status || 'ACTIVE');
     const [endDate, setEndDate] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen || !restaurant) return;
+        setSelectedPlan(restaurant.subscription_plan || 'STANDARD');
+        setSelectedStatus(restaurant.subscription_status || 'ACTIVE');
+        setEndDate(
+            restaurant.subscription_end
+                ? new Date(restaurant.subscription_end).toISOString().split('T')[0]
+                : ''
+        );
+    }, [isOpen, restaurant]);
 
     if (!isOpen || !restaurant) return null;
 
