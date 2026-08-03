@@ -55,7 +55,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
         try {
           const orderDate = new Date(order.timestamp).toLocaleDateString('en-CA');
           matchesDate = orderDate === selectedDate;
-        } catch (e) {
+        } catch {
           matchesDate = false;
         }
       }
@@ -520,7 +520,7 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails }: {
                   {(() => {
                     try {
                       return new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    } catch (e) {
+                    } catch {
                       return '--:--';
                     }
                   })()}

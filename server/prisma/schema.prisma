@@ -28,45 +28,54 @@ model Admin {
   created_at         DateTime @default(now()) @db.Timestamptz
 
   // 🆕 Subscription Fields
-  subscription_plan   String   @default("STANDARD") // STANDARD, BASIC, PRO
-  subscription_status String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELLED, TRIAL
+  subscription_plan   String    @default("STANDARD") // STANDARD, BASIC, PRO
+  subscription_status String    @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELLED, TRIAL
   subscription_end    DateTime? @db.Timestamptz
   trial_ends_at       DateTime? @db.Timestamptz
-  
-  // 🆕 Plan Limits
-  max_tables          Int      @default(10)
-  max_menu_items      Int      @default(50)
-  max_staff_accounts  Int      @default(1)
 
-  menus  Menu[]
-  tables Table[]
-  orders Order[]
-  promotions Promotion[]
+  // 🆕 Plan Limits
+  max_tables         Int @default(10)
+  max_menu_items     Int @default(50)
+  max_staff_accounts Int @default(1)
+
+  menus       Menu[]
+  tables      Table[]
+  orders      Order[]
+  promotions  Promotion[]
+  categories  Category[]
+  ingredients Ingredient[]
 
   @@map("admins")
 }
 
-
 model Category {
   id         Int      @id @default(autoincrement())
+  admin_id   String   @db.Uuid
   name_en    String
   name_ar    String?
   sort_order Int?     @default(0)
   created_at DateTime @default(now()) @db.Timestamptz
 
+  admin Admin  @relation(fields: [admin_id], references: [id], onDelete: Cascade)
   menus Menu[]
 
+  @@unique([admin_id, name_en])
+  @@index([admin_id])
   @@map("categories")
 }
 
 model Ingredient {
   id         Int      @id @default(autoincrement())
+  admin_id   String   @db.Uuid
   name_en    String
   name_ar    String?
   created_at DateTime @default(now()) @db.Timestamptz
 
+  admin            Admin            @relation(fields: [admin_id], references: [id], onDelete: Cascade)
   menu_ingredients MenuIngredient[]
 
+  @@unique([admin_id, name_en])
+  @@index([admin_id])
   @@map("ingredients")
 }
 
@@ -85,15 +94,15 @@ model Menu {
   created_at     DateTime  @default(now()) @db.Timestamptz
 
   // 🆕 UX Enhancement Fields
-  tags                String[]  @default([]) // ["spicy", "vegan", "best_seller", "new", "popular"]
-  is_featured         Boolean   @default(false) // For stories/hero section
-  has_modifiers       Boolean   @default(false) // Quick-add eligibility check
-  suggested_items_ids Int[]     @default([]) // Manual upsell suggestions (array of menu IDs)
+  tags                String[] @default([]) // ["spicy", "vegan", "best_seller", "new", "popular"]
+  is_featured         Boolean  @default(false) // For stories/hero section
+  has_modifiers       Boolean  @default(false) // Quick-add eligibility check
+  suggested_items_ids Int[]    @default([]) // Manual upsell suggestions (array of menu IDs)
 
-  admin            Admin?           @relation(fields: [user_id], references: [id])
-  category         Category?        @relation(fields: [category_id], references: [id])
-  menu_ingredients MenuIngredient[]
-  order_items      OrderItem[]
+  admin                Admin?              @relation(fields: [user_id], references: [id])
+  category             Category?           @relation(fields: [category_id], references: [id])
+  menu_ingredients     MenuIngredient[]
+  order_items          OrderItem[]
   menu_modifier_groups MenuModifierGroup[]
   combo_items          ComboGroupItem[]
 
@@ -104,9 +113,9 @@ model Menu {
 model MenuIngredient {
   menu_id              Int
   ingredient_id        Int
-  removable            Boolean @default(true)
-  extra_available      Boolean @default(false)
-  max_extra            Int     @default(0)
+  removable            Boolean  @default(true)
+  extra_available      Boolean  @default(false)
+  max_extra            Int      @default(0)
   extra_price_override Decimal? @db.Decimal(10, 2)
 
   menu       Menu       @relation(fields: [menu_id], references: [id], onDelete: Cascade)
@@ -126,7 +135,7 @@ model ModifierGroup {
   required       Boolean? @default(false)
   created_at     DateTime @default(now()) @db.Timestamptz
 
-  modifier_options      ModifierOption[]
+  modifier_options     ModifierOption[]
   menu_modifier_groups MenuModifierGroup[]
 
   @@map("modifier_groups")
@@ -191,8 +200,8 @@ model Table {
   status     String?  @default("available")
   created_at DateTime @default(now()) @db.Timestamptz
 
-  admin  Admin?  @relation(fields: [admin_id], references: [id])
-  orders Order[]
+  admin      Admin?      @relation(fields: [admin_id], references: [id])
+  orders     Order[]
   promotions Promotion[]
 
   @@unique([admin_id, code])
@@ -200,18 +209,27 @@ model Table {
 }
 
 model Order {
-  id         Int      @id @default(autoincrement())
-  admin_id   String?  @db.Uuid
-  table_id   Int?
-  total      Decimal? @default(0) @db.Decimal(10, 2)
-  status     String?  @default("pending")
-  type       String?  @default("dine_in") // "dine_in" or "take_away"
-  created_at DateTime @default(now()) @db.Timestamptz
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+  id             Int      @id @default(autoincrement())
+  admin_id       String?  @db.Uuid
+  table_id       Int?
+  total          Decimal? @default(0) @db.Decimal(10, 2)
+  subtotal       Decimal  @default(0) @db.Decimal(10, 2)
+  discount       Decimal  @default(0) @db.Decimal(10, 2)
+  vat            Decimal  @default(0) @db.Decimal(10, 2)
+  service_charge Decimal  @default(0) @db.Decimal(10, 2)
+  delivery_fee   Decimal  @default(0) @db.Decimal(10, 2)
+  tip            Decimal  @default(0) @db.Decimal(10, 2)
+  promotion_id   String?  @db.Uuid
+  promotion_code String?
+  status         String?  @default("pending")
+  type           String?  @default("dine_in") // "dine_in" or "take_away"
+  created_at     DateTime @default(now()) @db.Timestamptz
+  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz
 
   admin       Admin?      @relation(fields: [admin_id], references: [id])
   table       Table?      @relation(fields: [table_id], references: [id])
   order_items OrderItem[]
+  promotion   Promotion?  @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
 
   @@index([admin_id])
   @@index([status])
@@ -225,9 +243,10 @@ model OrderItem {
   quantity       Int?     @default(1)
   price_at_order Decimal  @db.Decimal(10, 2)
   note           String?
+  customizations Json?    @default("{}")
   created_at     DateTime @default(now()) @db.Timestamptz
 
-  order Order? @relation(fields: [order_id], references: [id])
+  order Order? @relation(fields: [order_id], references: [id], onDelete: Cascade)
   menu  Menu?  @relation(fields: [menu_id], references: [id])
 
   @@map("order_items")
@@ -249,8 +268,9 @@ model Promotion {
   table_id    Int?
   created_at  DateTime  @default(now()) @db.Timestamptz
 
-  admin Admin  @relation(fields: [admin_id], references: [id], onDelete: Cascade)
-  table Table? @relation(fields: [table_id], references: [id], onDelete: SetNull)
+  admin  Admin   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  table  Table?  @relation(fields: [table_id], references: [id], onDelete: SetNull)
+  orders Order[]
 
   @@unique([admin_id, code])
   @@index([admin_id, active])
@@ -259,12 +279,12 @@ model Promotion {
 
 // 🆕 Super Admin Model for platform management
 model SuperAdmin {
-  id         String   @id @default(uuid()) @db.Uuid
-  email      String   @unique
+  id         String    @id @default(uuid()) @db.Uuid
+  email      String    @unique
   password   String
   name       String?
-  role       String   @default("SUPER_ADMIN") // For future role expansion
-  created_at DateTime @default(now()) @db.Timestamptz
+  role       String    @default("SUPER_ADMIN") // For future role expansion
+  created_at DateTime  @default(now()) @db.Timestamptz
   last_login DateTime? @db.Timestamptz
 
   @@map("super_admins")

@@ -1,5 +1,6 @@
 // orderService.ts
 import { api } from './api'
+import { getErrorMessage } from '../utils/errors'
 
 // ---------------- Types (kept compatible) ----------------
 type IngredientAction = 'no' | 'normal' | 'extra'
@@ -16,6 +17,11 @@ export type CreateOrderItemInput = {
   custom_ingredients?: { id: string; action: IngredientAction }[]
   /** Optional legacy list like ["ing:<id>:extra"] — ignored here but supported if you need */
   selected_modifiers?: string[]
+  checkout_payload?: {
+    ingredients?: { ingredientId: string; action: 'remove' | 'extra'; qty?: number }[]
+    options?: { optionId: string; qty?: number }[]
+    comboChildren?: { groupId: string; childMenuId: string; notes?: string }[]
+  }
   /** Optional free text note from the UI for this line */
   note?: string
   /**
@@ -43,6 +49,30 @@ export interface AnalyticsOrder {
   total: number
   timestamp: Date
   items: AnalyticsOrderItem[]
+}
+
+interface ApiMenuRef {
+  id?: string
+  name_en?: string
+  name_ar?: string
+  price?: number | string
+}
+
+interface ApiOrderItem {
+  id?: string
+  price_at_order?: number | string
+  quantity?: number
+  menu?: ApiMenuRef | null
+  menus?: ApiMenuRef | null
+}
+
+interface ApiOrder {
+  id: string
+  table_id?: string
+  status?: string
+  total?: number | string
+  created_at: string
+  order_items?: ApiOrderItem[]
 }
 
 // ---------------- Helpers ----------------
@@ -81,6 +111,8 @@ export const orderService = {
     note?: string        // if you want this saved on orders, add handling in the Edge Function
     admin_id?: string
     type?: 'dine_in' | 'take_away' // Added type
+    promotion_code?: string
+    tip_percent?: number
   }) {
     try {
       // Build function payload items
@@ -90,36 +122,20 @@ export const orderService = {
         const mergedNote = mergeNotes(it.note, extrasNote)
 
         // map tri-state ingredients -> picks for the function
-        const ingredients =
+        const ingredients = it.checkout_payload?.ingredients ??
           (it.custom_ingredients ?? []).flatMap((c) => {
             if (c.action === 'no') return [{ ingredientId: c.id, action: 'remove' as const }]
             if (c.action === 'extra') return [{ ingredientId: c.id, action: 'extra' as const, qty: 1 }]
             return []
           })
 
-        // if you later add modifier options to CreateOrderItemInput, map them here:
-        // const options = (it.modifier_options ?? []).map((o: any) => ({
-        //   optionId: o.option_id ?? o.id, qty: o.qty ?? 1
-        // }))
-
-        // if you later add combo children, map them here:
-        // const comboChildren = (it.combo_children ?? []).map((c: any) => ({
-        //   childMenuId: c.child_menu_id ?? c.menu_item_id,
-        //   ingredients: (c.custom_ingredients ?? []).flatMap((x: any) =>
-        //     x.action === 'no' ? [{ ingredientId: x.id, action: 'remove' as const }] :
-        //     x.action === 'extra' ? [{ ingredientId: x.id, action: 'extra' as const, qty: 1 }] : []
-        //   ),
-        //   options: (c.modifier_options ?? []).map((o: any) => ({ optionId: o.option_id ?? o.id, qty: o.qty ?? 1 })),
-        //   notes: c.note
-        // }))
-
         return {
           menuId: it.menu_item_id,
           quantity: it.quantity ?? 1,
           notes: mergedNote || undefined,
           ingredients,
-          // options,
-          // comboChildren,
+          options: it.checkout_payload?.options,
+          comboChildren: it.checkout_payload?.comboChildren,
         }
       })
 
@@ -128,12 +144,28 @@ export const orderService = {
         tableCode: orderData.table_code,
         adminId: orderData.admin_id,
         items,
-        type: orderData.type // Pass type to backend
+        type: orderData.type,
+        promotionCode: orderData.promotion_code,
+        tipPercent: orderData.tip_percent ?? 0,
       });
-    } catch (error: any) {
-      console.error('invoke failed:', error?.message, error?.context);
+    } catch (error) {
+      console.error('Order submission failed:', getErrorMessage(error));
       throw error
     }
+  },
+
+  async validatePromotion(input: {
+    adminId: string
+    code: string
+    subtotal: number
+    tableCode?: string
+  }) {
+    return await api.get('/public/promotions/validate', {
+      adminId: input.adminId,
+      code: input.code,
+      subtotal: String(input.subtotal),
+      ...(input.tableCode ? { table: input.tableCode } : {}),
+    });
   },
 
   // Get orders for admin (raw, with nested menus; unchanged columns)
@@ -141,14 +173,14 @@ export const orderService = {
     try {
       const params: Record<string, string> = { adminId };
       if (status) params.status = status;
-      const orders = await api.get('/orders', params);
-      return (orders || []).map((o: any) => ({
+      const orders = await api.get('/orders', params) as ApiOrder[];
+      return (orders || []).map((o) => ({
         ...o,
         total: Number(o.total) || 0,
-        order_items: (o.order_items || []).map((oi: any) => ({
+        order_items: (o.order_items || []).map((oi) => ({
           ...oi,
           price_at_order: Number(oi.price_at_order) || 0,
-          menus: oi.menus ? { ...oi.menus, price: Number(oi.menus.price) || 0 } : null
+          menu: oi.menu ? { ...oi.menu, price: Number(oi.menu.price) || 0 } : null
         }))
       }));
     } catch (error) {
@@ -160,15 +192,15 @@ export const orderService = {
   // Cleaned, mapped shape for Analytics (unit price already includes extras)
   async getOrdersForAnalytics(adminId: string): Promise<AnalyticsOrder[]> {
     // Reuse the getOrders API or create a specific analytics endpoint
-    const data = await api.get('/orders', { adminId });
-    return (data ?? []).map((o: any) => ({
+    const data = await api.get('/orders', { adminId }) as ApiOrder[];
+    return (data ?? []).map((o) => ({
       id: o.id,
       tableNumber: o.table_id, // join tables for code if you want the code instead of id
       status: o.status ?? 'pending',
       total: Number(o.total) || 0,
       timestamp: new Date(o.created_at),
-      items: (o.order_items ?? []).map((oi: any) => {
-        const m = oi.menus
+      items: (o.order_items ?? []).map((oi) => {
+        const m = oi.menu ?? oi.menus
         return {
           id: m?.id,
           name_en: m?.name_en ?? undefined,

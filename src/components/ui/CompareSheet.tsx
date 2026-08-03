@@ -63,7 +63,7 @@ function diffIngredientTokensFromDetails(
 }
 
 const unitTotal = (it?: MenuItem | null) =>
-  it ? (it.price ?? 0) + (typeof (it as any).price_delta === 'number' ? (it as any).price_delta : 0) : null;
+  it ? (it.price ?? 0) + (it.price_delta ?? 0) : null;
 
 /* ===================== UI atoms ===================== */
 function ChipBadge({ chip }: { chip: Chip }) {
@@ -115,10 +115,10 @@ function MiniCard({
   const showCommon = by === 'ingredients' && filterMode !== 'unique';
 
   // Optional fields (non-breaking)
-  const portionGrams = (item as any)?.portion_grams as number | undefined;
-  const nutrition = (item as any)?.nutrition as { cal?: number; protein?: number; carbs?: number; fat?: number } | undefined;
-  const tags = (item as any)?.tags as string[] | undefined;
-  const allergens = (item as any)?.allergens as string[] | undefined;
+  const portionGrams = item.portion_grams;
+  const nutrition = item.nutrition;
+  const tags = item.tags;
+  const allergens = item.allergens;
 
   return (
     <article
@@ -168,7 +168,7 @@ function MiniCard({
             {(['cal', 'protein', 'carbs', 'fat'] as const).map(key => (
               <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-center">
                 <div className="text-slate-500 dark:text-slate-400">{t(`menu.${key}`) || key.toUpperCase()}</div>
-                <div className="font-bold tabular-nums">{(nutrition as any)[key]}</div>
+                <div className="font-bold tabular-nums">{nutrition[key]}</div>
               </div>
             ))}
           </div>
@@ -302,11 +302,17 @@ const CompareSheet: React.FC<Props> = ({
     };
   }, [onClose]);
 
-  useEffect(() => { try { localStorage.setItem('compare_filter_mode', filterMode); } catch { } }, [filterMode]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('compare_filter_mode', filterMode);
+    } catch {
+      // Storage can be unavailable in privacy modes.
+    }
+  }, [filterMode]);
 
   // حساب الشرائح
   const { A: chipsAAll, B: chipsBAll } = useMemo(
-    () => diffIngredientTokensFromDetails(a?.ingredients_details as any, b?.ingredients_details as any, isRTL),
+    () => diffIngredientTokensFromDetails(a?.ingredients_details, b?.ingredients_details, isRTL),
     [a?.ingredients_details, b?.ingredients_details, isRTL]
   );
 

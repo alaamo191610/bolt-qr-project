@@ -3,13 +3,13 @@ import { api } from './api'
 
 export const menuService = {
   // Get all menu items with categories
-  async getMenuItems(adminId?: string) {
+  async getMenuItems(adminId?: string): Promise<MenuItem[]> {
     try {
       // Use public endpoint if adminId is provided (Customer View), otherwise protected endpoint (Admin View)
       const endpoint = adminId ? `/public/menus?adminId=${adminId}` : '/menus';
-      const items = await api.get(endpoint);
+      const items = await api.get(endpoint) as Array<MenuItem & { price: number | string }>;
 
-      return (items || []).map((item: any) => ({
+      return (items || []).map((item) => ({
         ...item,
         price: Number(item.price) || 0
       }));

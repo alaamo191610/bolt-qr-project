@@ -4,18 +4,20 @@ const hostname = typeof window !== 'undefined' ? window.location.hostname : 'loc
 const fallbackProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
 const API_URL = (import.meta.env.VITE_API_URL || `${fallbackProtocol}//${hostname}:3000/api`).replace(/\/$/, '');
 
-interface SuperAdminStats {
+export interface SuperAdminStats {
     totalRestaurants: number;
     activeRestaurants: number;
     totalRevenue: number;
     growth: number;
 }
 
-interface Restaurant {
+export type SubscriptionPlan = 'STANDARD' | 'BASIC' | 'PRO';
+
+export interface Restaurant {
     id: string;
     email: string;
     restaurant_name?: string;
-    subscription_plan: string;
+    subscription_plan: SubscriptionPlan;
     subscription_status: string;
     subscription_end?: Date;
     trial_ends_at?: Date;

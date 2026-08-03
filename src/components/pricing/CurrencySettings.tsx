@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CURRENCIES, DEFAULT_PRICING, type PricingPrefs, type CurrencyCode } from '../../pricing/types';
 import { roundAmount, formatCurrency } from '../../pricing/money';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function CurrencySettings({ adminId }: { adminId: string }) {
   const { t, isRTL } = useLanguage();
@@ -22,7 +23,6 @@ export default function CurrencySettings({ adminId }: { adminId: string }) {
     }
   }, [globalPrefs]);
 
-  const [loading, setLoading] = useState(false); // Global handles initial load usually
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -57,15 +57,15 @@ export default function CurrencySettings({ adminId }: { adminId: string }) {
       await refreshPrefs(); // Update global context immediately
       setDirty(false);
       toast.success(t('pricing.saved') || 'Settings saved successfully');
-    } catch (e: any) {
-      console.error(e);
-      toast.error((t('common.error') || 'Error') + ': ' + (e?.message || 'Failed to save settings'));
+    } catch (error) {
+      console.error(error);
+      toast.error((t('common.error') || 'Error') + ': ' + getErrorMessage(error, 'Failed to save settings'));
     } finally { setSaving(false); }
   };
 
   // helper to localize currency names (falls back to english name)
-  const currencyName = (code: CurrencyCode) =>
-    t(`pricing.currencies.${code}`) || (CURRENCIES.find(c => c.code === code)?.name ?? code);
+  const currencyName = useCallback((code: CurrencyCode) =>
+    t(`pricing.currencies.${code}`) || (CURRENCIES.find(c => c.code === code)?.name ?? code), [t]);
 
   const preview = useMemo(() => {
     const base = 100; // sample price
@@ -79,11 +79,7 @@ export default function CurrencySettings({ adminId }: { adminId: string }) {
         return { code: c.code, label: currencyName(c.code as CurrencyCode), value: formatCurrency(rounded, c.code as CurrencyCode, c.symbol, prefs.priceDisplay) };
       });
     return { base: formatCurrency(base, cur.code as CurrencyCode, cur.symbol, prefs.priceDisplay), list };
-  }, [prefs]);
-
-  if (loading) {
-    return <div className="p-6 rounded-xl border bg-white">{t('pricing.loading') || 'Loading…'}</div>;
-  }
+  }, [prefs, currencyName]);
 
   // Interpolations for text that includes the base currency
   const ratesHint = (t('pricing.ratesHint') || `1 {base} = X target currency`).replace('{base}', prefs.baseCurrency);
@@ -172,7 +168,7 @@ export default function CurrencySettings({ adminId }: { adminId: string }) {
           <select
             className="border rounded-md px-2 py-1"
             value={prefs.rounding}
-            onChange={e => { setPrefs(p => ({ ...p, rounding: e.target.value as any })); setDirty(true); }}
+            onChange={e => { setPrefs(p => ({ ...p, rounding: e.target.value as PricingPrefs['rounding'] })); setDirty(true); }}
           >
             <option value="none">{t('pricing.roundingNone') || 'none'}</option>
             <option value="nearest-0.05">{t('pricing.rounding005') || 'nearest 0.05'}</option>

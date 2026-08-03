@@ -2,6 +2,7 @@
 import React from "react";
 import { adminService } from "../services/adminService";
 import { api } from "../services/api";
+import { getErrorMessage } from "../utils/errors";
 
 export interface User {
   id: string;
@@ -103,11 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       // Auto login after sign up
       await signIn(email, password);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Signup failed:", error);
       throw new Error(
-        error.message ||
-          "Registration failed. If an admin already exists, please log in."
+        getErrorMessage(error, "Registration failed. If an admin already exists, please log in.")
       );
     }
   };

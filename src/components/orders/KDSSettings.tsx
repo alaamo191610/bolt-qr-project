@@ -3,6 +3,7 @@ import type { KDSPrefs, OrderStatusKey } from "../../order-admin/types";
 import { DEFAULT_KDS } from "../../order-admin/defaults";
 import { adminService } from "../../services/adminService";
 import { toast } from "react-hot-toast";
+import { getErrorMessage } from "../../utils/errors";
 
 function Select({
   value,
@@ -97,8 +98,8 @@ export default function KDSSettings({ adminId }: { adminId: string }) {
       await adminService.saveKDSPrefs(adminId, prefs);
       setDirty(false);
       toast.success("KDS settings saved successfully");
-    } catch (e: any) {
-      toast.error("Failed to save: " + e?.message);
+    } catch (error) {
+      toast.error("Failed to save: " + getErrorMessage(error));
     } finally {
       setSaving(false);
     }

@@ -1,10 +1,17 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { Clock, CheckCircle2, Circle, PartyPopper, ArrowRight, UtensilsCrossed } from 'lucide-react';
+import { Clock, CheckCircle2, PartyPopper, ArrowRight, UtensilsCrossed } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { socket, joinOrderRoom } from '../../services/socket';
 
+interface ConfirmedOrder {
+  id: number;
+  status: string;
+  order_number?: number;
+  total?: number | string;
+}
+
 interface Props {
-  order: any;
+  order: ConfirmedOrder;
   onStartNewOrder: () => void;
 }
 
@@ -30,7 +37,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
 
       const handleUpdate = (data: { status: string }) => {
         console.log('Order update received:', data);
-        setOrder((prev: any) => ({ ...prev, status: data.status }));
+        setOrder((prev) => ({ ...prev, status: data.status }));
       };
 
       socket.on('order-status-updated', handleUpdate);

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { adminService } from '../services/adminService';
-import { DEFAULT_PRICING, type PricingPrefs, type CurrencyCode, CURRENCIES } from '../pricing/types';
+import { DEFAULT_PRICING, type PricingPrefs, CURRENCIES } from '../pricing/types';
 import { formatCurrency, roundAmount } from '../pricing/money';
 import { useAuth } from '../providers/AuthProvider';
 
@@ -46,13 +46,6 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const updatePrefs = (newPrefs: PricingPrefs) => {
         setPrefs(newPrefs);
-    };
-
-    const getFormatLocale = () => {
-        // Decoupled from language as requested.
-        // If we strictly want to support locale-based digits (e.g. Arabic numerals) later,
-        // we can add a specific setting for it, but for now defaults to standard digits.
-        return 'en-US';
     };
 
     const formatPrice = useCallback((amount: number, useSymbol: boolean = true) => {

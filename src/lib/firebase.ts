@@ -3,11 +3,11 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported, type Analytics, logEvent } from "firebase/analytics";
 
 const env = (k: string) => {
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[k]) {
-      return (import.meta as any).env[k];
+    if (typeof import.meta !== 'undefined' && import.meta.env?.[k]) {
+      return import.meta.env[k];
     }
-    if (typeof process !== 'undefined' && (process as any).env?.[k]) {
-      return (process as any).env[k];
+    if (typeof process !== 'undefined' && process.env?.[k]) {
+      return process.env[k];
     }
     return undefined;
   };

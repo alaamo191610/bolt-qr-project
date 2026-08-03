@@ -2,7 +2,7 @@
 'use client';
 
 import React, {
-  createContext, useContext, useEffect, useId,
+  createContext, useCallback, useContext, useEffect, useId,
   useMemo, useRef, useState
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -41,7 +41,7 @@ export function Tabs({
 
   const [active, setActiveState] = useState(initial);
 
-  const setActive = (v: string) => {
+  const setActive = useCallback((v: string) => {
     setActiveState(v);
     if (storageKey && typeof window !== 'undefined') localStorage.setItem(storageKey, v);
     if (urlSync) {
@@ -49,7 +49,7 @@ export function Tabs({
       next.set(queryKey, v);
       navigate({ pathname: location.pathname, search: `?${next.toString()}` }, { replace: true });
     }
-  };
+  }, [location.pathname, location.search, navigate, queryKey, storageKey, urlSync]);
 
   useEffect(() => {
     if (!urlSync) return;
@@ -58,7 +58,7 @@ export function Tabs({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  const value = useMemo(() => ({ active, setActive, idBase }), [active, idBase]);
+  const value = useMemo(() => ({ active, setActive, idBase }), [active, setActive, idBase]);
 
   return (
     <Ctx.Provider value={value}>

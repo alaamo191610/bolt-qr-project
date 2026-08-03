@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -32,6 +32,8 @@ interface OrderItem {
   name_ar?: string; // arabic
   price: number;
   quantity: number;
+  price_at_order?: number;
+  menu?: { price?: number } | null;
 }
 
 interface Order {
@@ -73,14 +75,14 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
 
   const numberFmt = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
-  const pickLabel = (d: {
+  const pickLabel = useCallback((d: {
     name?: string;
     name_en?: string;
     name_ar?: string;
   }) =>
     language === "ar"
       ? d.name_ar ?? d.name ?? d.name_en ?? ""
-      : d.name_en ?? d.name ?? d.name_ar ?? "";
+      : d.name_en ?? d.name ?? d.name_ar ?? "", [language]);
 
   // ✅ 1) Fetch a menu index (id -> {id,name_en,name_ar}) once on client
   const [menuIndex, setMenuIndex] = useState<
@@ -93,7 +95,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       const data = await menuService.getMenuItems(); // Use service instead of direct DB
 
       if (data && mounted) {
-        setMenuIndex(Object.fromEntries(data.map((m: any) => [m.id, m])));
+        setMenuIndex(Object.fromEntries(data.map((m: { id: string; name_en: string; name_ar?: string }) => [m.id, m])));
       }
     })();
     return () => {
@@ -262,8 +264,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
         name: pickLabel(i),
         quantity: i.quantity,
         // prefer the price stored on the order item at the time of purchase
-        price:
-          (i as any).price_at_order ?? i.price ?? (i as any).menu?.price ?? 0,
+        price: i.price_at_order ?? i.price ?? i.menu?.price ?? 0,
       })),
     }));
 
@@ -284,7 +285,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       transformedOrders,
     };
     // include menu deps so enrichment re-runs when menus arrive
-  }, [orders, getLocalizedDayName, language, menuIndex, menuByEnName]);
+  }, [orders, getLocalizedDayName, menuIndex, menuByEnName, pickLabel]);
 
   const topItemMax = popularItems[0]?.count || 1;
   const topTableMax = topTables[0]?.count || 1;

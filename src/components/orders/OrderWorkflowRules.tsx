@@ -7,6 +7,7 @@ import type {
 import { DEFAULT_FLOW } from "../../order-admin/defaults";
 import { adminService } from "../../services/adminService";
 import { toast } from "react-hot-toast";
+import { getErrorMessage } from "../../utils/errors";
 
 function Chip({
   children,
@@ -114,8 +115,8 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
       await adminService.saveOrderRules(adminId, flow);
       setDirty(false);
       toast.success("Order workflow rules saved");
-    } catch (e: any) {
-      toast.error("Failed to save: " + e?.message);
+    } catch (error) {
+      toast.error("Failed to save: " + getErrorMessage(error));
     } finally {
       setSaving(false);
     }

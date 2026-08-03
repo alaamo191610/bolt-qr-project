@@ -9,7 +9,7 @@ interface HourlyData {
 }
 
 interface HourlyHeatmapProps {
-    orders: any[];
+    orders: Array<{ timestamp?: Date | string; created_at?: Date | string }>;
 }
 
 const HourlyHeatmap: React.FC<HourlyHeatmapProps> = ({ orders }) => {
@@ -155,8 +155,6 @@ const HourlyHeatmap: React.FC<HourlyHeatmapProps> = ({ orders }) => {
                                                 (d) => d.day === dayIndex && d.hour === hour
                                             );
                                             const count = dataPoint?.count || 0;
-                                            const isPeak = count === maxCount && count > 0;
-
                                             return (
                                                 <div
                                                     key={hour}

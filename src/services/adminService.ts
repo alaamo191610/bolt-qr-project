@@ -3,6 +3,17 @@ import type { OrderFlowRules, KDSPrefs } from '../order-admin/types';
 import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
 import { api } from './api';
 
+interface AnalyticsApiItem {
+  quantity: number;
+  menu?: { name_en?: string } | null;
+  menus?: { name_en?: string } | null;
+}
+
+interface AnalyticsApiOrder {
+  total?: number;
+  order_items?: AnalyticsApiItem[];
+}
+
 export const adminService = {
   async login(credentials: { email: string; password: string }) {
     return await api.post('/auth/login', credentials);
@@ -54,9 +65,9 @@ export const adminService = {
       const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
       const itemCounts: Record<string, number> = {};
-      orders?.forEach((order: any) => {
-        (order.order_items || []).forEach((item: any) => {
-          const itemName = item.menus?.name_en || 'Unknown Item';
+      orders?.forEach((order: AnalyticsApiOrder) => {
+        (order.order_items || []).forEach((item: AnalyticsApiItem) => {
+          const itemName = item.menu?.name_en || item.menus?.name_en || 'Unknown Item';
           itemCounts[itemName] = (itemCounts[itemName] || 0) + item.quantity;
         });
       });

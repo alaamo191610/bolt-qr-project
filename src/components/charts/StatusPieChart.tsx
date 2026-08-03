@@ -80,7 +80,7 @@ const StatusPieChart: React.FC<Props> = ({ data, t }) => {
               cx="50%"
               cy="50%"
               outerRadius={100}
-              label={(props: any) => {
+              label={(props) => {
                 const pct = percentFmt.format(props.percent ?? 0);
                 return `${props.payload.label} (${pct})`;
               }}
@@ -93,10 +93,10 @@ const StatusPieChart: React.FC<Props> = ({ data, t }) => {
 
             <Tooltip
               // value = slice value; name = nameKey ('label')
-              formatter={(value: number, name: string, p: any) => {
+              formatter={(value, name, p) => {
                 const countStr = numberFmt.format(Number(value));
                 const pct = percentFmt.format((p?.payload?.count ?? 0) / total);
-                return [`${countStr} • ${pct}`, name]; // [value, label]
+                return [`${countStr} • ${pct}`, String(name)]; // [value, label]
               }}
               wrapperStyle={{ direction: 'ltr' }}
             />

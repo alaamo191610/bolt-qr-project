@@ -165,6 +165,102 @@ const requireSuperAdmin = (req, res, next) => {
   next();
 };
 
+const normalizeCatalogIds = (values = []) => [...new Set(
+  values.map(value => Number(value)).filter(Number.isInteger)
+)];
+
+const assertCatalogOwnership = async (db, adminId, categoryId, ingredientIds = []) => {
+  if (categoryId !== null && categoryId !== undefined) {
+    const category = await db.category.findFirst({
+      where: { id: Number(categoryId), admin_id: adminId },
+      select: { id: true }
+    });
+    if (!category) throw Object.assign(new Error('Invalid category'), { status: 400 });
+  }
+
+  if (ingredientIds.length) {
+    const ownedCount = await db.ingredient.count({
+      where: { id: { in: ingredientIds }, admin_id: adminId }
+    });
+    if (ownedCount !== ingredientIds.length) {
+      throw Object.assign(new Error('One or more ingredients are invalid'), { status: 400 });
+    }
+  }
+};
+
+const roundMoney = value => Number((Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2));
+
+const finiteSetting = (value, fallback, min, max) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+};
+
+const resolvePromotion = async (db, { adminId, code, subtotal, tableId }) => {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return null;
+
+  const promotion = await db.promotion.findFirst({
+    where: { admin_id: adminId, code: normalizedCode, active: true }
+  });
+  if (!promotion) throw Object.assign(new Error('Invalid promotion code'), { status: 400 });
+
+  const now = new Date();
+  if ((promotion.start_at && promotion.start_at > now) || (promotion.end_at && promotion.end_at < now)) {
+    throw Object.assign(new Error('Promotion is not active'), { status: 400 });
+  }
+  if (promotion.usage_limit !== null && promotion.times_used >= promotion.usage_limit) {
+    throw Object.assign(new Error('Promotion usage limit reached'), { status: 400 });
+  }
+  if (promotion.min_order !== null && subtotal < Number(promotion.min_order)) {
+    throw Object.assign(new Error(`Minimum order is ${Number(promotion.min_order).toFixed(2)}`), { status: 400 });
+  }
+  if (promotion.applies_to === 'table' && (!tableId || promotion.table_id !== tableId)) {
+    throw Object.assign(new Error('Promotion is not valid for this table'), { status: 400 });
+  }
+  return promotion;
+};
+
+const calculateOrderTotals = ({ subtotal, promotion, billingSettings, pricingPrefs, type, tipPercent }) => {
+  const billing = billingSettings && typeof billingSettings === 'object' ? billingSettings : {};
+  const pricing = pricingPrefs && typeof pricingPrefs === 'object' ? pricingPrefs : {};
+  const vatPercent = finiteSetting(billing.vatPercent, 0, 0, 100);
+  const servicePercent = finiteSetting(billing.serviceChargePercent, 0, 0, 100);
+  const configuredDelivery = finiteSetting(billing.deliveryFee, 0, 0, 1000000);
+  const safeTipPercent = finiteSetting(tipPercent, 0, 0, 100);
+
+  let discount = 0;
+  if (promotion) {
+    discount = promotion.type === 'percent'
+      ? roundMoney(subtotal * (Number(promotion.value) / 100))
+      : roundMoney(Math.min(subtotal, Number(promotion.value)));
+  }
+
+  const afterDiscount = roundMoney(Math.max(0, subtotal - discount));
+  const serviceCharge = billing.showServiceChargeLine === false
+    ? 0
+    : roundMoney(afterDiscount * (servicePercent / 100));
+  const vatBase = roundMoney(afterDiscount + serviceCharge);
+  const taxInclusive = pricing.taxInclusive === true;
+  const vat = billing.showVatLine === false || vatPercent === 0
+    ? 0
+    : taxInclusive
+      ? roundMoney(vatBase - (vatBase / (1 + vatPercent / 100)))
+      : roundMoney(vatBase * (vatPercent / 100));
+  const deliveryFee = type === 'take_away' ? roundMoney(configuredDelivery) : 0;
+  const beforeTip = roundMoney(afterDiscount + serviceCharge + deliveryFee + (taxInclusive ? 0 : vat));
+  const tip = roundMoney(beforeTip * (safeTipPercent / 100));
+
+  return {
+    subtotal: roundMoney(subtotal),
+    discount,
+    vat,
+    serviceCharge,
+    deliveryFee,
+    tip,
+    total: roundMoney(beforeTip + tip)
+  };
+};
+
 const publicAdminSelect = {
   id: true,
   email: true,
@@ -245,6 +341,16 @@ app.post('/api/menus', authenticate, async (req, res) => {
   const { name_en, name_ar, price, category_id, image_url, available, ingredients } = req.body;
   const user_id = req.user.id; // Get user ID from authenticated token
   try {
+    const categoryId = category_id == null ? null : Number(category_id);
+    const ingredientIds = normalizeCatalogIds(ingredients);
+    if (categoryId !== null && !Number.isInteger(categoryId)) {
+      return res.status(400).json({ error: 'Invalid category' });
+    }
+    if (Array.isArray(ingredients) && ingredientIds.length !== new Set(ingredients.map(Number)).size) {
+      return res.status(400).json({ error: 'Invalid ingredient list' });
+    }
+    await assertCatalogOwnership(prisma, user_id, categoryId, ingredientIds);
+
     // 🆕 Enforce Menu Item Limit
     const admin = await prisma.admin.findUnique({
       where: { id: user_id },
@@ -263,14 +369,14 @@ app.post('/api/menus', authenticate, async (req, res) => {
 
     const menu = await prisma.menu.create({
       data: {
-        name_en, name_ar, price, category_id: Number(category_id), image_url, available, user_id,
+        name_en, name_ar, price, category_id: categoryId, image_url, available, user_id,
         menu_ingredients: {
-          create: (ingredients || []).map(id => ({ ingredient_id: Number(id) }))
+          create: ingredientIds.map(id => ({ ingredient_id: id }))
         }
       }
     });
-    res.json(menu);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.status(201).json(menu);
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 app.put('/api/menus/:id', authenticate, async (req, res) => {
@@ -283,11 +389,21 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
     });
     if (!ownedMenu) return res.status(404).json({ error: 'Menu item not found' });
 
+    const categoryId = category_id === undefined ? undefined : (category_id === null ? null : Number(category_id));
+    const ingredientIds = ingredients === undefined ? undefined : normalizeCatalogIds(ingredients);
+    if (categoryId !== undefined && categoryId !== null && !Number.isInteger(categoryId)) {
+      return res.status(400).json({ error: 'Invalid category' });
+    }
+    if (ingredients !== undefined && (!Array.isArray(ingredients) || ingredientIds.length !== new Set(ingredients.map(Number)).size)) {
+      return res.status(400).json({ error: 'Invalid ingredient list' });
+    }
+    await assertCatalogOwnership(prisma, req.user.id, categoryId, ingredientIds || []);
+
     const data = {};
     if (name_en !== undefined) data.name_en = name_en;
     if (name_ar !== undefined) data.name_ar = name_ar;
     if (price !== undefined) data.price = price;
-    if (category_id !== undefined) data.category_id = category_id === null ? null : Number(category_id);
+    if (categoryId !== undefined) data.category_id = categoryId;
     if (image_url !== undefined) data.image_url = image_url;
     if (available !== undefined) data.available = available;
 
@@ -297,12 +413,12 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
         data
       });
 
-      if (ingredients) {
+      if (ingredientIds !== undefined) {
         // Replace ingredients
         await tx.menuIngredient.deleteMany({ where: { menu_id: menu.id } });
-        if (ingredients.length > 0) {
+        if (ingredientIds.length > 0) {
           await tx.menuIngredient.createMany({
-            data: ingredients.map(id => ({ menu_id: menu.id, ingredient_id: Number(id) }))
+            data: ingredientIds.map(id => ({ menu_id: menu.id, ingredient_id: id }))
           });
         }
       }
@@ -313,7 +429,7 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
     io.to(`menu_${req.user.id}`).emit('menu-updated', result);
 
     res.json(result);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 app.delete('/api/menus/:id', authenticate, async (req, res) => {
@@ -358,7 +474,10 @@ app.get('/api/menus/:id/options', authenticate, async (req, res) => {
     if (!ownedMenu) return res.status(404).json({ error: 'Menu item not found' });
 
     const [allIngredients, allMenus, menuIngredients, menuModifierGroups, comboGroups] = await Promise.all([
-      prisma.ingredient.findMany({ orderBy: { name_en: 'asc' } }),
+      prisma.ingredient.findMany({
+        where: { admin_id: req.user.id },
+        orderBy: { name_en: 'asc' }
+      }),
       prisma.menu.findMany({
         where: { user_id: req.user.id, deleted_at: null },
         select: { id: true, name_en: true, price: true },
@@ -387,6 +506,12 @@ app.post('/api/menus/:id/ingredients', authenticate, async (req, res) => {
       select: { id: true }
     });
     if (!ownedMenu) return res.status(404).json({ error: 'Menu item not found' });
+    if (!Array.isArray(ingredients)) return res.status(400).json({ error: 'Ingredients must be an array' });
+    const ingredientIds = normalizeCatalogIds(ingredients.map(item => item.ingredient_id));
+    if (ingredientIds.length !== ingredients.length) {
+      return res.status(400).json({ error: 'Invalid ingredient list' });
+    }
+    await assertCatalogOwnership(prisma, req.user.id, undefined, ingredientIds);
 
     await prisma.$transaction(async (tx) => {
       await tx.menuIngredient.deleteMany({ where: { menu_id: menuId } });
@@ -404,7 +529,7 @@ app.post('/api/menus/:id/ingredients', authenticate, async (req, res) => {
       }
     });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
@@ -581,30 +706,50 @@ app.get('/api/public/menus/:id/config', async (req, res) => {
 });
 
 // --- Categories & Ingredients ---
-app.get('/api/categories', async (req, res) => {
-  const categories = await prisma.category.findMany({ orderBy: { name_en: 'asc' } });
+app.get('/api/categories', authenticate, async (req, res) => {
+  const categories = await prisma.category.findMany({
+    where: { admin_id: req.user.id },
+    orderBy: { name_en: 'asc' }
+  });
   res.json(categories);
 });
 
 app.post('/api/categories', authenticate, async (req, res) => {
-  const { name_en, name_ar } = req.body;
-  const category = await prisma.category.create({
-    data: { name_en, name_ar }
-  });
-  res.json(category);
+  const name_en = String(req.body.name_en || '').trim();
+  const name_ar = req.body.name_ar ? String(req.body.name_ar).trim() : null;
+  if (!name_en) return res.status(400).json({ error: 'English category name is required' });
+  try {
+    const category = await prisma.category.create({
+      data: { admin_id: req.user.id, name_en, name_ar }
+    });
+    res.status(201).json(category);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Category already exists' });
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/ingredients', async (req, res) => {
-  const ingredients = await prisma.ingredient.findMany({ orderBy: { name_en: 'asc' } });
+app.get('/api/ingredients', authenticate, async (req, res) => {
+  const ingredients = await prisma.ingredient.findMany({
+    where: { admin_id: req.user.id },
+    orderBy: { name_en: 'asc' }
+  });
   res.json(ingredients);
 });
 
 app.post('/api/ingredients', authenticate, async (req, res) => {
-  const { name_en, name_ar } = req.body;
-  const ingredient = await prisma.ingredient.create({
-    data: { name_en, name_ar }
-  });
-  res.json(ingredient);
+  const name_en = String(req.body.name_en || '').trim();
+  const name_ar = req.body.name_ar ? String(req.body.name_ar).trim() : null;
+  if (!name_en) return res.status(400).json({ error: 'English ingredient name is required' });
+  try {
+    const ingredient = await prisma.ingredient.create({
+      data: { admin_id: req.user.id, name_en, name_ar }
+    });
+    res.status(201).json(ingredient);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Ingredient already exists' });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- Orders ---
@@ -625,7 +770,7 @@ app.get('/api/orders', authenticate, async (req, res) => {
 });
 
 app.post('/api/orders', orderRateLimit, async (req, res) => {
-  const { tableCode, items, adminId, type } = req.body; // Added type
+  const { tableCode, items, adminId, type, promotionCode, tipPercent } = req.body;
 
   if (!adminId) return res.status(400).json({ error: 'Restaurant ID required' });
   if (!Array.isArray(items) || items.length === 0 || items.length > 100) {
@@ -637,40 +782,68 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
   if (type === 'dine_in' && !tableCode) {
     return res.status(400).json({ error: 'Table code required for dine-in orders' });
   }
+  if (!Number.isFinite(Number(tipPercent ?? 0)) || Number(tipPercent ?? 0) < 0 || Number(tipPercent ?? 0) > 100) {
+    return res.status(400).json({ error: 'Invalid tip percentage' });
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const targetAdmin = await tx.admin.findUnique({
         where: { id: adminId },
-        select: { id: true, subscription_status: true }
+        select: {
+          id: true,
+          subscription_status: true,
+          billing_settings: true,
+          pricing_prefs: true
+        }
       });
       if (!targetAdmin || !['ACTIVE', 'TRIAL'].includes(targetAdmin.subscription_status)) {
         throw Object.assign(new Error('Restaurant is not accepting orders'), { status: 403 });
       }
 
-      // 1. Resolve the table inside the requested restaurant.
       let table = null;
       if (tableCode) {
         table = await tx.table.findFirst({
           where: {
             admin_id: adminId,
-            code: {
-              equals: tableCode,
-              mode: 'insensitive'
-            }
+            code: { equals: String(tableCode), mode: 'insensitive' }
           }
         });
       }
-
       if (!table && type === 'dine_in') {
         throw Object.assign(new Error('Table not found'), { status: 404 });
       }
 
-      const normalizedItems = items.map(item => ({
-        ...item,
-        menuId: Number(item.menuId),
-        quantity: Number(item.quantity)
-      }));
+      const normalizedItems = items.map(item => {
+        if (item.ingredients !== undefined && !Array.isArray(item.ingredients)) {
+          throw Object.assign(new Error('Invalid ingredient selections'), { status: 400 });
+        }
+        if (item.options !== undefined && !Array.isArray(item.options)) {
+          throw Object.assign(new Error('Invalid modifier selections'), { status: 400 });
+        }
+        if (item.comboChildren !== undefined && !Array.isArray(item.comboChildren)) {
+          throw Object.assign(new Error('Invalid combo selections'), { status: 400 });
+        }
+        return {
+          menuId: Number(item.menuId),
+          quantity: Number(item.quantity),
+          notes: item.notes == null ? null : String(item.notes).trim().slice(0, 500),
+          ingredients: (item.ingredients || []).flat().map(selection => ({
+            ingredientId: Number(selection.ingredientId),
+            action: selection.action,
+            qty: Number(selection.qty || 1)
+          })),
+          options: (item.options || []).flat().map(selection => ({
+            optionId: Number(selection.optionId),
+            qty: Number(selection.qty || 1)
+          })),
+          comboChildren: (item.comboChildren || []).flat().map(selection => ({
+            groupId: selection.groupId == null ? null : Number(selection.groupId),
+            childMenuId: Number(selection.childMenuId)
+          }))
+        };
+      });
+
       if (normalizedItems.some(item =>
         !Number.isInteger(item.menuId) ||
         !Number.isInteger(item.quantity) ||
@@ -680,111 +853,228 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
         throw Object.assign(new Error('Invalid menu item or quantity'), { status: 400 });
       }
 
-      // 2. Load only active menu items owned by this restaurant.
       const menuIds = [...new Set(normalizedItems.map(item => item.menuId))];
-      const menuItemsFromDb = await tx.menu.findMany({
-        where: {
-          id: { in: menuIds },
-          user_id: adminId,
-          deleted_at: null,
-          available: true
-        }
-      });
+      const [menuItemsFromDb, ingredientConfigs, modifierLinks, comboGroups] = await Promise.all([
+        tx.menu.findMany({
+          where: { id: { in: menuIds }, user_id: adminId, deleted_at: null, available: true }
+        }),
+        tx.menuIngredient.findMany({ where: { menu_id: { in: menuIds } } }),
+        tx.menuModifierGroup.findMany({
+          where: { menu_id: { in: menuIds } },
+          include: { modifier_group: { include: { modifier_options: true } } }
+        }),
+        tx.comboGroup.findMany({
+          where: { menu_id: { in: menuIds } },
+          include: {
+            combo_group_items: {
+              include: {
+                menus: {
+                  select: { id: true, user_id: true, available: true, deleted_at: true }
+                }
+              }
+            }
+          }
+        })
+      ]);
+
       if (menuItemsFromDb.length !== menuIds.length) {
         throw Object.assign(new Error('One or more menu items are unavailable'), { status: 400 });
       }
-      const priceMap = new Map(menuItemsFromDb.map(item => [item.id, item.price]));
 
-      const ingredientSelections = normalizedItems.flatMap(item =>
-        (Array.isArray(item.ingredients) ? item.ingredients.flat() : [])
-          .filter(selection => selection?.action === 'extra')
-          .map(selection => ({
-            menuId: item.menuId,
-            ingredientId: Number(selection.ingredientId),
-            quantity: Number(selection.qty || 1)
-          }))
-      );
-      const configuredExtras = ingredientSelections.length
-        ? await tx.menuIngredient.findMany({
-            where: {
-              OR: ingredientSelections.map(selection => ({
-                menu_id: selection.menuId,
-                ingredient_id: selection.ingredientId
-              }))
-            }
-          })
-        : [];
-      const extrasMap = new Map(configuredExtras.map(extra => [
-        `${extra.menu_id}:${extra.ingredient_id}`,
-        extra
+      const priceMap = new Map(menuItemsFromDb.map(item => [item.id, Number(item.price)]));
+      const ingredientMap = new Map(ingredientConfigs.map(config => [
+        `${config.menu_id}:${config.ingredient_id}`,
+        config
       ]));
+      const modifierGroupsByMenu = new Map();
+      for (const link of modifierLinks) {
+        const groups = modifierGroupsByMenu.get(link.menu_id) || [];
+        groups.push(link.modifier_group);
+        modifierGroupsByMenu.set(link.menu_id, groups);
+      }
+      const comboGroupsByMenu = new Map();
+      for (const group of comboGroups) {
+        const groups = comboGroupsByMenu.get(group.menu_id) || [];
+        groups.push(group);
+        comboGroupsByMenu.set(group.menu_id, groups);
+      }
 
-      let total = 0;
+      let subtotal = 0;
       const orderItemsData = normalizedItems.map(item => {
-        const basePrice = priceMap.get(item.menuId);
-        const requestedExtras = (Array.isArray(item.ingredients) ? item.ingredients.flat() : [])
-          .filter(selection => selection?.action === 'extra');
-        let extrasTotal = 0;
+        const ingredientIds = item.ingredients.map(selection => selection.ingredientId);
+        if (ingredientIds.some(id => !Number.isInteger(id)) || new Set(ingredientIds).size !== ingredientIds.length) {
+          throw Object.assign(new Error('Invalid ingredient customization'), { status: 400 });
+        }
 
-        for (const selection of requestedExtras) {
-          const configured = extrasMap.get(`${item.menuId}:${Number(selection.ingredientId)}`);
-          const extraQty = Number(selection.qty || 1);
-          if (
-            !configured?.extra_available ||
-            !Number.isInteger(extraQty) ||
-            extraQty < 1 ||
-            extraQty > configured.max_extra
-          ) {
+        let ingredientDelta = 0;
+        for (const selection of item.ingredients) {
+          const configured = ingredientMap.get(`${item.menuId}:${selection.ingredientId}`);
+          if (!configured || !['remove', 'extra'].includes(selection.action)) {
             throw Object.assign(new Error('Invalid ingredient customization'), { status: 400 });
           }
-          extrasTotal += Number(configured.extra_price_override || 0) * extraQty;
+          if (selection.action === 'remove' && !configured.removable) {
+            throw Object.assign(new Error('Ingredient cannot be removed'), { status: 400 });
+          }
+          if (selection.action === 'extra') {
+            if (
+              !configured.extra_available ||
+              !Number.isInteger(selection.qty) ||
+              selection.qty < 1 ||
+              selection.qty > configured.max_extra
+            ) {
+              throw Object.assign(new Error('Invalid ingredient quantity'), { status: 400 });
+            }
+            ingredientDelta += Number(configured.extra_price_override || 0) * selection.qty;
+          }
         }
 
-        const price = Number(basePrice) + extrasTotal;
-        if (!Number.isFinite(price)) {
+        const linkedModifierGroups = modifierGroupsByMenu.get(item.menuId) || [];
+        const optionIds = item.options.map(selection => selection.optionId);
+        if (optionIds.some(id => !Number.isInteger(id)) || new Set(optionIds).size !== optionIds.length) {
+          throw Object.assign(new Error('Invalid modifier selection'), { status: 400 });
+        }
+        const optionToGroup = new Map();
+        for (const group of linkedModifierGroups) {
+          for (const option of group.modifier_options) optionToGroup.set(option.id, { option, group });
+        }
+        const selectionsByGroup = new Map();
+        let modifierDelta = 0;
+        for (const selection of item.options) {
+          const configured = optionToGroup.get(selection.optionId);
+          if (
+            !configured ||
+            !Number.isInteger(selection.qty) ||
+            selection.qty < 1 ||
+            selection.qty > Number(configured.option.max_qty || 1) ||
+            (configured.group.selection_type === 'single' && selection.qty !== 1)
+          ) {
+            throw Object.assign(new Error('Invalid modifier selection'), { status: 400 });
+          }
+          const groupSelections = selectionsByGroup.get(configured.group.id) || [];
+          groupSelections.push(selection);
+          selectionsByGroup.set(configured.group.id, groupSelections);
+          modifierDelta += Number(configured.option.price_delta || 0) * selection.qty;
+        }
+        for (const group of linkedModifierGroups) {
+          const selectedCount = (selectionsByGroup.get(group.id) || []).length;
+          const minimum = Math.max(Number(group.min_select || 0), group.required ? 1 : 0);
+          const maximum = group.selection_type === 'single' ? 1 : Number(group.max_select || 99);
+          if (selectedCount < minimum || selectedCount > maximum) {
+            throw Object.assign(new Error(`Invalid selection for ${group.name_en}`), { status: 400 });
+          }
+        }
+
+        const linkedComboGroups = comboGroupsByMenu.get(item.menuId) || [];
+        const comboSelectionsByGroup = new Map();
+        let comboDelta = 0;
+        for (const selection of item.comboChildren) {
+          if (!Number.isInteger(selection.childMenuId)) {
+            throw Object.assign(new Error('Invalid combo selection'), { status: 400 });
+          }
+          const candidateGroups = linkedComboGroups.filter(group =>
+            (selection.groupId === null || group.id === selection.groupId) &&
+            group.combo_group_items.some(groupItem => groupItem.child_menu_id === selection.childMenuId)
+          );
+          if (candidateGroups.length !== 1) {
+            throw Object.assign(new Error('Invalid combo selection'), { status: 400 });
+          }
+          const group = candidateGroups[0];
+          const configured = group.combo_group_items.find(groupItem => groupItem.child_menu_id === selection.childMenuId);
+          if (
+            !configured?.menus ||
+            configured.menus.user_id !== adminId ||
+            configured.menus.available !== true ||
+            configured.menus.deleted_at !== null
+          ) {
+            throw Object.assign(new Error('Combo item is unavailable'), { status: 400 });
+          }
+          const groupSelections = comboSelectionsByGroup.get(group.id) || [];
+          if (groupSelections.some(existing => existing.childMenuId === selection.childMenuId)) {
+            throw Object.assign(new Error('Duplicate combo selection'), { status: 400 });
+          }
+          groupSelections.push(selection);
+          comboSelectionsByGroup.set(group.id, groupSelections);
+          comboDelta += Number(configured.upgrade_price_delta || 0);
+        }
+        for (const group of linkedComboGroups) {
+          const selectedCount = (comboSelectionsByGroup.get(group.id) || []).length;
+          if (selectedCount < Number(group.min_select || 0) || selectedCount > Number(group.max_select || 1)) {
+            throw Object.assign(new Error('Invalid combo selection count'), { status: 400 });
+          }
+        }
+
+        const unitPrice = roundMoney(priceMap.get(item.menuId) + ingredientDelta + modifierDelta + comboDelta);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
           throw Object.assign(new Error(`Invalid price for menu item ${item.menuId}`), { status: 400 });
         }
-        const itemTotal = price * item.quantity;
-        total += itemTotal;
+        subtotal += unitPrice * item.quantity;
         return {
           menu_id: item.menuId,
           quantity: item.quantity,
-          price_at_order: price,
-          note: item.notes
+          price_at_order: unitPrice,
+          note: item.notes,
+          customizations: {
+            ingredients: item.ingredients,
+            options: item.options,
+            comboChildren: item.comboChildren
+          }
         };
       });
 
+      subtotal = roundMoney(subtotal);
+      const promotion = await resolvePromotion(tx, {
+        adminId,
+        code: promotionCode,
+        subtotal,
+        tableId: table?.id || null
+      });
+      const totals = calculateOrderTotals({
+        subtotal,
+        promotion,
+        billingSettings: targetAdmin.billing_settings,
+        pricingPrefs: targetAdmin.pricing_prefs,
+        type,
+        tipPercent: Number(tipPercent || 0)
+      });
+
       const orderData = {
-        total: Number(total.toFixed(2)),
+        total: totals.total,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        vat: totals.vat,
+        service_charge: totals.serviceCharge,
+        delivery_fee: totals.deliveryFee,
+        tip: totals.tip,
+        promotion_code: promotion?.code || null,
         status: 'pending',
         type,
         admin: { connect: { id: adminId } }
       };
+      if (table) orderData.table = { connect: { id: table.id } };
+      if (promotion) orderData.promotion = { connect: { id: promotion.id } };
 
-      if (table) {
-        orderData.table = { connect: { id: table.id } };
-        // Admin is implicitly linked via table if we wanted, but safer to link explicitly
-      }
-
-      const order = await tx.order.create({
-        data: orderData
+      const order = await tx.order.create({ data: orderData });
+      await tx.orderItem.createMany({
+        data: orderItemsData.map(itemData => ({ ...itemData, order_id: order.id }))
       });
 
-      // 4. Create Order Items
-      if (orderItemsData.length > 0) {
-        await tx.orderItem.createMany({
-          data: orderItemsData.map(itemData => ({
-            ...itemData,
-            order_id: order.id,
-          }))
+      if (promotion) {
+        const promotionUpdate = await tx.promotion.updateMany({
+          where: {
+            id: promotion.id,
+            OR: [
+              { usage_limit: null },
+              { times_used: { lt: promotion.usage_limit ?? 0 } }
+            ]
+          },
+          data: { times_used: { increment: 1 } }
         });
+        if (promotionUpdate.count !== 1) {
+          throw Object.assign(new Error('Promotion usage limit reached'), { status: 400 });
+        }
       }
-
       if (table && table.status !== 'occupied') {
-        await tx.table.update({
-          where: { id: table.id },
-          data: { status: 'occupied' }
-        });
+        await tx.table.update({ where: { id: table.id }, data: { status: 'occupied' } });
       }
       return order;
     });
@@ -1016,6 +1306,55 @@ app.get('/api/public/pricing', async (req, res) => {
   }
 });
 
+app.get('/api/public/promotions/validate', orderRateLimit, async (req, res) => {
+  const adminId = String(req.query.adminId || '');
+  const code = String(req.query.code || '');
+  const subtotal = Number(req.query.subtotal || 0);
+  const tableCode = req.query.table ? String(req.query.table) : null;
+  if (!adminId || !code || !Number.isFinite(subtotal) || subtotal < 0) {
+    return res.status(400).json({ error: 'Restaurant, promotion code, and subtotal are required' });
+  }
+
+  try {
+    const restaurant = await prisma.admin.findFirst({
+      where: { id: adminId, subscription_status: { in: ['ACTIVE', 'TRIAL'] } },
+      select: { id: true }
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    const table = tableCode
+      ? await prisma.table.findFirst({
+          where: { admin_id: adminId, code: { equals: tableCode, mode: 'insensitive' } },
+          select: { id: true }
+        })
+      : null;
+    const promotion = await resolvePromotion(prisma, {
+      adminId,
+      code,
+      subtotal: roundMoney(subtotal),
+      tableId: table?.id || null
+    });
+
+    res.json({
+      id: promotion.id,
+      admin_id: promotion.admin_id,
+      code: promotion.code,
+      type: promotion.type,
+      value: Number(promotion.value),
+      min_order: promotion.min_order === null ? null : Number(promotion.min_order),
+      start_at: promotion.start_at,
+      end_at: promotion.end_at,
+      usage_limit: promotion.usage_limit,
+      times_used: promotion.times_used,
+      active: promotion.active,
+      applies_to: promotion.applies_to,
+      table_id: promotion.table_id
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // 🆕 Public endpoint for customer menu (No auth required)
 app.get('/api/public/menus', async (req, res) => {
   const adminId = req.query.adminId;
@@ -1159,6 +1498,19 @@ app.get('/api/admin/monetary', authenticate, async (req, res) => {
 
 app.put('/api/admin/pricing', authenticate, async (req, res) => {
   const { pricing_prefs } = req.body;
+  const allowedCurrencies = new Set(['USD', 'QAR', 'JOD', 'SAR']);
+  if (!pricing_prefs || typeof pricing_prefs !== 'object' || !allowedCurrencies.has(pricing_prefs.baseCurrency)) {
+    return res.status(400).json({ error: 'Invalid pricing preferences' });
+  }
+  if (
+    !Array.isArray(pricing_prefs.enabledCurrencies) ||
+    pricing_prefs.enabledCurrencies.some(currency => !allowedCurrencies.has(currency)) ||
+    !['symbol', 'code'].includes(pricing_prefs.priceDisplay) ||
+    !['none', 'nearest-0.05', 'nearest-0.1', 'nearest-0.5'].includes(pricing_prefs.rounding) ||
+    typeof pricing_prefs.taxInclusive !== 'boolean'
+  ) {
+    return res.status(400).json({ error: 'Invalid pricing preferences' });
+  }
   try {
     await prisma.admin.update({ where: { id: req.user.id }, data: { pricing_prefs } });
     res.json({ success: true });
@@ -1167,8 +1519,34 @@ app.put('/api/admin/pricing', authenticate, async (req, res) => {
 
 app.put('/api/admin/billing', authenticate, async (req, res) => {
   const { billing_settings } = req.body;
+  if (!billing_settings || typeof billing_settings !== 'object') {
+    return res.status(400).json({ error: 'Invalid billing settings' });
+  }
+  const vatPercent = Number(billing_settings.vatPercent);
+  const serviceChargePercent = Number(billing_settings.serviceChargePercent);
+  const deliveryFee = Number(billing_settings.deliveryFee);
+  if (
+    !Number.isFinite(vatPercent) || vatPercent < 0 || vatPercent > 100 ||
+    !Number.isFinite(serviceChargePercent) || serviceChargePercent < 0 || serviceChargePercent > 100 ||
+    !Number.isFinite(deliveryFee) || deliveryFee < 0 || deliveryFee > 1000000 ||
+    typeof billing_settings.showVatLine !== 'boolean' ||
+    typeof billing_settings.showServiceChargeLine !== 'boolean'
+  ) {
+    return res.status(400).json({ error: 'Invalid billing settings' });
+  }
   try {
-    await prisma.admin.update({ where: { id: req.user.id }, data: { billing_settings } });
+    await prisma.admin.update({
+      where: { id: req.user.id },
+      data: {
+        billing_settings: {
+          vatPercent,
+          serviceChargePercent,
+          deliveryFee,
+          showVatLine: billing_settings.showVatLine,
+          showServiceChargeLine: billing_settings.showServiceChargeLine
+        }
+      }
+    });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1190,6 +1568,10 @@ app.post('/api/promotions', authenticate, async (req, res) => {
   const type = req.body.type;
   const value = Number(req.body.value);
   const appliesTo = req.body.applies_to || 'global';
+  const minOrder = req.body.min_order == null ? null : Number(req.body.min_order);
+  const usageLimit = req.body.usage_limit == null || req.body.usage_limit === '' ? null : Number(req.body.usage_limit);
+  const startAt = req.body.start_at ? new Date(req.body.start_at) : null;
+  const endAt = req.body.end_at ? new Date(req.body.end_at) : null;
 
   if (!code || !['percent', 'fixed'].includes(type) || !Number.isFinite(value) || value < 0) {
     return res.status(400).json({ error: 'Invalid promotion' });
@@ -1199,6 +1581,15 @@ app.post('/api/promotions', authenticate, async (req, res) => {
   }
   if (!['global', 'table'].includes(appliesTo)) {
     return res.status(400).json({ error: 'Invalid promotion scope' });
+  }
+  if (
+    (minOrder !== null && (!Number.isFinite(minOrder) || minOrder < 0)) ||
+    (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit < 1)) ||
+    (startAt && Number.isNaN(startAt.getTime())) ||
+    (endAt && Number.isNaN(endAt.getTime())) ||
+    (startAt && endAt && endAt <= startAt)
+  ) {
+    return res.status(400).json({ error: 'Invalid promotion limits or dates' });
   }
 
   try {
@@ -1215,10 +1606,10 @@ app.post('/api/promotions', authenticate, async (req, res) => {
       code,
       type,
       value,
-      min_order: req.body.min_order == null ? null : Number(req.body.min_order),
-      start_at: req.body.start_at ? new Date(req.body.start_at) : null,
-      end_at: req.body.end_at ? new Date(req.body.end_at) : null,
-      usage_limit: req.body.usage_limit ? Number(req.body.usage_limit) : null,
+      min_order: minOrder,
+      start_at: startAt,
+      end_at: endAt,
+      usage_limit: usageLimit,
       active: req.body.active !== false,
       applies_to: appliesTo,
       table_id: tableId
@@ -1241,11 +1632,15 @@ app.post('/api/promotions', authenticate, async (req, res) => {
       });
     }
     res.json(promo);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Promotion code already exists' });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.put('/api/promotions/:id/active', authenticate, async (req, res) => {
   const { active } = req.body;
+  if (typeof active !== 'boolean') return res.status(400).json({ error: 'Active must be a boolean' });
   try {
     const ownedPromo = await prisma.promotion.findFirst({
       where: { id: req.params.id, admin_id: req.user.id },

@@ -251,7 +251,9 @@ const ThemeCustomizer: React.FC<SheetProps> = ({
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
-    } catch { }
+    } catch {
+      // Clipboard access can be denied by the browser; the UI simply remains unchanged.
+    }
   };
 
   const toggleSection = (section: keyof typeof sectionsOpen) => {
@@ -313,12 +315,12 @@ const ThemeCustomizer: React.FC<SheetProps> = ({
         <div
           className="h-[calc(100%-168px)] overflow-y-auto p-6 space-y-6 custom-scrollbar"
           style={{
-            ["--color-primary" as any]:
+            ["--color-primary"]:
               normalizeHex(temp.primary) ?? temp.primary,
-            ["--color-secondary" as any]:
+            ["--color-secondary"]:
               normalizeHex(temp.secondary) ?? temp.secondary,
-            ["--color-accent" as any]: normalizeHex(temp.accent) ?? temp.accent,
-          }}
+            ["--color-accent"]: normalizeHex(temp.accent) ?? temp.accent,
+          } as React.CSSProperties}
         >
           {/* Dark Mode */}
           <div className="flex items-center justify-between p-4 rounded-2xl border bg-slate-50/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 transition-all hover:shadow-md">

@@ -34,7 +34,7 @@ interface StoriesSectionProps {
 }
 
 const StoriesSection: React.FC<StoriesSectionProps> = ({ featuredItems, onAddToCart }) => {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {

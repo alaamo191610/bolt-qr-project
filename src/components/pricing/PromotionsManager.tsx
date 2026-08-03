@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
-import type { Promotion } from '../../pricing/types';
+import { useCallback, useEffect, useState } from 'react';
+import type { Promotion, PromotionType } from '../../pricing/types';
 import { adminService } from '../../services/adminService';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { getErrorMessage } from '../../utils/errors';
 
 const EMPTY: Promotion = {
   admin_id: '',
@@ -26,7 +27,7 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const load = async()=>{
+  const load = useCallback(async()=>{
     setLoading(true);
     try {
       const list = await adminService.listPromotions(adminId);
@@ -36,9 +37,9 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
     } finally {
       setLoading(false);
     }
-  };
+  }, [adminId]);
 
-  useEffect(()=>{ load(); },[adminId]);
+  useEffect(()=>{ load(); },[load]);
 
   const onChange = (patch: Partial<Promotion>) => setForm(p=>({ ...p, ...patch }));
 
@@ -49,8 +50,8 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
       await adminService.upsertPromotion(payload);
       setForm({ ...EMPTY, admin_id: adminId });
       await load();
-    }catch(e:any){
-      alert(`${t('common.error') || 'Error'}: ${e?.message || ''}`);
+    }catch(error){
+      alert(`${t('common.error') || 'Error'}: ${getErrorMessage(error, '')}`);
     } finally { setSaving(false); }
   };
 
@@ -58,8 +59,8 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
     try{
       await adminService.setPromotionActive(adminId, row.id!, !row.active);
       await load();
-    }catch(e:any){
-      alert(`${t('common.error') || 'Error'}: ${e?.message || ''}`);
+    }catch(error){
+      alert(`${t('common.error') || 'Error'}: ${getErrorMessage(error, '')}`);
     }
   };
 
@@ -98,7 +99,7 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
           <select
             className="w-full border rounded-md px-2 py-1"
             value={form.type}
-            onChange={e=>onChange({ type: e.target.value as any })}
+            onChange={e=>onChange({ type: e.target.value as PromotionType })}
           >
             <option value="percent">{t('promos.percent') || 'percent %'}</option>
             <option value="fixed">{t('promos.fixed') || 'fixed amount'}</option>
@@ -163,7 +164,7 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
             <select
               className="w-full border rounded-md px-2 py-1"
               value={form.applies_to}
-              onChange={e=>onChange({ applies_to: e.target.value as any })}
+              onChange={e=>onChange({ applies_to: e.target.value as 'global' | 'table' })}
             >
               <option value="global">{t('promos.scopeGlobal') || 'global'}</option>
               <option value="table">{t('promos.scopeTable') || 'specific table'}</option>

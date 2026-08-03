@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Plus, Minus } from "lucide-react";
 import { menuService } from "../../services/menuService";
+import { getErrorMessage } from "../../utils/errors";
 
 /**
  * MenuItemCustomizer
@@ -25,7 +26,7 @@ export type IngredientPick = {
   qty?: number;
 };
 export type OptionPick = { optionId: string; qty?: number };
-export type ComboChildPick = { childMenuId: string; notes?: string };
+export type ComboChildPick = { groupId: string; childMenuId: string; notes?: string };
 export type CartLine = {
   menuId: string;
   quantity: number;
@@ -33,6 +34,8 @@ export type CartLine = {
   ingredients?: IngredientPick[];
   options?: OptionPick[];
   comboChildren?: ComboChildPick[];
+  priceDelta?: number;
+  displayLabels?: string[];
 };
 
 // --- DB result shapes ---
@@ -122,9 +125,9 @@ function useMenuConfig(menuId: string) {
         setMI(data.ingredients);
         setMMG(data.modifierGroups);
         setCombo(data.comboGroups);
-      } catch (e: any) {
+      } catch (e) {
         if (!active) return;
-        setError(e.message || String(e));
+        setError(getErrorMessage(e));
       } finally {
         if (active) setLoading(false);
       }
@@ -309,6 +312,16 @@ export default function MenuItemCustomizer({
     return errs;
   }, [groups, optState]);
 
+  const comboErrors = useMemo(() => {
+    const errors: string[] = [];
+    for (const group of combo) {
+      const selectedCount = childrenState[group.id] ? 1 : 0;
+      if (selectedCount < Number(group.min_select ?? 0)) errors.push("Select a combo item");
+      if (selectedCount > Number(group.max_select ?? 1)) errors.push("Too many combo items selected");
+    }
+    return errors;
+  }, [combo, childrenState]);
+
   const pricing = useMemo(() => {
     const base = Number(menu?.price ?? 0);
     let extrasDelta = 0;
@@ -384,8 +397,8 @@ export default function MenuItemCustomizer({
   }, [ingState, ingredientConfig, groups, optState, combo, childrenState]);
 
   const canAdd = useMemo(
-    () => optionErrors.length === 0 && qty > 0,
-    [optionErrors, qty]
+    () => optionErrors.length === 0 && comboErrors.length === 0 && qty > 0,
+    [optionErrors, comboErrors, qty]
   );
 
   // build CartLine payload for Edge Function
@@ -411,7 +424,7 @@ export default function MenuItemCustomizer({
     const comboChildren: ComboChildPick[] = [];
     for (const cg of combo) {
       const childId = childrenState[cg.id];
-      if (childId) comboChildren.push({ childMenuId: childId });
+      if (childId) comboChildren.push({ groupId: cg.id, childMenuId: childId });
     }
     return {
       menuId,
@@ -420,8 +433,10 @@ export default function MenuItemCustomizer({
       ingredients: ingredients.length ? ingredients : undefined,
       options: options.length ? options : undefined,
       comboChildren: comboChildren.length ? comboChildren : undefined,
+      priceDelta: pricing.unit - pricing.base,
+      displayLabels: snapshot.length ? snapshot : undefined,
     };
-  }, [menuId, qty, note, ingState, groups, optState, combo, childrenState]);
+  }, [menuId, qty, note, ingState, groups, optState, combo, childrenState, pricing.unit, pricing.base, snapshot]);
 
   if (loading) return (
     <div className="flex items-center justify-center p-12">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Check, Crown, Zap, Rocket } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errors';
 
 interface Restaurant {
     id: string;
@@ -82,8 +83,8 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
             await onUpdate(restaurant.id, selectedPlan, selectedStatus, endDate || undefined);
             toast.success('Subscription updated successfully!');
             onClose();
-        } catch (error: any) {
-            toast.error(error.message || 'Failed to update subscription');
+        } catch (error) {
+            toast.error(getErrorMessage(error, 'Failed to update subscription'));
         } finally {
             setLoading(false);
         }

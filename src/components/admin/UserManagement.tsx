@@ -3,6 +3,7 @@ import { UserCog, Plus, Trash2, Mail, Store } from "lucide-react";
 import { adminService } from "../../services/adminService";
 import { toast } from "react-hot-toast";
 import type { Admin } from "../../lib/supabase";
+import { getErrorMessage } from "../../utils/errors";
 
 const UserManagement: React.FC = () => {
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -22,7 +23,7 @@ const UserManagement: React.FC = () => {
     try {
       const data = await adminService.getAllAdmins();
       setAdmins(data);
-    } catch (error) {
+    } catch {
       toast.error("Failed to load users");
     }
   };
@@ -38,8 +39,8 @@ const UserManagement: React.FC = () => {
       setNewUser({ email: "", password: "", restaurant_name: "" });
       setShowAddModal(false);
       loadAdmins();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add user");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to add user"));
     } finally {
       setSubmitting(false);
     }
@@ -51,7 +52,7 @@ const UserManagement: React.FC = () => {
       await adminService.deleteAdmin(id);
       toast.success("User deleted");
       setAdmins((prev) => prev.filter((a) => a.id !== id));
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete user");
     }
   };

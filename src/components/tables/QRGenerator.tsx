@@ -18,8 +18,7 @@ import {
   Palette,
   Maximize2,
   X,
-  Settings,
-  Share2
+  Settings
 } from 'lucide-react';
 
 interface Table {

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Database } from 'lucide-react';
 import { menuService } from '../../services/menuService';
 import { api } from '../../services/api';
-import { useLanguage } from '../../contexts/LanguageContext';
 import toast from 'react-hot-toast';
 
 interface SeedDataButtonProps {
@@ -166,7 +165,6 @@ const dummyItems = [
 
 export const SeedDataButton: React.FC<SeedDataButtonProps> = ({ userId, onComplete }) => {
     const [loading, setLoading] = useState(false);
-    const { t } = useLanguage();
 
     const handleSeed = async () => {
         if (!userId) {
@@ -185,7 +183,7 @@ export const SeedDataButton: React.FC<SeedDataButtonProps> = ({ userId, onComple
             // 1. Fetch or Create Categories
             const existingCategories = await menuService.getCategories();
             const categoryMap = new Map<string, string>(); // Name -> ID
-            existingCategories?.forEach((c: any) => categoryMap.set(c.name_en, c.id));
+            existingCategories?.forEach((c: { name_en: string; id: string }) => categoryMap.set(c.name_en, c.id));
 
             for (const cat of dummyCategories) {
                 if (!categoryMap.has(cat.name_en)) {
@@ -201,7 +199,7 @@ export const SeedDataButton: React.FC<SeedDataButtonProps> = ({ userId, onComple
             // 2. Fetch or Create Ingredients
             const existingIngredients = await menuService.getIngredients();
             const ingredientMap = new Map<string, string>(); // Name -> ID
-            existingIngredients?.forEach((i: any) => ingredientMap.set(i.name_en, i.id));
+            existingIngredients?.forEach((i: { name_en: string; id: string }) => ingredientMap.set(i.name_en, i.id));
 
             for (const ing of dummyIngredients) {
                 if (!ingredientMap.has(ing.name_en)) {

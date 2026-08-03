@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, Lock, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { superAdminService } from '../../services/superAdminService';
+import { getErrorMessage } from '../../utils/errors';
 
 const SuperAdminLogin: React.FC = () => {
     const navigate = useNavigate();
@@ -24,9 +25,9 @@ const SuperAdminLogin: React.FC = () => {
             localStorage.setItem('superAdminToken', token);
             toast.success(`Welcome, ${user.name || 'Super Admin'}!`);
             navigate('/super-admin/dashboard');
-        } catch (error: any) {
+        } catch (error) {
             console.error('Login error:', error);
-            toast.error(error.message || 'Login failed. Please try again.');
+            toast.error(getErrorMessage(error, 'Login failed. Please try again.'));
         } finally {
             setLoading(false);
         }

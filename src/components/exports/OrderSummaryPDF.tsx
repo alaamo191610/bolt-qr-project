@@ -17,7 +17,7 @@ const styles = StyleSheet.create({
   page: { padding: 24, fontSize: 12 },
   headerBar: { backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 20, marginBottom: 16 },
   headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  headerTitle: { color: '#ffffff', fontSize: 18, fontWeight: 700 as any },
+  headerTitle: { color: '#ffffff', fontSize: 18, fontWeight: 700 },
   headerSub: { color: '#dbeafe', fontSize: 10 },
 
   section: { marginBottom: 20 },
@@ -31,11 +31,11 @@ const styles = StyleSheet.create({
   },
   kpiCardMid: { marginHorizontal: 8 },
   kpiLabel: { fontSize: 10, color: '#64748b', marginBottom: 4 },
-  kpiValue: { fontSize: 16, fontWeight: 700 as any, color: '#0f172a' },
+  kpiValue: { fontSize: 16, fontWeight: 700, color: '#0f172a' },
 
   // Grouped-by-table "table"
   tableHeaderRow: { flexDirection: 'row', backgroundColor: '#f3f4f6', borderWidth: 1, borderStyle: 'solid', borderColor: '#e5e7eb', borderRadius: 6 },
-  thCell: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, fontWeight: 700 as any, color: '#374151' },
+  thCell: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, fontWeight: 700, color: '#374151' },
   thNarrow: { flexBasis: 90, flexGrow: 0 },
   tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderStyle: 'solid', borderColor: '#e5e7eb' },
   tdCell: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, color: '#111827' },
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   },
   orderHeaderRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', marginBottom: 6 },
   orderLine: { marginBottom: 2 },
-  bold: { fontWeight: 700 as any },
+  bold: { fontWeight: 700 },
   muted: { color: '#6b7280' },
 
   // Status badge
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 11, color: '#111827' },
   itemMeta: { fontSize: 11, color: '#111827' },
 
-  summaryRow: { fontSize: 13, fontWeight: 700 as any, marginTop: 6, color: '#1f2937' },
+  summaryRow: { fontSize: 13, fontWeight: 700, marginTop: 6, color: '#1f2937' },
 
   footer: { position: 'absolute', bottom: 16, left: 24, right: 24, textAlign: 'center', fontSize: 10, color: '#6b7280' },
 });
@@ -155,7 +155,7 @@ const OrderSummaryPDF: React.FC<Props> = ({ orders, t, language, dateRange }) =>
 
         {/* Grouped by Table */}
         <View style={styles.section}>
-          <Text style={{ fontSize: 14, fontWeight: 700 as any, color: '#0f172a', marginBottom: 6 }}>
+          <Text style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
             {t('analytics.groupedByTable')}
           </Text>
           <View style={styles.tableHeaderRow}>

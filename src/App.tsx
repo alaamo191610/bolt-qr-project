@@ -77,6 +77,40 @@ interface AdminProfile {
   preferred_language?: string;
 }
 
+interface ApiTable {
+  id: number;
+  code: string;
+  status?: string;
+  capacity?: number;
+  admin_id?: string;
+}
+
+interface ApiOrderItem {
+  menu?: { name_en?: string } | null;
+  price_at_order: number;
+  quantity: number;
+}
+
+interface ApiOrder {
+  id: number;
+  order_number?: number;
+  table?: { code?: string } | null;
+  table_id?: number;
+  order_items?: ApiOrderItem[];
+  total?: number;
+  status?: Order['status'];
+  created_at: string;
+}
+
+interface ApiMenuItem {
+  id: number;
+  name_en: string;
+  name_ar?: string;
+  price: number;
+  categories?: { name_en?: string } | null;
+  image_url?: string;
+}
+
 function App() {
   const { user, loading } = useAuth();
 
@@ -196,7 +230,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const adminTables = await tableService.getTables(user.id);
       setTables(
-        adminTables.map((table: any) => ({
+        adminTables.map((table: ApiTable) => ({
           id: table.id,
           number: table.code,
           status: table.status || "available",
@@ -214,12 +248,12 @@ const AdminDashboard: React.FC = () => {
     try {
       const adminOrders = await orderService.getOrders(user.id);
       setOrders(
-        adminOrders.map((order: any) => ({
+        adminOrders.map((order: ApiOrder) => ({
           id: order.id,
           order_number: order.order_number,
           tableNumber: order.table?.code || order.table_id,
           items:
-            order.order_items?.map((item: any) => ({
+            order.order_items?.map((item: ApiOrderItem) => ({
               name: item.menu?.name_en || "Unknown Item",
               price: item.price_at_order,
               quantity: item.quantity,
@@ -239,7 +273,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const adminMenuItems = await menuService.getMenuItems(user.id);
       setMenuItems(
-        adminMenuItems.map((item: any) => ({
+        adminMenuItems.map((item: ApiMenuItem) => ({
           id: item.id,
           name: item.name_en,
           description: item.name_ar || item.name_en,
@@ -295,12 +329,12 @@ const AdminDashboard: React.FC = () => {
 
     joinAdminRoom(user.id);
 
-    const handleNewOrder = (order: any) => {
+    const handleNewOrder = (order: ApiOrder) => {
       const transformedOrder: Order = {
         id: order.id,
         order_number: order.order_number,
         tableNumber: order.table?.code || order.table_id,
-        items: order.order_items?.map((item: any) => ({
+        items: order.order_items?.map((item: ApiOrderItem) => ({
           name: item.menu?.name_en || "Unknown Item",
           price: item.price_at_order,
           quantity: item.quantity,

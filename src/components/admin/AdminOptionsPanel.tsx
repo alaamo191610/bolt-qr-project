@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Save, ChevronDown, ChevronUp } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { api } from "../../services/api";
+import { getErrorMessage } from "../../utils/errors";
 
 /**
  * AdminOptionsPanel
@@ -22,7 +23,6 @@ import { api } from "../../services/api";
 
 export default function AdminOptionsPanel({
   menuId,
-  adminId,
 }: {
   menuId: string;
   adminId?: string;
@@ -90,16 +90,25 @@ export default function AdminOptionsPanel({
   };
   const [combo, setCombo] = useState<ComboGroup>({ items: [] });
 
-  useEffect(() => {
-    if (menuId) void loadAll();
-  }, [menuId]);
+  type OptionsResponse = {
+    allIngredients: Array<{ id: string; name_en: string | null; name_ar: string | null; extra_price: number | null }>;
+    allMenus: Array<{ id: string; name_en: string | null; price: number | null }>;
+    menuIngredients: IngCfg[];
+    menuModifierGroups: Array<{ modifier_group: ModGroup & { modifier_options?: ModOption[] } }>;
+    comboGroups: Array<{
+      id?: string;
+      min_select?: number | null;
+      max_select?: number | null;
+      combo_group_items?: ComboItem[];
+    }>;
+  };
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const data = await api.get(`/menus/${menuId}/options`);
+      const data = await api.get(`/menus/${menuId}/options`) as OptionsResponse;
 
       setAllIngredients(data.allIngredients || []);
       setAllMenus(data.allMenus || []);
@@ -121,10 +130,10 @@ export default function AdminOptionsPanel({
 
       // modifier groups attached to this menu
       const g = (data.menuModifierGroups || [])
-        .map((x: any) => x.modifier_group)
+        .map((x) => x.modifier_group)
         .filter(Boolean);
       setGroups(
-        (g || []).map((gr: any) => ({
+        (g || []).map((gr) => ({
           id: gr.id,
           name_en: gr.name_en || "",
           name_ar: gr.name_ar,
@@ -132,7 +141,7 @@ export default function AdminOptionsPanel({
           min_select: gr.min_select,
           max_select: gr.max_select,
           required: !!gr.required,
-          options: (gr.modifier_options || []).map((o: any) => ({
+          options: (gr.modifier_options || []).map((o) => ({
             id: o.id,
             name_en: o.name_en || "",
             name_ar: o.name_ar,
@@ -152,7 +161,7 @@ export default function AdminOptionsPanel({
             id: grp.id,
             min_select: grp.min_select,
             max_select: grp.max_select,
-            items: (grp.combo_group_items || []).map((it: any) => ({
+            items: (grp.combo_group_items || []).map((it) => ({
               child_menu_id: it.child_menu_id,
               upgrade_price_delta: Number(it.upgrade_price_delta || 0),
               is_default: !!it.is_default,
@@ -160,12 +169,16 @@ export default function AdminOptionsPanel({
           }
           : { items: [] }
       );
-    } catch (e: any) {
-      setError(e.message || String(e));
+    } catch (e) {
+      setError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  }
+  }, [menuId]);
+
+  useEffect(() => {
+    if (menuId) void loadAll();
+  }, [menuId, loadAll]);
 
   // ---------- INGREDIENTS ----------
   const toggleIngredient = (ingredient_id: string) => {
@@ -418,7 +431,7 @@ export default function AdminOptionsPanel({
                         i === gi
                           ? {
                             ...x,
-                            selection_type: e.target.value as any,
+                            selection_type: e.target.value as "single" | "multi",
                             max_select:
                               e.target.value === "single" ? 1 : x.max_select,
                           }

@@ -11,11 +11,22 @@ export function computePromoDiscount(subtotal: number, promo?: Promotion | null)
   return +Math.min(subtotal, promo.value).toFixed(2);
 }
 
-export function computeTotals(subtotal: number, billing: BillingSettings, promo?: Promotion | null) {
+export function computeTotals(
+  subtotal: number,
+  billing: BillingSettings,
+  promo?: Promotion | null,
+  options?: { taxInclusive?: boolean; includeDelivery?: boolean }
+) {
   const discount = computePromoDiscount(subtotal, promo);
   const afterPromo = Math.max(0, subtotal - discount);
-  const vat = billing.showVatLine ? +(afterPromo * (billing.vatPercent / 100)).toFixed(2) : 0;
   const service = billing.showServiceChargeLine ? +(afterPromo * (billing.serviceChargePercent / 100)).toFixed(2) : 0;
-  const total = +(afterPromo + vat + service + billing.deliveryFee).toFixed(2);
+  const vatBase = afterPromo + service;
+  const vat = billing.showVatLine
+    ? options?.taxInclusive
+      ? +(vatBase - vatBase / (1 + billing.vatPercent / 100)).toFixed(2)
+      : +(vatBase * (billing.vatPercent / 100)).toFixed(2)
+    : 0;
+  const delivery = options?.includeDelivery ? billing.deliveryFee : 0;
+  const total = +(afterPromo + service + delivery + (options?.taxInclusive ? 0 : vat)).toFixed(2);
   return { discount, vat, service, total };
 }

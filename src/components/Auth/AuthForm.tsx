@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { LogIn, UserPlus, Loader2 } from "lucide-react";
 import LanguageToggle from "../common/LanguageToggle";
+import { getErrorMessage } from "../../utils/errors";
 
 const AuthForm: React.FC = () => {
   const { t } = useLanguage();
@@ -31,8 +32,8 @@ const AuthForm: React.FC = () => {
         await signIn(email, password);
       }
       navigate("/");
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

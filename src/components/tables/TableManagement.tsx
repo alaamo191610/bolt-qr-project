@@ -4,6 +4,7 @@ import { tableService } from "../../services/tableService";
 import toast from "react-hot-toast";
 import { socket } from "../../services/socket";
 import { useAuth } from "../../providers/AuthProvider";
+import { getErrorMessage } from "../../utils/errors";
 
 interface Table {
   id: number;
@@ -17,6 +18,11 @@ interface TableManagementProps {
   tables: Table[];
   setTables: React.Dispatch<React.SetStateAction<Table[]>>;
   onDataChange: () => void;
+}
+
+interface TableStatusUpdate {
+  id: number;
+  status: string;
 }
 
 const TableManagement: React.FC<TableManagementProps> = ({
@@ -33,7 +39,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
   React.useEffect(() => {
     if (!user?.id) return;
 
-    const handleTableUpdate = (updatedTable: any) => {
+    const handleTableUpdate = (updatedTable: TableStatusUpdate) => {
       setTables((prev) =>
         prev.map((table) =>
           table.id === updatedTable.id
@@ -76,9 +82,9 @@ const TableManagement: React.FC<TableManagementProps> = ({
       setNewTable({ code: "", capacity: 4 });
       setShowAddModal(false);
       toast.success("Table added successfully!");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error adding table:", error);
-      toast.error(error.message || "Failed to add table");
+      toast.error(getErrorMessage(error, "Failed to add table"));
     }
   };
 
@@ -101,9 +107,9 @@ const TableManagement: React.FC<TableManagementProps> = ({
       setTables((prev) => prev.filter((table) => table.id !== tableToDelete));
       toast.success("Table deleted successfully");
       setShowDeleteModal(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting table:", error);
-      toast.error(error.message || "Failed to delete table");
+      toast.error(getErrorMessage(error, "Failed to delete table"));
     } finally {
       setIsDeleting(false);
       setTableToDelete(null);

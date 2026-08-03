@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings } from 'lucide-react';
-import { superAdminService } from '../../services/superAdminService';
+import { superAdminService, type Restaurant, type SubscriptionPlan } from '../../services/superAdminService';
 import PlanManagementModal from './PlanManagementModal';
 import toast from 'react-hot-toast';
 
@@ -9,17 +9,13 @@ const SuperAdminDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ totalRestaurants: 0, activeRestaurants: 0, totalRevenue: 0, growth: 0 });
-    const [restaurants, setRestaurants] = useState<any[]>([]);
+    const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedPlan, setSelectedPlan] = useState<'ALL' | 'STANDARD' | 'BASIC' | 'PRO'>('ALL');
-    const [selectedRestaurant, setSelectedRestaurant] = useState<any | null>(null);
+    const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         const token = localStorage.getItem('superAdminToken');
         if (!token) {
             navigate('/super-admin/login');
@@ -41,7 +37,11 @@ const SuperAdminDashboard: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [navigate]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const handleLogout = () => {
         localStorage.removeItem('superAdminToken');
@@ -55,7 +55,7 @@ const SuperAdminDashboard: React.FC = () => {
         try {
             await superAdminService.updateRestaurantPlan(token, restaurantId, newPlan, status, endDate);
             loadData(); // Reload data
-        } catch (error) {
+        } catch {
             toast.error('Failed to update plan');
         }
     };
@@ -170,10 +170,10 @@ const SuperAdminDashboard: React.FC = () => {
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Restaurants</h2>
                             <div className="flex items-center space-x-2">
-                                {['ALL', 'STANDARD', 'BASIC', 'PRO'].map(plan => (
+                                {(['ALL', 'STANDARD', 'BASIC', 'PRO'] as const).map(plan => (
                                     <button
                                         key={plan}
-                                        onClick={() => setSelectedPlan(plan as any)}
+                                        onClick={() => setSelectedPlan(plan as 'ALL' | SubscriptionPlan)}
                                         className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${selectedPlan === plan
                                             ? 'bg-purple-600 text-white'
                                             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'

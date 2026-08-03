@@ -60,19 +60,48 @@ export interface MenuItem {
   is_featured?: boolean; // For stories section
   has_modifiers?: boolean; // Quick-add eligibility
   user_id?: string;
-}
-interface CartItem extends MenuItem {
-  quantity: number;
   price_delta?: number;
   custom_ingredients?: { id: string; action: "normal" | "no" | "extra" }[];
   selected_modifiers?: string[];
+  checkout_payload?: {
+    ingredients?: { ingredientId: string; action: "remove" | "extra"; qty?: number }[];
+    options?: { optionId: string; qty?: number }[];
+    comboChildren?: { groupId: string; childMenuId: string; notes?: string }[];
+  };
   notes?: string;
+}
+
+interface CartItem extends MenuItem {
+  quantity: number;
+}
+
+interface ActiveOrder {
+  id: number;
+  status: string;
+  order_number?: number;
+  total?: number | string;
 }
 
 type OverlayPos = { top: number; left?: number; right?: number };
 
 // scoped cart key per table
 const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
+
+const variantKey = (item: Partial<MenuItem>) =>
+  JSON.stringify({
+    id: item.id,
+    price_delta: Number(item.price_delta || 0),
+    custom_ingredients: (item.custom_ingredients || [])
+      .map((choice) => ({ id: choice.id, action: choice.action }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    checkout_payload: item.checkout_payload,
+  });
+
+const isSameVariant = (a: Partial<MenuItem>, b: Partial<MenuItem>) =>
+  variantKey(a) === variantKey(b);
+
+const unit = (item: CartItem) => (item.price || 0) + (item.price_delta || 0);
+const line = (item: CartItem) => unit(item) * (item.quantity || 0);
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
@@ -94,7 +123,7 @@ const CustomerMenu: React.FC = () => {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [showCartOverlay, setShowCartOverlay] = useState(false);
-  const [overlayPos, setOverlayPos] = useState<OverlayPos>({
+  const [, setOverlayPos] = useState<OverlayPos>({
     top: 0,
     right: 16,
   });
@@ -103,9 +132,9 @@ const CustomerMenu: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderType, setOrderType] = useState<'dine_in' | 'take_away' | null>(null);
-  const [error, setError] = useState<{ code: string; params?: any } | null>(null);
+  const [error, setError] = useState<{ code: string; params?: Record<string, string> } | null>(null);
   // NEW: Store the full active order, not just a boolean
-  const [activeOrder, setActiveOrder] = useState<any | null>(null);
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
 
   // 🆕 compare
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -176,7 +205,7 @@ const CustomerMenu: React.FC = () => {
 
       return [...prev, id];
     });
-  }, []);
+  }, [t]);
 
   const clearCompare = useCallback(() => setCompareIds([]), []);
 
@@ -299,7 +328,7 @@ const CustomerMenu: React.FC = () => {
         return;
       }
 
-      const transformed = items.map((item: any) => {
+      const transformed = items.map((item) => {
         const normalizedPrice =
           typeof item.price === "number"
             ? item.price
@@ -325,7 +354,7 @@ const CustomerMenu: React.FC = () => {
       setMenuItems(transformed);
 
       const categoryMap = new Map<string, Category>();
-      items.forEach((it: any) => {
+      items.forEach((it) => {
         if (it.categories && !categoryMap.has(it.categories.id)) {
           categoryMap.set(it.categories.id, it.categories);
         }
@@ -365,7 +394,7 @@ const CustomerMenu: React.FC = () => {
         joinMenuRoom(adminId);
       };
 
-      const handleMenuUpdate = (updatedItem: any) => {
+      const handleMenuUpdate = (updatedItem: Pick<MenuItem, 'id' | 'available'>) => {
         console.log("Socket: Menu update received:", updatedItem);
         setMenuItems((prev) =>
           prev.map((item) => {
@@ -430,31 +459,10 @@ const CustomerMenu: React.FC = () => {
 
     return () => clearTimeout(id);
   }, [searchTerm, filteredItems.length]);
-  // ---- variant helpers (same id + same options = same line) ----
-  const variantKey = (m: Partial<MenuItem>) =>
-    JSON.stringify({
-      id: m.id,
-      price_delta: Number((m as any).price_delta || 0),
-      custom_ingredients: ((m as any).custom_ingredients || [])
-        .map((x: any) => ({ id: x.id, action: x.action }))
-        .sort((a: any, b: any) => a.id.localeCompare(b.id)),
-    });
-
-  const isSameVariant = (a: Partial<MenuItem>, b: Partial<MenuItem>) =>
-    variantKey(a) === variantKey(b);
-
-  // ---- money helpers (unit incl. extras) ----
-  type CartLine = CartItem & {
-    price_delta?: number;
-    custom_ingredients?: { id: string; action: "normal" | "no" | "extra" }[];
-  };
-  const unit = (it: CartLine) => (it.price || 0) + (it.price_delta || 0);
-  const line = (it: CartLine) => unit(it) * (it.quantity || 0);
-
   // derived: quantity map / totals
   const quantityMap = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const it of cart as CartLine[]) {
+    for (const it of cart) {
       m[it.id] = (m[it.id] || 0) + (it.quantity || 0);
     }
     return m;
@@ -466,7 +474,7 @@ const CustomerMenu: React.FC = () => {
   );
 
   const totalPrice = useMemo(
-    () => (cart as CartLine[]).reduce((sum, it) => sum + line(it), 0),
+    () => cart.reduce((sum, it) => sum + line(it), 0),
     [cart]
   );
 
@@ -475,22 +483,22 @@ const CustomerMenu: React.FC = () => {
       moneyLoading
         ? currency.format(totalPrice)
         : formatPrice(totalPrice, prefs),
-    [moneyLoading, totalPrice, prefs]
+    [moneyLoading, totalPrice, prefs, currency]
   );
 
   // cart ops
   const addToCart = useCallback((incoming: MenuItem) => {
     setCart((prev) => {
-      const copy = [...prev] as CartLine[];
+      const copy = [...prev];
       const i = copy.findIndex((li) => isSameVariant(li, incoming));
       if (i >= 0) {
         copy[i] = { ...copy[i], quantity: (copy[i].quantity || 0) + 1 };
       } else {
-        copy.push({ ...(incoming as any), quantity: 1 });
+        copy.push({ ...incoming, quantity: 1 });
       }
       // analytics: include extras if present
       const priceWithExtras =
-        (incoming.price || 0) + ((incoming as any).price_delta || 0);
+        (incoming.price || 0) + (incoming.price_delta || 0);
       trackMenuEvents.itemAddedToCart(
         incoming.id,
         incoming.name_en,
@@ -503,7 +511,7 @@ const CustomerMenu: React.FC = () => {
 
   const removeFromCart = useCallback((itemId: string) => {
     setCart((prev) => {
-      const copy = [...prev] as CartLine[];
+      const copy = [...prev];
       const idx = [...copy].reverse().findIndex((li) => li.id === itemId);
       if (idx === -1) return prev;
       const realIdx = copy.length - 1 - idx;
@@ -524,7 +532,7 @@ const CustomerMenu: React.FC = () => {
     });
   }, []);
 
-  const placeOrder = async () => {
+  const placeOrder = async (checkout: { promotionCode?: string; tipPercent: number }) => {
     setIsOrdering(true);
 
     // Track order started
@@ -538,6 +546,7 @@ const CustomerMenu: React.FC = () => {
         price_delta: item.price_delta,
         custom_ingredients: item.custom_ingredients,
         selected_modifiers: item.selected_modifiers,
+        checkout_payload: item.checkout_payload,
         note: item.notes,
       }));
       const newOrder = await orderService.createOrder({
@@ -545,6 +554,8 @@ const CustomerMenu: React.FC = () => {
         items: orderItems,
         admin_id: adminId || undefined,
         type: orderType || 'dine_in', // Pass the selected order type
+        promotion_code: checkout.promotionCode,
+        tip_percent: checkout.tipPercent,
       });
 
       // Track successful order
@@ -570,14 +581,14 @@ const CustomerMenu: React.FC = () => {
   // }, [orderPlaced]);
 
   // overlay positioning
-  const getAnchorPosition = (offsetY = 8): OverlayPos | null => {
+  const getAnchorPosition = useCallback((offsetY = 8): OverlayPos | null => {
     const anchor = document.getElementById("header-cart-anchor");
     if (!anchor) return null;
     const r = anchor.getBoundingClientRect();
     const top = r.bottom + offsetY + window.scrollY;
     if (isRTL) return { top, left: r.left + window.scrollX };
     return { top, right: window.innerWidth - r.right + window.scrollX };
-  };
+  }, [isRTL]);
   const nudgeIfDisabled = (btn: HTMLButtonElement | null) => {
     if (prefersReducedMotion || !btn?.animate) return;
     btn.animate(
@@ -607,7 +618,7 @@ const CustomerMenu: React.FC = () => {
       window.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, [showCartOverlay, isRTL]);
+  }, [showCartOverlay, isRTL, getAnchorPosition]);
 
   // close overlay on outside click / Esc / resize to mobile
   useEffect(() => {
@@ -953,27 +964,27 @@ const CustomerMenu: React.FC = () => {
                           {isRTL ? it.name_ar || it.name_en : it.name_en}
                         </span>
                         <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                          {formatPrice(line(it as CartLine), prefs)}
+                          {formatPrice(line(it), prefs)}
                         </span>
                       </div>
                       <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                         <span>
                           {it.quantity} ×{" "}
-                          {formatPrice(unit(it as CartLine), prefs)}
+                          {formatPrice(unit(it), prefs)}
                         </span>
-                        {!!(it as any).selected_modifiers?.length && (
+                        {!!it.selected_modifiers?.length && (
                           <span className="mx-2">•</span>
                         )}
-                        {!!(it as any).selected_modifiers?.length && (
+                        {!!it.selected_modifiers?.length && (
                           <span className="truncate inline-block max-w-[55%] align-bottom">
-                            {(it as any).selected_modifiers.join(", ")}
+                            {it.selected_modifiers?.join(", ")}
                           </span>
                         )}
-                        {!!(it as any).notes && (
+                        {!!it.notes && (
                           <>
                             <span className="mx-2">•</span>
                             <span className="truncate inline-block max-w-[55%] align-bottom italic">
-                              {(it as any).notes}
+                              {it.notes}
                             </span>
                           </>
                         )}
@@ -1025,8 +1036,18 @@ const CustomerMenu: React.FC = () => {
           onClose={() => setShowCart(false)}
           onAdd={addToCart}
           onRemove={removeFromCart}
+          orderType={orderType || 'dine_in'}
           onPlaceOrder={placeOrder}
           onClearCart={handleClearCart}
+          validatePromo={async (code) => {
+            if (!adminId) return null;
+            return await orderService.validatePromotion({
+              adminId,
+              code,
+              subtotal: totalPrice,
+              tableCode: orderType === 'dine_in' ? tableNumber : undefined,
+            });
+          }}
         // onEditItem={(item) => openEditModal(item)}
         />
       )}
@@ -1051,9 +1072,9 @@ const CustomerMenu: React.FC = () => {
                   : "bg-white/10 border border-white/30 ring-1 ring-white/20",
               ].join(" ")}
               style={{
-                ["--tw-glass-sheen" as any]:
+                ["--tw-glass-sheen"]:
                   "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.05))",
-              }}
+              } as React.CSSProperties}
             >
               {/* sheen overlay */}
               <span className="pointer-events-none absolute inset-0 rounded-2xl mix-blend-overlay opacity-80 [background:var(--tw-glass-sheen)]" />
@@ -1178,10 +1199,9 @@ const CustomerMenu: React.FC = () => {
                 // (no hard colors—lets the page bleed through)
                 // You can tweak the from/to stops for more/less shine.
                 // Works across light/dark thanks to mix-blend overlay.
-                // @ts-ignore – Tailwind arbitrary props ok
-                ["--tw-glass-sheen" as any]:
+                ["--tw-glass-sheen"]:
                   "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.05))",
-              }}
+              } as React.CSSProperties}
             >
               {/* sheen overlay */}
               <span className="pointer-events-none absolute inset-0 rounded-[22px] mix-blend-overlay opacity-80 [background:var(--tw-glass-sheen)]" />

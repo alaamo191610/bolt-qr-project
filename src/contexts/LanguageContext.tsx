@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { trackMenuEvents } from '../lib/firebase';
 
 export type Language = 'en' | 'ar';
@@ -17,7 +17,9 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 // -----------------------------------------------------
 // 1) ENGLISH (en)
 // -----------------------------------------------------
-const translations: Record<Language, any> = {
+type TranslationTree = { [key: string]: string | TranslationTree };
+
+const translations: Record<Language, TranslationTree> = {
   en: {
     common: {
       loading: "Getting things ready for you…",
@@ -1314,6 +1316,32 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return new Intl.DateTimeFormat(locale, { weekday: format }).format(date);
   };
 
+  const updateDocumentDirection = useCallback((lang: Language) => {
+    const isRTL = lang === 'ar';
+    document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+    document.documentElement.lang = lang;
+    document.documentElement.style.fontFamily = 'var(--font-playpen-arabic)';
+    document.body.classList.toggle('rtl', isRTL);
+  }, []);
+
+  const setLanguage = useCallback((lang: Language) => {
+    setLanguageState((previousLanguage) => {
+      if (previousLanguage !== lang) {
+        trackMenuEvents.languageChanged(previousLanguage, lang);
+      }
+      return lang;
+    });
+    updateDocumentDirection(lang);
+
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get('lang') !== lang) {
+      currentUrl.searchParams.set('lang', lang);
+      window.history.replaceState({}, '', currentUrl.toString());
+    }
+
+    localStorage.setItem('restaurant-language', lang);
+  }, [updateDocumentDirection]);
+
   useEffect(() => {
     const initializeLanguage = () => {
       const isValidLang = (lang: string | null): lang is Language =>
@@ -1387,56 +1415,17 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleAdminLanguageLoaded as EventListener
       );
     };
-  }, []);
+  }, [setLanguage, updateDocumentDirection]);
 
-
-  const updateDocumentDirection = (lang: Language) => {
-    const isRTL = lang === 'ar';
-    document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
-    document.documentElement.lang = lang;
-
-    // Update font family based on language
-    if (isRTL) {
-      document.documentElement.style.fontFamily = 'var(--font-playpen-arabic)';
-    } else {
-      document.documentElement.style.fontFamily = 'var(--font-playpen-arabic)';
-    }
-
-    // Update body class for RTL styling
-    if (isRTL) {
-      document.body.classList.add('rtl');
-    } else {
-      document.body.classList.remove('rtl');
-    }
-  };
-
-  const setLanguage = (lang: Language) => {
-    const previousLanguage = language;
-
-    setLanguageState(lang);
-    updateDocumentDirection(lang);
-
-    // Track language change
-    if (previousLanguage !== lang) {
-      trackMenuEvents.languageChanged(previousLanguage, lang);
-    }
-
-    // Update URL parameter only if it's different
-    const currentUrl = new URL(window.location.href);
-    const currentLang = currentUrl.searchParams.get('lang');
-
-    if (currentLang !== lang) {
-      currentUrl.searchParams.set('lang', lang);
-      window.history.replaceState({}, '', currentUrl.toString());
-    }
-
-    // Always update localStorage
-    localStorage.setItem('restaurant-language', lang);
-  };
 
   const t = (key: string, params?: Record<string, string>): string => {
-    const getNestedTranslation = (obj: any, path: string): string | undefined => {
-      return path.split('.').reduce((acc, part) => acc?.[part], obj);
+    const getNestedTranslation = (obj: TranslationTree, path: string): string | undefined => {
+      let current: string | TranslationTree | undefined = obj;
+      for (const part of path.split('.')) {
+        if (!current || typeof current === 'string') return undefined;
+        current = current[part];
+      }
+      return typeof current === 'string' ? current : undefined;
     };
 
     const value = getNestedTranslation(translations[language], key);

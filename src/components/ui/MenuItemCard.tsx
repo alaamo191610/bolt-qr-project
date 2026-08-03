@@ -23,7 +23,8 @@ type CartLine = {
     qty?: number;
   }[];
   options?: { optionId: string; qty?: number }[];
-  comboChildren?: { childMenuId: string; notes?: string }[];
+  comboChildren?: { groupId: string; childMenuId: string; notes?: string }[];
+  priceDelta?: number;
 };
 
 /* ---------- Types ---------- */
@@ -67,6 +68,10 @@ export interface MenuItem {
   // ingredient-driven customization
   custom_ingredients?: { id: string; action: "normal" | "no" | "extra" }[];
   price_delta?: number;
+  checkout_payload?: CartLine;
+  portion_grams?: number;
+  nutrition?: { cal?: number; protein?: number; carbs?: number; fat?: number };
+  allergens?: string[];
 }
 
 interface Props {
@@ -87,18 +92,22 @@ interface Props {
 function track(name: string, props?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   try {
-    (window as any).dataLayer?.push({ event: name, ...props });
-  } catch { }
+    window.dataLayer?.push({ event: name, ...props });
+  } catch {
+    // Analytics must never interrupt ordering.
+  }
   try {
     window.dispatchEvent(
       new CustomEvent("analytics:event", { detail: { name, props } })
     );
-  } catch { }
+  } catch {
+    // Analytics must never interrupt ordering.
+  }
 }
 
 /* ---------- small motion helpers ---------- */
 function onAnimationFinish(a: Animation) {
-  const f = (a as any).finished as Promise<Animation> | undefined;
+  const f = a.finished;
   return (
     f?.then(() => { }) ??
     new Promise<void>((r) =>
@@ -140,7 +149,8 @@ async function ensureCartAnchor(
   temp.setAttribute("data-cart-anchor", "header-temp");
   temp.style.position = "fixed";
   temp.style.top = "16px";
-  isRTL ? (temp.style.left = "16px") : (temp.style.right = "16px");
+  if (isRTL) temp.style.left = "16px";
+  else temp.style.right = "16px";
   temp.style.width = "1px";
   temp.style.height = "1px";
   temp.style.pointerEvents = "none";
@@ -210,40 +220,6 @@ async function flyToHeaderFromRect(
   if (isTemp) anchor.remove();
 }
 
-/* ---------- NEW: “VS” compare icon (two squares + VS badge) ---------- */
-const CompareIconVS: React.FC<{ className?: string; active?: boolean }> = ({
-  className,
-  active,
-}) => (
-  <span
-    className={[
-      "relative inline-flex items-center justify-center",
-      className || "",
-    ].join(" ")}
-  >
-    <span className="flex gap-0.5">
-      <span
-        className={`w-3.5 h-3.5 rounded-[3px] ${active ? "bg-white/90" : "bg-slate-500/80 dark:bg-slate-400/80"
-          }`}
-      />
-      <span
-        className={`w-3.5 h-3.5 rounded-[3px] ${active ? "bg-white/70" : "bg-slate-400/70 dark:bg-slate-500/70"
-          }`}
-      />
-    </span>
-    <span
-      aria-hidden="true"
-      className={`absolute -bottom-1 -right-2 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-extrabold ${active
-        ? "bg-white text-emerald-600"
-        : "bg-emerald-600 text-white dark:bg-emerald-500"
-        }`}
-      style={{ lineHeight: 1 }}
-    >
-      VS
-    </span>
-  </span>
-);
-
 /* ---------- component ---------- */
 const MenuItemCard: React.FC<Props> = ({
   item,
@@ -260,8 +236,8 @@ const MenuItemCard: React.FC<Props> = ({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   // Safe i18n → always a string (prevents TS2322 on aria/title)
-  const tt = (key: string, fallback: string, values?: any): string => {
-    const v = t?.(key as any, values) as unknown;
+  const tt = (key: string, fallback: string, values?: Record<string, string>): string => {
+    const v = t(key, values);
     return typeof v === "string" ? v : v == null ? fallback : String(v);
   };
 
@@ -399,8 +375,9 @@ const MenuItemCard: React.FC<Props> = ({
     }));
     const selected_modifiers = ingList.flatMap((i) => {
       const a = ingChoice[i.id];
-      if (a === "no") return [`ing:${i.id}:no`];
-      if (a === "extra") return [`ing:${i.id}:extra`];
+      const name = isRTL ? i.name_ar || i.name_en : i.name_en;
+      if (a === "no") return [`${isRTL ? "بدون" : "No"} ${name}`];
+      if (a === "extra") return [`${isRTL ? "إضافي" : "Extra"} ${name}`];
       return [];
     });
     const payload: MenuItem = {
@@ -492,10 +469,7 @@ const MenuItemCard: React.FC<Props> = ({
       action: p.action === "remove" ? "no" : "extra", // your cart expects "no"|"extra"
     }));
 
-    // Optional: include options/combos in the cart item (for display later)
-    const selected_options = (line.options || []).map(
-      (o) => `opt:${o.optionId}${o.qty && o.qty > 1 ? `x${o.qty}` : ""}`
-    );
+    const selected_options = line.displayLabels || [];
 
     // Build the payload your current onAdd() understands
     const cartItem: MenuItem = {
@@ -503,12 +477,10 @@ const MenuItemCard: React.FC<Props> = ({
       // keep base item fields
       notes: line.notes || "",
       custom_ingredients,
-      price_delta: 0, // Cart UI can stay simple; pricing is recomputed server-side at checkout
+      price_delta: Number(line.priceDelta || 0),
       selected_modifiers: selected_options, // optional display chip support
+      checkout_payload: line,
     } as MenuItem;
-
-    // Attach the full payload for checkout (Edge Function)
-    (cartItem as any).edgePayload = line;
 
     onAdd(cartItem);
     setOpenMenuId(null);
@@ -690,7 +662,7 @@ const MenuItemCard: React.FC<Props> = ({
                       if (item.has_modifiers) {
                         setOpenMenuId(item.id);
                       } else {
-                        onPlus(e as any);
+                        onPlus(e);
                       }
                     }}
                     disabled={!isAvailable}
@@ -814,7 +786,7 @@ const MenuItemCard: React.FC<Props> = ({
                     <p
                       dir="auto"
                       lang={isRTL ? "ar" : "en"}
-                      style={{ unicodeBidi: "plaintext" as any }}
+                      style={{ unicodeBidi: "plaintext" }}
                       className="mt-1 text-slate-500 dark:text-slate-400 text-[15px] leading-snug line-clamp-2"
                     >
                       {displayDesc}
@@ -1117,13 +1089,17 @@ const MenuItemCard: React.FC<Props> = ({
                         if (quantity === 0) {
                           try {
                             await Promise.resolve(addWithOptions(rect));
-                          } catch { }
+                          } catch {
+                            // The cart state remains unchanged when the animation/action fails.
+                          }
                           return;
                         }
                         // Otherwise, confirm the pending +/- changes
                         try {
                           await commitPending(rect);
-                        } catch { }
+                        } catch {
+                          // The cart state remains unchanged when the animation/action fails.
+                        }
                       }}
                       className="rounded-xl btn-primary text-white py-3 px-6 font-semibold shadow-lg active:scale-[.99] transition
                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500"

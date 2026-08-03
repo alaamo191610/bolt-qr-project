@@ -18,7 +18,7 @@ const handleResponse = async (res: Response) => {
       if (errorData && errorData.error) {
         errorMsg = errorData.error;
       }
-    } catch (e) {
+    } catch {
       // Not JSON or no error field, backup to statusText
     }
     throw new Error(errorMsg);
@@ -34,7 +34,7 @@ export const api = {
     return handleResponse(res);
   },
 
-  async post(endpoint: string, body: any) {
+  async post(endpoint: string, body: unknown) {
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: getHeaders(),
@@ -43,7 +43,7 @@ export const api = {
     return handleResponse(res);
   },
 
-  async put(endpoint: string, body: any) {
+  async put(endpoint: string, body: unknown) {
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'PUT',
       headers: getHeaders(),

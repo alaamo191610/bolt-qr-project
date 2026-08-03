@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -17,6 +17,7 @@ import { UploadCloud, Loader2, XCircle } from "lucide-react";
 import AdminOptionsPanel from "../admin/AdminOptionsPanel"; // adjust path
 import { SeedDataButton } from "./SeedDataButton";
 import { api } from "../../services/api";
+import { getErrorMessage } from "../../utils/errors";
 
 interface Category {
   id: string;
@@ -392,8 +393,8 @@ const ImageUploadField = ({
       const imageUrl = data.url;
 
       onChange(imageUrl);
-    } catch (err: any) {
-      console.error("Upload failed:", err.message);
+    } catch (err) {
+      console.error("Upload failed:", getErrorMessage(err));
       setUploadError("Upload failed. Please try again.");
     } finally {
       setUploading(false);
@@ -594,38 +595,7 @@ const DigitalMenu: React.FC = () => {
   };
 
   // Data fetching
-  useEffect(() => {
-    if (!user) return;
-
-    fetchItems();
-    fetchCategories();
-    fetchIngredients();
-
-    // Prevent component reload on tab switch
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        // Tab became visible - refresh data if needed
-        const lastFetch = sessionStorage.getItem("lastDataFetch");
-        const now = Date.now();
-
-        // Only refetch if more than 5 minutes have passed
-        if (!lastFetch || now - parseInt(lastFetch) > 300000) {
-          fetchItems();
-          fetchCategories();
-          fetchIngredients();
-          sessionStorage.setItem("lastDataFetch", now.toString());
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [user]);
-
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -633,7 +603,7 @@ const DigitalMenu: React.FC = () => {
 
       // Always fetch fresh data when explicitly called
       // Only use cache on initial component mount
-      const shouldUseCache = !items.length && !document.hidden;
+      const shouldUseCache = !document.hidden;
 
       if (shouldUseCache) {
         const cachedItems = sessionStorage.getItem(`menuItems_${user.id}`);
@@ -644,7 +614,7 @@ const DigitalMenu: React.FC = () => {
             if (
               parsed &&
               Array.isArray(parsed.data) &&
-              parsed.data.every((i: any) => !isNaN(Number(i.price)))
+              parsed.data.every((i: MenuItem) => !isNaN(Number(i.price)))
             ) {
               if (Date.now() - parsed.timestamp < 300000) {
                 setItems(parsed.data);
@@ -688,9 +658,9 @@ const DigitalMenu: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const data = await menuService.getCategories();
       setCategories(data || []);
@@ -698,9 +668,9 @@ const DigitalMenu: React.FC = () => {
       console.error("Error fetching categories:", error);
       return [];
     }
-  };
+  }, []);
 
-  const fetchIngredients = async () => {
+  const fetchIngredients = useCallback(async () => {
     try {
       const data = await menuService.getIngredients();
       setIngredients(data || []);
@@ -708,7 +678,34 @@ const DigitalMenu: React.FC = () => {
       console.error("Error fetching ingredients:", error);
       return [];
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    void fetchItems();
+    void fetchCategories();
+    void fetchIngredients();
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const lastFetch = sessionStorage.getItem("lastDataFetch");
+        const now = Date.now();
+
+        if (!lastFetch || now - parseInt(lastFetch) > 300000) {
+          void fetchItems();
+          void fetchCategories();
+          void fetchIngredients();
+          sessionStorage.setItem("lastDataFetch", now.toString());
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user, fetchItems, fetchCategories, fetchIngredients]);
 
   // Category management
   const handleAddCategory = async (categoryData: {
@@ -827,7 +824,7 @@ const DigitalMenu: React.FC = () => {
         {
           loading: form.id ? t("common.saving") : t("common.adding"),
           success: form.id ? t("common.updated") : t("common.added"),
-          error: (err: any) => err.message || t("common.errorOccurred") || "Something went wrong",
+          error: (err: unknown) => getErrorMessage(err, t("common.errorOccurred") || "Something went wrong"),
         }
       );
 

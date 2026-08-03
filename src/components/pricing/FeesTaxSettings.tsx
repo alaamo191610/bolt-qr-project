@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_BILLING, type BillingSettings } from '../../pricing/types';
 import { adminService } from '../../services/adminService';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function FeesTaxSettings({ adminId }:{ adminId: string }){
   const { t, isRTL } = useLanguage();
@@ -34,8 +35,8 @@ export default function FeesTaxSettings({ adminId }:{ adminId: string }){
     try{
       await adminService.saveBillingSettings(adminId, settings);
       setDirty(false);
-    }catch(e:any){
-      alert(`${t('common.error') || 'Error'}: ${e?.message || ''}`);
+    }catch(error){
+      alert(`${t('common.error') || 'Error'}: ${getErrorMessage(error, '')}`);
     }finally{
       setSaving(false);
     }

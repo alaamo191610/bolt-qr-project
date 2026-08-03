@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Menu, X, Search, LogOut } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useAdminMonetary } from "../../hooks/useAdminMonetary";
@@ -12,7 +13,7 @@ interface ResponsiveLayoutProps {
   navigation: Array<{
     id: string;
     name: string;
-    icon: React.ComponentType<any>;
+    icon: LucideIcon;
   }>;
   activeTab: string;
   setActiveTab: (tab: string) => void;

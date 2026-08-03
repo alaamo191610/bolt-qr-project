@@ -7,6 +7,7 @@ import { formatPrice } from '../../pricing/usePrice';
 import type { MenuItem } from './MenuItemCard';
 import type { Promotion } from '../../pricing/types';
 import { HiXMark } from "react-icons/hi2";
+import { getErrorMessage } from '../../utils/errors';
 
 interface CartItem extends MenuItem { quantity: number; }
 
@@ -18,7 +19,8 @@ interface Props {
   onClose: () => void;
   onAdd: (item: MenuItem) => void;
   onRemove: (id: string) => void;
-  onPlaceOrder: () => void;
+  orderType: 'dine_in' | 'take_away';
+  onPlaceOrder: (checkout: { promotionCode?: string; tipPercent: number }) => void;
 
   /** NEW: High-impact UX hooks */
   onEditItem?: (item: CartItem) => void;                 // open modifiers editor for this line
@@ -27,7 +29,7 @@ interface Props {
 }
 
 // helpers aware of extras (price_delta)
-const unitTotal = (item: CartItem) => (item.price || 0) + ((item as any).price_delta || 0);
+const unitTotal = (item: CartItem) => (item.price || 0) + (item.price_delta || 0);
 const lineTotal = (item: CartItem) => unitTotal(item) * (item.quantity || 0);
 
 const CartDrawer: React.FC<Props> = ({
@@ -38,6 +40,7 @@ const CartDrawer: React.FC<Props> = ({
   onClose,
   onAdd,
   onRemove,
+  orderType,
   onPlaceOrder,
   onEditItem,
   onClearCart,
@@ -78,7 +81,7 @@ const CartDrawer: React.FC<Props> = ({
   );
 
   const extras = useMemo(
-    () => cart.reduce((s, it) => s + (((it as any).price_delta || 0) * (it.quantity || 0)), 0),
+    () => cart.reduce((s, it) => s + ((it.price_delta || 0) * (it.quantity || 0)), 0),
     [cart]
   );
 
@@ -90,17 +93,21 @@ const CartDrawer: React.FC<Props> = ({
   const breakdown = useMemo(() => {
     // subtotal already includes extras; extras line is informational
     if (moneyLoading || !billing) {
-      const delivery = billing?.deliveryFee ?? 0;
+      const delivery = orderType === 'take_away' ? (billing?.deliveryFee ?? 0) : 0;
       return { discount: 0, vat: 0, service: 0, delivery, total: subtotal + delivery };
     }
-    const { discount, vat, service, total } = computeTotals(subtotal, billing, appliedPromo);
-    return { discount, vat, service, delivery: billing.deliveryFee, total };
-  }, [subtotal, billing, appliedPromo, moneyLoading]);
+    const delivery = orderType === 'take_away' ? billing.deliveryFee : 0;
+    const { discount, vat, service, total } = computeTotals(subtotal, billing, appliedPromo, {
+      taxInclusive: prefs.taxInclusive,
+      includeDelivery: orderType === 'take_away',
+    });
+    return { discount, vat, service, delivery, total };
+  }, [subtotal, billing, appliedPromo, moneyLoading, orderType, prefs.taxInclusive]);
 
   /** NEW: tip value (visual add-on; not part of computeTotals unless you decide so) */
   const tipValue = useMemo(() => {
     const pct = Number.isFinite(tipPercent) ? tipPercent : 0;
-    return Math.max(0, Math.round((breakdown.total * pct) / 100));
+    return Math.max(0, Math.round(((breakdown.total * pct) / 100) * 100) / 100);
   }, [breakdown.total, tipPercent]);
 
   // Disable background scroll while open
@@ -151,9 +158,9 @@ const CartDrawer: React.FC<Props> = ({
 
   const nameForIng = (item: CartItem, id: string) => {
     const list = (item.ingredients_details || [])
-      .map((d: any) => d.ingredient)
+      .map((d) => d.ingredient)
       .filter(Boolean);
-    const found = list.find((x: any) => x.id === id);
+    const found = list.find((x) => x.id === id);
     return found ? (isRTL ? found.name_ar : found.name_en) : undefined;
   };
 
@@ -251,8 +258,8 @@ const CartDrawer: React.FC<Props> = ({
               {/* Section: Items */}
               <section className="space-y-3">
                 {cart.map((item) => {
-                  const choices = ((item as any).custom_ingredients || []) as Array<{ id: string; action: 'no' | 'normal' | 'extra' }>;
-                  const delta = ((item as any).price_delta || 0) as number;
+                  const choices = item.custom_ingredients || [];
+                  const delta = item.price_delta || 0;
 
                   return (
                     <div
@@ -332,9 +339,9 @@ const CartDrawer: React.FC<Props> = ({
                           </div>
 
                           {/* Notes (expandable) */}
-                          {!!(item as any).notes && (
+                          {!!item.notes && (
                             <div className="mt-1.5">
-                              <ExpandableText>{(item as any).notes}</ExpandableText>
+                              <ExpandableText>{item.notes}</ExpandableText>
                             </div>
                           )}
 
@@ -366,6 +373,19 @@ const CartDrawer: React.FC<Props> = ({
                                   +{choices.length - 6} {isRTL ? 'أخرى' : 'more'}
                                 </button>
                               )}
+                            </div>
+                          )}
+
+                          {!!item.selected_modifiers?.length && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {item.selected_modifiers.map((label) => (
+                                <span
+                                  key={label}
+                                  className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/40 dark:bg-emerald-900/20 dark:text-emerald-200"
+                                >
+                                  {label}
+                                </span>
+                              ))}
                             </div>
                           )}
 
@@ -438,7 +458,11 @@ const CartDrawer: React.FC<Props> = ({
                   <div className={`flex ${isRTL ? 'flex-row-reverse' : ''} items-center gap-2`}>
                     <input
                       value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value.trim())}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.trim());
+                        setAppliedPromo(null);
+                        setPromoError(null);
+                      }}
                       className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/40 px-3 py-2 text-sm"
                       placeholder={isRTL ? 'ادخل الرمز' : 'Enter code'}
                     />
@@ -450,8 +474,8 @@ const CartDrawer: React.FC<Props> = ({
                           const promo = await (validatePromo?.(promoCode) ?? Promise.resolve(null));
                           if (promo) setAppliedPromo(promo);
                           else setPromoError(isRTL ? 'رمز غير صالح' : 'Invalid code');
-                        } catch {
-                          setPromoError(isRTL ? 'تعذر التحقق' : 'Could not validate');
+                        } catch (error) {
+                          setPromoError(isRTL ? 'رمز الخصم غير صالح أو منتهي' : getErrorMessage(error));
                         } finally { setPromoLoading(false); }
                       }}
                       disabled={promoLoading}
@@ -598,7 +622,10 @@ const CartDrawer: React.FC<Props> = ({
                   </div>
 
                   <button
-                    onClick={onPlaceOrder}
+                    onClick={() => onPlaceOrder({
+                      promotionCode: appliedPromo?.code,
+                      tipPercent,
+                    })}
                     disabled={isOrdering || cart.length === 0 || moneyLoading}
                     className="rounded-xl bg-primary text-white py-4 px-6 font-bold text-lg shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                     title={t('menu.placeOrder')}

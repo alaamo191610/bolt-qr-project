@@ -21,13 +21,17 @@ interface Props {
 /* tiny analytics helper */
 function track(name: string, props?: Record<string, unknown>) {
   try {
-    (window as any).dataLayer?.push({ event: name, ...props });
-  } catch {}
+    window.dataLayer?.push({ event: name, ...props });
+  } catch {
+    // Analytics must never interrupt menu rendering.
+  }
   try {
     window.dispatchEvent(
       new CustomEvent("analytics:event", { detail: { name, props } })
     );
-  } catch {}
+  } catch {
+    // Analytics must never interrupt menu rendering.
+  }
 }
 
 const MenuGrid: React.FC<Props> = ({
@@ -200,9 +204,9 @@ const MenuGrid: React.FC<Props> = ({
                       300
                     )}ms`,
                     // big paint-skip for offscreen cards
-                    contentVisibility: "auto" as any,
-                    containIntrinsicSize: "400px 320px" as any,
-                  }}
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "400px 320px",
+                  } as React.CSSProperties & { contentVisibility: string; containIntrinsicSize: string }}
                 >
                   <div className="h-full">
                     {canCompare ? (
