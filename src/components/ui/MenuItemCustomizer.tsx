@@ -473,10 +473,10 @@ export default function MenuItemCustomizer({
 
   return (
 
-    <div className="h-full flex flex-col bg-white dark:bg-slate-800">
+    <div className="flex h-full min-h-0 flex-col bg-white dark:bg-slate-800">
       {/* Sticky Navbar */}
-      <div className="sticky top-0 z-20 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/50 px-4 h-14 flex items-center justify-between">
-        <div className="opacity-0 transition-opacity duration-300 font-semibold" id="sticky-title">
+      <div className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-slate-100 bg-white/80 px-4 backdrop-blur-md dark:border-slate-700/50 dark:bg-slate-800/80">
+        <div className="opacity-0 transition-opacity duration-300 font-semibold" id="item-customizer-title">
           {/* Title fades in on scroll - simple implementation: just hide for now or show always if we want. 
                Let's show the Name always for context, it's safer UX. */}
           {menu.name_en}
@@ -490,21 +490,23 @@ export default function MenuItemCustomizer({
         </button>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto" style={{ scrollPaddingTop: '3.5rem' }}>
+      {/* Fixed cover image */}
+      {menu.image_url && (
+        <div className="relative h-48 w-full shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 sm:h-60">
+          <img
+            src={menu.image_url}
+            alt={menu.name_en || 'Menu Item'}
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+        </div>
+      )}
 
-        {/* Hero Image */}
-        {menu.image_url && (
-          <div className="relative w-full h-64 sm:h-72">
-            <img
-              src={menu.image_url}
-              alt={menu.name_en || 'Menu Item'}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
-          </div>
-        )}
-
+      {/* Only the content below the cover scrolls */}
+      <div
+        className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain"
+        style={{ scrollPaddingTop: '3.5rem', WebkitOverflowScrolling: 'touch' }}
+      >
         <div className="px-5 py-6">
           {/* Header Info */}
           <div className="mb-8">
@@ -760,7 +762,7 @@ export default function MenuItemCustomizer({
       </div>
 
       {/* Sticky Footer */}
-      <div className="sticky bottom-0 z-20 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+      <div className="z-20 shrink-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
         <div className="flex items-center gap-4 max-w-lg mx-auto w-full">
           {/* Quantity Stepper */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-full p-1">

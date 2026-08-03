@@ -49,14 +49,14 @@ export default function CustomerItemModal({
 
   const modal = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-4"
+      className="fixed inset-0 z-[9999] flex min-h-0 items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-2 py-2 sm:px-4 sm:py-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="item-customizer-title"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl bg-white dark:bg-slate-800 shadow-2xl transform transition-all animate-slide-up rounded-[2.5rem] overflow-hidden max-h-[90vh] flex flex-col ring-1 ring-black/5"
+        className="relative flex h-[calc(100dvh-1rem)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5 transition-all animate-slide-up dark:bg-slate-800 sm:h-[90dvh] sm:max-h-[56rem] sm:rounded-[2.5rem]"
         onClick={(e) => e.stopPropagation()}
       >
         <MenuItemCustomizer
