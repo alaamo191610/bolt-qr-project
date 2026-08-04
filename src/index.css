@@ -5,6 +5,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .pos-receipt-print,
+  .pos-receipt-print * {
+    visibility: visible;
+  }
+
+  .pos-receipt-print {
+    position: absolute !important;
+    inset: 0 !important;
+  }
+}
+
 /* ===============================
    ⬛ BASE STYLES & COLOR THEMES
    =============================== */

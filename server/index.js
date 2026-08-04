@@ -9,6 +9,7 @@ import prisma from './db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { unlink } from 'fs/promises';
+import { createPosRouter } from './pos/routes.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -29,7 +30,7 @@ const corsOptions = {
     }
     return callback(new Error('Origin not allowed by CORS'));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 };
 
 const app = express();
@@ -287,6 +288,14 @@ const publicAdminSelect = {
   max_staff_accounts: true,
   created_at: true,
 };
+
+app.use('/api/pos/v1', createPosRouter({
+  prisma,
+  jwtSecret: JWT_SECRET,
+  authenticateAdmin: authenticate,
+  authRateLimit,
+  io,
+}));
 
 // --- Auth Routes ---
 app.post('/api/auth/login', authRateLimit, async (req, res) => {

@@ -7,8 +7,88 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PosDeviceStatus {
+  ACTIVE
+  INACTIVE
+  REVOKED
+}
+
+enum TillShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  PAY_IN
+  PAY_OUT
+  CASH_DROP
+  ADJUSTMENT
+}
+
+enum DiningSessionStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum CheckStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  VOID
+  CLOSED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  EXTERNAL_CARD
+  HOUSE_ACCOUNT
+  COMPLIMENTARY
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  VOIDED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum OrderSource {
+  QR
+  POS
+  WAITER
+  ONLINE
+  KIOSK
+  API
+}
+
+enum OrderItemStatus {
+  ACTIVE
+  VOIDED
+}
+
 model Admin {
   id                 String   @id @default(uuid()) @db.Uuid
+  organization_id    String?  @db.Uuid
+  default_branch_id  String?  @db.Uuid
   email              String   @unique
   password           String?
   restaurant_name    String?
@@ -38,50 +118,62 @@ model Admin {
   max_menu_items     Int @default(50)
   max_staff_accounts Int @default(1)
 
-  menus       Menu[]
-  tables      Table[]
-  orders      Order[]
-  promotions  Promotion[]
-  categories  Category[]
-  ingredients Ingredient[]
+  organization   Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  default_branch Branch?       @relation("AdminDefaultBranch", fields: [default_branch_id], references: [id], onDelete: SetNull)
+  menus          Menu[]
+  tables         Table[]
+  orders         Order[]
+  promotions     Promotion[]
+  categories     Category[]
+  ingredients    Ingredient[]
+  audit_events   AuditEvent[]
 
+  @@index([organization_id])
+  @@index([default_branch_id])
   @@map("admins")
 }
 
 model Category {
   id         Int      @id @default(autoincrement())
   admin_id   String   @db.Uuid
+  branch_id  String?  @db.Uuid
   name_en    String
   name_ar    String?
   sort_order Int?     @default(0)
   created_at DateTime @default(now()) @db.Timestamptz
 
-  admin Admin  @relation(fields: [admin_id], references: [id], onDelete: Cascade)
-  menus Menu[]
+  admin  Admin   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  menus  Menu[]
 
   @@unique([admin_id, name_en])
   @@index([admin_id])
+  @@index([branch_id])
   @@map("categories")
 }
 
 model Ingredient {
   id         Int      @id @default(autoincrement())
   admin_id   String   @db.Uuid
+  branch_id  String?  @db.Uuid
   name_en    String
   name_ar    String?
   created_at DateTime @default(now()) @db.Timestamptz
 
   admin            Admin            @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  branch           Branch?          @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   menu_ingredients MenuIngredient[]
 
   @@unique([admin_id, name_en])
   @@index([admin_id])
+  @@index([branch_id])
   @@map("ingredients")
 }
 
 model Menu {
   id             Int       @id @default(autoincrement())
   user_id        String?   @db.Uuid
+  branch_id      String?   @db.Uuid
   category_id    Int?
   name_en        String
   name_ar        String?
@@ -100,13 +192,19 @@ model Menu {
   suggested_items_ids Int[]    @default([]) // Manual upsell suggestions (array of menu IDs)
 
   admin                Admin?              @relation(fields: [user_id], references: [id])
+  branch               Branch?             @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   category             Category?           @relation(fields: [category_id], references: [id])
   menu_ingredients     MenuIngredient[]
   order_items          OrderItem[]
   menu_modifier_groups MenuModifierGroup[]
+  combo_groups         ComboGroup[]
   combo_items          ComboGroupItem[]
 
   @@index([user_id])
+  @@index([branch_id])
+  @@index([branch_id, available, deleted_at])
+  @@index([user_id, available, deleted_at])
+  @@index([category_id])
   @@map("menus")
 }
 
@@ -122,6 +220,7 @@ model MenuIngredient {
   ingredient Ingredient @relation(fields: [ingredient_id], references: [id], onDelete: Cascade)
 
   @@id([menu_id, ingredient_id])
+  @@index([ingredient_id])
   @@map("menu_ingredients")
 }
 
@@ -153,6 +252,7 @@ model ModifierOption {
 
   modifier_group ModifierGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
+  @@index([group_id])
   @@map("modifier_options")
 }
 
@@ -164,6 +264,7 @@ model MenuModifierGroup {
   modifier_group ModifierGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
   @@id([menu_id, group_id])
+  @@index([group_id])
   @@map("menu_modifier_groups")
 }
 
@@ -174,8 +275,10 @@ model ComboGroup {
   max_select Int?     @default(1)
   created_at DateTime @default(now()) @db.Timestamptz
 
+  menu              Menu             @relation(fields: [menu_id], references: [id], onDelete: Cascade)
   combo_group_items ComboGroupItem[]
 
+  @@index([menu_id])
   @@map("combo_groups")
 }
 
@@ -189,72 +292,100 @@ model ComboGroupItem {
   combo_group ComboGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
   menus       Menu       @relation(fields: [child_menu_id], references: [id], onDelete: Cascade)
 
+  @@index([group_id])
+  @@index([child_menu_id])
   @@map("combo_group_items")
 }
 
 model Table {
   id         Int      @id @default(autoincrement())
   admin_id   String?  @db.Uuid
+  branch_id  String?  @db.Uuid
   code       String
   capacity   Int?     @default(4)
   status     String?  @default("available")
   created_at DateTime @default(now()) @db.Timestamptz
 
-  admin      Admin?      @relation(fields: [admin_id], references: [id])
-  orders     Order[]
-  promotions Promotion[]
+  admin           Admin?          @relation(fields: [admin_id], references: [id])
+  branch          Branch?         @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  orders          Order[]
+  promotions      Promotion[]
+  dining_sessions DiningSession[]
 
   @@unique([admin_id, code])
+  @@index([branch_id, status])
   @@map("tables")
 }
 
 model Order {
-  id             Int      @id @default(autoincrement())
-  admin_id       String?  @db.Uuid
+  id             Int         @id @default(autoincrement())
+  admin_id       String?     @db.Uuid
+  branch_id      String?     @db.Uuid
+  check_id       String?     @db.Uuid
   table_id       Int?
-  total          Decimal? @default(0) @db.Decimal(10, 2)
-  subtotal       Decimal  @default(0) @db.Decimal(10, 2)
-  discount       Decimal  @default(0) @db.Decimal(10, 2)
-  vat            Decimal  @default(0) @db.Decimal(10, 2)
-  service_charge Decimal  @default(0) @db.Decimal(10, 2)
-  delivery_fee   Decimal  @default(0) @db.Decimal(10, 2)
-  tip            Decimal  @default(0) @db.Decimal(10, 2)
-  promotion_id   String?  @db.Uuid
+  total          Decimal?    @default(0) @db.Decimal(10, 2)
+  subtotal       Decimal     @default(0) @db.Decimal(10, 2)
+  discount       Decimal     @default(0) @db.Decimal(10, 2)
+  vat            Decimal     @default(0) @db.Decimal(10, 2)
+  service_charge Decimal     @default(0) @db.Decimal(10, 2)
+  delivery_fee   Decimal     @default(0) @db.Decimal(10, 2)
+  tip            Decimal     @default(0) @db.Decimal(10, 2)
+  promotion_id   String?     @db.Uuid
   promotion_code String?
-  status         String?  @default("pending")
-  type           String?  @default("dine_in") // "dine_in" or "take_away"
-  created_at     DateTime @default(now()) @db.Timestamptz
-  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz
+  status         String?     @default("pending")
+  type           String?     @default("dine_in") // "dine_in" or "take_away"
+  source         OrderSource @default(QR)
+  version        Int         @default(1)
+  created_at     DateTime    @default(now()) @db.Timestamptz
+  updated_at     DateTime    @default(now()) @updatedAt @db.Timestamptz
 
   admin       Admin?      @relation(fields: [admin_id], references: [id])
+  branch      Branch?     @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  check       Check?      @relation(fields: [check_id], references: [id], onDelete: SetNull)
   table       Table?      @relation(fields: [table_id], references: [id])
   order_items OrderItem[]
   promotion   Promotion?  @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
 
   @@index([admin_id])
+  @@index([branch_id, created_at])
+  @@index([branch_id, status, created_at])
+  @@index([check_id, created_at])
   @@index([status])
+  @@index([admin_id, created_at])
+  @@index([admin_id, status, created_at])
+  @@index([table_id, created_at])
   @@map("orders")
 }
 
 model OrderItem {
-  id             Int      @id @default(autoincrement())
-  order_id       Int?
-  menu_id        Int?
-  quantity       Int?     @default(1)
-  price_at_order Decimal  @db.Decimal(10, 2)
-  note           String?
-  customizations Json?    @default("{}")
-  created_at     DateTime @default(now()) @db.Timestamptz
+  id                    Int             @id @default(autoincrement())
+  order_id              Int?
+  menu_id               Int?
+  quantity              Int?            @default(1)
+  price_at_order        Decimal         @db.Decimal(10, 2)
+  note                  String?
+  customizations        Json?           @default("{}")
+  status                OrderItemStatus @default(ACTIVE)
+  voided_by_employee_id String?         @db.Uuid
+  void_reason           String?
+  voided_at             DateTime?       @db.Timestamptz
+  created_at            DateTime        @default(now()) @db.Timestamptz
 
-  order Order? @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  menu  Menu?  @relation(fields: [menu_id], references: [id])
+  order     Order?    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  menu      Menu?     @relation(fields: [menu_id], references: [id])
+  voided_by Employee? @relation("OrderItemVoidedBy", fields: [voided_by_employee_id], references: [id], onDelete: SetNull)
 
+  @@index([order_id])
+  @@index([order_id, status])
+  @@index([menu_id])
+  @@index([voided_by_employee_id, voided_at])
   @@map("order_items")
 }
 
 model Promotion {
   id          String    @id @default(uuid()) @db.Uuid
   admin_id    String    @db.Uuid
+  branch_id   String?   @db.Uuid
   code        String
   type        String    @default("percent")
   value       Decimal   @db.Decimal(10, 2)
@@ -269,12 +400,364 @@ model Promotion {
   created_at  DateTime  @default(now()) @db.Timestamptz
 
   admin  Admin   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   table  Table?  @relation(fields: [table_id], references: [id], onDelete: SetNull)
   orders Order[]
 
   @@unique([admin_id, code])
   @@index([admin_id, active])
+  @@index([branch_id, active])
   @@map("promotions")
+}
+
+model Organization {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  slug       String   @unique
+  active     Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  admins       Admin[]
+  branches     Branch[]
+  employees    Employee[]
+  pos_roles    PosRole[]
+  audit_events AuditEvent[]
+
+  @@index([active])
+  @@map("organizations")
+}
+
+model Branch {
+  id                String   @id @default(uuid()) @db.Uuid
+  organization_id   String   @db.Uuid
+  code              String
+  name              String
+  timezone          String   @default("Asia/Amman")
+  currency          String   @default("JOD")
+  active            Boolean  @default(true)
+  next_check_number Int      @default(1)
+  created_at        DateTime @default(now()) @db.Timestamptz
+  updated_at        DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  organization       Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  default_for_admins Admin[]              @relation("AdminDefaultBranch")
+  categories         Category[]
+  ingredients        Ingredient[]
+  menus              Menu[]
+  tables             Table[]
+  orders             Order[]
+  promotions         Promotion[]
+  employee_roles     EmployeeBranchRole[]
+  devices            PosDevice[]
+  registers          Register[]
+  dining_sessions    DiningSession[]
+  checks             Check[]
+  payments           Payment[]
+  audit_events       AuditEvent[]
+  idempotency_keys   ApiIdempotencyKey[]
+
+  @@unique([organization_id, code])
+  @@index([organization_id, active])
+  @@map("branches")
+}
+
+model Employee {
+  id              String         @id @default(uuid()) @db.Uuid
+  organization_id String         @db.Uuid
+  email           String?
+  display_name    String
+  pin_hash        String?
+  status          EmployeeStatus @default(ACTIVE)
+  created_at      DateTime       @default(now()) @db.Timestamptz
+  updated_at      DateTime       @default(now()) @updatedAt @db.Timestamptz
+
+  organization       Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  branch_roles       EmployeeBranchRole[]
+  till_shifts        TillShift[]
+  cash_movements     CashMovement[]
+  opened_sessions    DiningSession[]      @relation("DiningSessionOpenedBy")
+  opened_checks      Check[]              @relation("CheckOpenedBy")
+  closed_checks      Check[]              @relation("CheckClosedBy")
+  captured_payments  Payment[]            @relation("PaymentCapturedBy")
+  approved_refunds   Refund[]             @relation("RefundApprovedBy")
+  voided_order_items OrderItem[]          @relation("OrderItemVoidedBy")
+  audit_events       AuditEvent[]         @relation("AuditEmployeeActor")
+
+  @@unique([organization_id, email])
+  @@index([organization_id, status])
+  @@map("employees")
+}
+
+model PosRole {
+  id              String   @id @default(uuid()) @db.Uuid
+  organization_id String   @db.Uuid
+  code            String
+  name            String
+  permissions     String[] @default([])
+  system          Boolean  @default(false)
+  created_at      DateTime @default(now()) @db.Timestamptz
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  organization Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  assignments  EmployeeBranchRole[]
+
+  @@unique([organization_id, code])
+  @@index([organization_id])
+  @@map("pos_roles")
+}
+
+model EmployeeBranchRole {
+  employee_id String   @db.Uuid
+  branch_id   String   @db.Uuid
+  role_id     String   @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz
+
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  role     PosRole  @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([employee_id, branch_id, role_id])
+  @@index([branch_id, role_id])
+  @@index([employee_id, branch_id])
+  @@map("employee_branch_roles")
+}
+
+model PosDevice {
+  id           String          @id @default(uuid()) @db.Uuid
+  branch_id    String          @db.Uuid
+  code         String
+  name         String
+  platform     String?
+  status       PosDeviceStatus @default(ACTIVE)
+  last_seen_at DateTime?       @db.Timestamptz
+  created_at   DateTime        @default(now()) @db.Timestamptz
+  updated_at   DateTime        @default(now()) @updatedAt @db.Timestamptz
+
+  branch   Branch    @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  register Register?
+
+  @@unique([branch_id, code])
+  @@index([branch_id, status])
+  @@index([last_seen_at])
+  @@map("pos_devices")
+}
+
+model Register {
+  id         String   @id @default(uuid()) @db.Uuid
+  branch_id  String   @db.Uuid
+  device_id  String?  @unique @db.Uuid
+  code       String
+  name       String
+  active     Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  branch Branch      @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  device PosDevice?  @relation(fields: [device_id], references: [id], onDelete: SetNull)
+  shifts TillShift[]
+
+  @@unique([branch_id, code])
+  @@index([branch_id, active])
+  @@map("registers")
+}
+
+model TillShift {
+  id            String          @id @default(uuid()) @db.Uuid
+  register_id   String          @db.Uuid
+  employee_id   String          @db.Uuid
+  status        TillShiftStatus @default(OPEN)
+  opening_cash  Decimal         @default(0) @db.Decimal(12, 2)
+  expected_cash Decimal?        @db.Decimal(12, 2)
+  counted_cash  Decimal?        @db.Decimal(12, 2)
+  opened_at     DateTime        @default(now()) @db.Timestamptz
+  closed_at     DateTime?       @db.Timestamptz
+  created_at    DateTime        @default(now()) @db.Timestamptz
+  updated_at    DateTime        @default(now()) @updatedAt @db.Timestamptz
+
+  register       Register       @relation(fields: [register_id], references: [id], onDelete: Restrict)
+  employee       Employee       @relation(fields: [employee_id], references: [id], onDelete: Restrict)
+  cash_movements CashMovement[]
+  payments       Payment[]
+
+  @@index([register_id, status, opened_at])
+  @@index([employee_id, opened_at])
+  @@map("till_shifts")
+}
+
+model CashMovement {
+  id            String           @id @default(uuid()) @db.Uuid
+  till_shift_id String           @db.Uuid
+  employee_id   String           @db.Uuid
+  type          CashMovementType
+  amount        Decimal          @db.Decimal(12, 2)
+  reason        String
+  note          String?
+  created_at    DateTime         @default(now()) @db.Timestamptz
+
+  till_shift TillShift @relation(fields: [till_shift_id], references: [id], onDelete: Restrict)
+  employee   Employee  @relation(fields: [employee_id], references: [id], onDelete: Restrict)
+
+  @@index([till_shift_id, created_at])
+  @@index([employee_id, created_at])
+  @@map("cash_movements")
+}
+
+model DiningSession {
+  id                    String              @id @default(uuid()) @db.Uuid
+  branch_id             String              @db.Uuid
+  table_id              Int?
+  opened_by_employee_id String?             @db.Uuid
+  status                DiningSessionStatus @default(OPEN)
+  guest_count           Int                 @default(1)
+  version               Int                 @default(1)
+  opened_at             DateTime            @default(now()) @db.Timestamptz
+  closed_at             DateTime?           @db.Timestamptz
+  created_at            DateTime            @default(now()) @db.Timestamptz
+  updated_at            DateTime            @default(now()) @updatedAt @db.Timestamptz
+
+  branch    Branch    @relation(fields: [branch_id], references: [id], onDelete: Restrict)
+  table     Table?    @relation(fields: [table_id], references: [id], onDelete: SetNull)
+  opened_by Employee? @relation("DiningSessionOpenedBy", fields: [opened_by_employee_id], references: [id], onDelete: SetNull)
+  checks    Check[]
+
+  @@index([branch_id, status, opened_at])
+  @@index([table_id, status])
+  @@map("dining_sessions")
+}
+
+model Check {
+  id                    String      @id @default(uuid()) @db.Uuid
+  branch_id             String      @db.Uuid
+  dining_session_id     String?     @db.Uuid
+  number                Int
+  status                CheckStatus @default(OPEN)
+  currency              String      @default("JOD")
+  subtotal              Decimal     @default(0) @db.Decimal(12, 2)
+  discount              Decimal     @default(0) @db.Decimal(12, 2)
+  vat                   Decimal     @default(0) @db.Decimal(12, 2)
+  service_charge        Decimal     @default(0) @db.Decimal(12, 2)
+  delivery_fee          Decimal     @default(0) @db.Decimal(12, 2)
+  tip                   Decimal     @default(0) @db.Decimal(12, 2)
+  total                 Decimal     @default(0) @db.Decimal(12, 2)
+  paid                  Decimal     @default(0) @db.Decimal(12, 2)
+  balance               Decimal     @default(0) @db.Decimal(12, 2)
+  opened_by_employee_id String?     @db.Uuid
+  closed_by_employee_id String?     @db.Uuid
+  version               Int         @default(1)
+  opened_at             DateTime    @default(now()) @db.Timestamptz
+  closed_at             DateTime?   @db.Timestamptz
+  void_reason           String?
+  voided_at             DateTime?   @db.Timestamptz
+  updated_at            DateTime    @default(now()) @updatedAt @db.Timestamptz
+
+  branch         Branch         @relation(fields: [branch_id], references: [id], onDelete: Restrict)
+  dining_session DiningSession? @relation(fields: [dining_session_id], references: [id], onDelete: SetNull)
+  opened_by      Employee?      @relation("CheckOpenedBy", fields: [opened_by_employee_id], references: [id], onDelete: SetNull)
+  closed_by      Employee?      @relation("CheckClosedBy", fields: [closed_by_employee_id], references: [id], onDelete: SetNull)
+  orders         Order[]
+  payments       Payment[]
+
+  @@unique([branch_id, number])
+  @@index([branch_id, status, opened_at])
+  @@index([dining_session_id])
+  @@index([opened_by_employee_id, opened_at])
+  @@map("checks")
+}
+
+model Payment {
+  id                      String        @id @default(uuid()) @db.Uuid
+  branch_id               String        @db.Uuid
+  check_id                String        @db.Uuid
+  till_shift_id           String?       @db.Uuid
+  captured_by_employee_id String?       @db.Uuid
+  method                  PaymentMethod
+  status                  PaymentStatus @default(PENDING)
+  amount                  Decimal       @db.Decimal(12, 2)
+  tip                     Decimal       @default(0) @db.Decimal(12, 2)
+  currency                String        @default("JOD")
+  provider                String?
+  provider_reference      String?
+  idempotency_key         String
+  metadata                Json          @default("{}")
+  created_at              DateTime      @default(now()) @db.Timestamptz
+  updated_at              DateTime      @default(now()) @updatedAt @db.Timestamptz
+
+  branch      Branch     @relation(fields: [branch_id], references: [id], onDelete: Restrict)
+  check       Check      @relation(fields: [check_id], references: [id], onDelete: Restrict)
+  till_shift  TillShift? @relation(fields: [till_shift_id], references: [id], onDelete: SetNull)
+  captured_by Employee?  @relation("PaymentCapturedBy", fields: [captured_by_employee_id], references: [id], onDelete: SetNull)
+  refunds     Refund[]
+
+  @@unique([branch_id, idempotency_key])
+  @@index([check_id, status, created_at])
+  @@index([till_shift_id, status, created_at])
+  @@index([branch_id, created_at])
+  @@index([provider, provider_reference])
+  @@map("payments")
+}
+
+model Refund {
+  id                      String       @id @default(uuid()) @db.Uuid
+  payment_id              String       @db.Uuid
+  approved_by_employee_id String?      @db.Uuid
+  status                  RefundStatus @default(PENDING)
+  amount                  Decimal      @db.Decimal(12, 2)
+  reason                  String
+  idempotency_key         String
+  metadata                Json         @default("{}")
+  created_at              DateTime     @default(now()) @db.Timestamptz
+  updated_at              DateTime     @default(now()) @updatedAt @db.Timestamptz
+
+  payment     Payment   @relation(fields: [payment_id], references: [id], onDelete: Restrict)
+  approved_by Employee? @relation("RefundApprovedBy", fields: [approved_by_employee_id], references: [id], onDelete: SetNull)
+
+  @@unique([payment_id, idempotency_key])
+  @@index([payment_id, status, created_at])
+  @@map("refunds")
+}
+
+model AuditEvent {
+  id                BigInt   @id @default(autoincrement())
+  organization_id   String   @db.Uuid
+  branch_id         String?  @db.Uuid
+  actor_admin_id    String?  @db.Uuid
+  actor_employee_id String?  @db.Uuid
+  action            String
+  entity_type       String
+  entity_id         String?
+  metadata          Json     @default("{}")
+  created_at        DateTime @default(now()) @db.Timestamptz
+
+  organization   Organization @relation(fields: [organization_id], references: [id], onDelete: Restrict)
+  branch         Branch?      @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  actor_admin    Admin?       @relation(fields: [actor_admin_id], references: [id], onDelete: SetNull)
+  actor_employee Employee?    @relation("AuditEmployeeActor", fields: [actor_employee_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id, created_at])
+  @@index([branch_id, created_at])
+  @@index([entity_type, entity_id, created_at])
+  @@index([actor_admin_id, created_at])
+  @@index([actor_employee_id, created_at])
+  @@map("audit_events")
+}
+
+model ApiIdempotencyKey {
+  id              String    @id @default(uuid()) @db.Uuid
+  branch_id       String    @db.Uuid
+  scope           String
+  key             String
+  request_hash    String
+  response_status Int?
+  response_body   Json?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  expires_at      DateTime? @db.Timestamptz
+
+  branch Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  @@unique([branch_id, scope, key])
+  @@index([expires_at])
+  @@map("api_idempotency_keys")
 }
 
 // 🆕 Super Admin Model for platform management
