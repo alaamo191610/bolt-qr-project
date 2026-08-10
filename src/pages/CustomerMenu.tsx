@@ -80,12 +80,44 @@ interface ActiveOrder {
   status: string;
   order_number?: number;
   total?: number | string;
+  tracking_token?: string;
 }
 
 type OverlayPos = { top: number; left?: number; right?: number };
 
 // scoped cart key per table
 const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
+const activeOrderKeyFor = (adminId: string, table: string) =>
+  `qr-active-order-v1:${adminId}:${table || "unknown"}`;
+const ACTIVE_ORDER_TTL_MS = 24 * 60 * 60 * 1000;
+
+const getTrackingContextFromUrl = () => {
+  if (typeof window === 'undefined') return { adminId: '', table: '' };
+  const params = new URLSearchParams(window.location.search);
+  return {
+    adminId: params.get('restaurant') || '',
+    table: (params.get('table') || '').trim().toUpperCase(),
+  };
+};
+
+const restoreActiveOrderFromUrl = (): ActiveOrder | null => {
+  const context = getTrackingContextFromUrl();
+  if (!context.adminId || !context.table) return null;
+  const storageKey = activeOrderKeyFor(context.adminId, context.table);
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as { order?: ActiveOrder; savedAt?: number };
+    if (!parsed.order?.id || !parsed.order.tracking_token || !parsed.savedAt || Date.now() - parsed.savedAt > ACTIVE_ORDER_TTL_MS) {
+      localStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed.order;
+  } catch {
+    localStorage.removeItem(storageKey);
+    return null;
+  }
+};
 
 const variantKey = (item: Partial<MenuItem>) =>
   JSON.stringify({
@@ -134,7 +166,7 @@ const CustomerMenu: React.FC = () => {
   const [orderType, setOrderType] = useState<'dine_in' | 'take_away' | null>(null);
   const [error, setError] = useState<{ code: string; params?: Record<string, string> } | null>(null);
   // NEW: Store the full active order, not just a boolean
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(restoreActiveOrderFromUrl);
 
   // 🆕 compare
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -373,6 +405,36 @@ const CustomerMenu: React.FC = () => {
   const [adminId, setAdminId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!adminId || !tableNumber || activeOrder) return;
+    const storageKey = activeOrderKeyFor(adminId, tableNumber);
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { order?: ActiveOrder; savedAt?: number };
+      if (!parsed.order?.id || !parsed.order.tracking_token || !parsed.savedAt || Date.now() - parsed.savedAt > ACTIVE_ORDER_TTL_MS) {
+        localStorage.removeItem(storageKey);
+        return;
+      }
+      setActiveOrder(parsed.order);
+    } catch {
+      localStorage.removeItem(storageKey);
+    }
+  }, [activeOrder, adminId, tableNumber]);
+
+  const persistActiveOrder = useCallback((order: ActiveOrder | null) => {
+    const urlContext = getTrackingContextFromUrl();
+    const trackingAdminId = adminId || urlContext.adminId;
+    const trackingTable = tableNumber || urlContext.table;
+    if (!trackingAdminId || !trackingTable) return;
+    const storageKey = activeOrderKeyFor(trackingAdminId, trackingTable);
+    if (!order) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+    localStorage.setItem(storageKey, JSON.stringify({ order, savedAt: Date.now() }));
+  }, [adminId, tableNumber]);
+
+  useEffect(() => {
     if (menuItems.length > 0) {
       console.log("CustomerMenu: First item:", menuItems[0]);
       if (menuItems[0].user_id) {
@@ -561,7 +623,8 @@ const CustomerMenu: React.FC = () => {
       // Track successful order
       trackMenuEvents.orderCompleted(tableNumber, cart, totalPrice);
 
-      setActiveOrder(newOrder); // Set the full active order
+      setActiveOrder(newOrder);
+      persistActiveOrder(newOrder);
       setShowCart(false);
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber)); // clear persisted cart
@@ -661,6 +724,20 @@ const CustomerMenu: React.FC = () => {
   };
 
   // views
+  if (activeOrder) return (
+    <OrderConfirmation
+      order={activeOrder}
+      onOrderChange={(order) => {
+        setActiveOrder(order);
+        persistActiveOrder(order);
+      }}
+      onStartNewOrder={() => {
+        persistActiveOrder(null);
+        setActiveOrder(null);
+      }}
+    />
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
@@ -711,13 +788,6 @@ const CustomerMenu: React.FC = () => {
       </div>
     );
   }
-
-  if (activeOrder) return (
-    <OrderConfirmation
-      order={activeOrder}
-      onStartNewOrder={() => setActiveOrder(null)}
-    />
-  );
 
   // Show landing page if no order type is selected yet
   if (!orderType) {

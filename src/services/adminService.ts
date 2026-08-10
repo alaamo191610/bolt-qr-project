@@ -19,6 +19,10 @@ export const adminService = {
     return await api.post('/auth/login', credentials);
   },
 
+  async getPosSetup(): Promise<{ defaultBranchId: string; branches: Array<{ id: string; name: string }> }> {
+    return await api.get('/pos/v1/admin/setup');
+  },
+
   // Get admin profile
   async getAdminProfile(adminId?: string) {
     void adminId;

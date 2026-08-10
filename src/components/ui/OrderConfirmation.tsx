@@ -1,25 +1,37 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { Clock, CheckCircle2, PartyPopper, ArrowRight, UtensilsCrossed } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { socket, joinOrderRoom } from '../../services/socket';
+import { orderService } from '../../services/orderService';
 
 interface ConfirmedOrder {
   id: number;
   status: string;
   order_number?: number;
   total?: number | string;
+  tracking_token?: string;
 }
 
 interface Props {
   order: ConfirmedOrder;
   onStartNewOrder: () => void;
+  onOrderChange?: (order: ConfirmedOrder) => void;
 }
 
 const EMOJIS = ['🍔', '🍕', '🍟', '🥗', '🍰', '🥤', '🌮', '🍣', '🍗', '🧁', '🥞', '🍩'];
 
-const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrder }) => {
+const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrder, onOrderChange }) => {
   const { t, isRTL } = useLanguage();
   const [order, setOrder] = useState(initialOrder);
+  const onOrderChangeRef = useRef(onOrderChange);
+  const initialOrderRef = useRef(initialOrder);
+  initialOrderRef.current = initialOrder;
+  const orderId = initialOrder.id;
+  const trackingToken = initialOrder.tracking_token;
+
+  useEffect(() => {
+    onOrderChangeRef.current = onOrderChange;
+  }, [onOrderChange]);
 
   // Status mapping
   const STATUS_STEPS = [
@@ -29,23 +41,54 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
     { key: 'served', label: t('status.served'), icon: PartyPopper }
   ];
 
-  // Join socket room
   useEffect(() => {
-    if (order?.id) {
-      console.log('Joining order room:', order.id);
-      joinOrderRoom(order.id);
+    setOrder(initialOrder);
+  }, [initialOrder]);
 
-      const handleUpdate = (data: { status: string }) => {
-        console.log('Order update received:', data);
-        setOrder((prev) => ({ ...prev, status: data.status }));
-      };
+  // Mobile browsers suspend sockets and can reload discarded tabs. Rejoin and
+  // reconcile with the server whenever the connection/page becomes active.
+  useEffect(() => {
+    if (!orderId || !trackingToken) return;
 
-      socket.on('order-status-updated', handleUpdate);
-      return () => {
-        socket.off('order-status-updated', handleUpdate);
-      };
-    }
-  }, [order?.id]);
+    const applyStatus = (status: string) => {
+      const updated = { ...initialOrderRef.current, status };
+      setOrder(updated);
+      onOrderChangeRef.current?.(updated);
+    };
+    const refreshStatus = async () => {
+      try {
+        const latest = await orderService.getPublicOrderStatus(orderId, trackingToken);
+        applyStatus(latest.status);
+      } catch (error) {
+        console.warn('Unable to refresh order status:', error);
+      }
+    };
+    const joinAndRefresh = () => {
+      joinOrderRoom(orderId, trackingToken);
+      void refreshStatus();
+    };
+    const handleUpdate = (data: { status: string }) => applyStatus(data.status);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!socket.connected) socket.connect();
+      else joinAndRefresh();
+    };
+
+    socket.on('connect', joinAndRefresh);
+    socket.on('order-status-updated', handleUpdate);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', joinAndRefresh);
+
+    if (socket.connected) joinAndRefresh();
+    else socket.connect();
+
+    return () => {
+      socket.off('connect', joinAndRefresh);
+      socket.off('order-status-updated', handleUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', joinAndRefresh);
+    };
+  }, [orderId, trackingToken]);
 
   const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === order.status);
   const activeStepIndex = currentStepIndex === -1 ? 0 : currentStepIndex;

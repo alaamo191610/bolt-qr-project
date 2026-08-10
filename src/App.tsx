@@ -22,7 +22,6 @@ import ResponsiveLayout from "./components/common/ResponsiveLayout";
 import { Toaster, toast } from "react-hot-toast";
 import { socket, joinAdminRoom } from "./services/socket";
 
-const ThemeCustomizer = React.lazy(() => import("./components/common/ThemeCustomizer"));
 const QRGenerator = React.lazy(() => import("./components/tables/QRGenerator"));
 const DigitalMenu = React.lazy(() => import("./components/menu/DigitalMenu"));
 const OrderManagement = React.lazy(() => import("./components/orders/OrderManagement"));
@@ -55,10 +54,13 @@ interface Order {
     name: string;
     price: number;
     quantity: number;
+    note?: string | null;
+    customizationDetails?: ApiCustomizationDetails;
   }>;
   total: number;
-  status: 'pending' | 'preparing' | 'ready' | 'served';
+  status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
   timestamp: Date;
+  type?: 'dine_in' | 'take_away';
 }
 
 interface MenuItem {
@@ -73,6 +75,7 @@ interface MenuItem {
 interface AdminProfile {
   id: string;
   name?: string;
+  restaurant_name?: string;
   email?: string;
   preferred_language?: string;
 }
@@ -89,6 +92,14 @@ interface ApiOrderItem {
   menu?: { name_en?: string } | null;
   price_at_order: number;
   quantity: number;
+  note?: string | null;
+  customization_details?: ApiCustomizationDetails;
+}
+
+interface ApiCustomizationDetails {
+  ingredients?: Array<{ name_en?: string; action?: string; qty?: number }>;
+  options?: Array<{ name_en?: string; qty?: number }>;
+  comboChildren?: Array<{ name_en?: string }>;
 }
 
 interface ApiOrder {
@@ -99,6 +110,7 @@ interface ApiOrder {
   order_items?: ApiOrderItem[];
   total?: number;
   status?: Order['status'];
+  type?: Order['type'];
   created_at: string;
 }
 
@@ -212,6 +224,7 @@ const AdminDashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
+  const [posUrl, setPosUrl] = useState<string>();
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // Individual fetch functions
@@ -257,10 +270,13 @@ const AdminDashboard: React.FC = () => {
               name: item.menu?.name_en || "Unknown Item",
               price: item.price_at_order,
               quantity: item.quantity,
+              note: item.note,
+              customizationDetails: item.customization_details,
             })) || [],
           total: order.total || 0,
           status: order.status || "pending",
           timestamp: new Date(order.created_at),
+          type: order.type,
         }))
       );
     } catch (e) {
@@ -293,6 +309,10 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (user && !dataLoaded) {
       fetchProfile();
+      adminService.getPosSetup().then((setup) => {
+        const branch = setup.branches.find((item) => item.id === setup.defaultBranchId) || setup.branches[0];
+        if (branch) setPosUrl(`/pos?branch=${encodeURIComponent(branch.id)}`);
+      }).catch((error) => console.error("Error loading POS branch:", error));
       setDataLoaded(true);
     }
   }, [user, dataLoaded, fetchProfile]);
@@ -338,10 +358,13 @@ const AdminDashboard: React.FC = () => {
           name: item.menu?.name_en || "Unknown Item",
           price: item.price_at_order,
           quantity: item.quantity,
+          note: item.note,
+          customizationDetails: item.customization_details,
         })) || [],
         total: order.total || 0,
         status: order.status || "pending",
         timestamp: new Date(order.created_at),
+        type: order.type,
       };
 
       setOrders((prev) => [transformedOrder, ...prev]);
@@ -435,14 +458,14 @@ const AdminDashboard: React.FC = () => {
         userInfo={{
           id: user?.id || "",
           name:
-            adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
+            adminProfile?.restaurant_name || adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
           email: user?.email || "",
         }}
         onSignOut={() => user && signOut()}
+        posUrl={posUrl}
       >
         {renderContent()}
       </ResponsiveLayout>
-      <ThemeCustomizer />
     </>
   );
 };

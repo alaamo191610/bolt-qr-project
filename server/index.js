@@ -70,9 +70,18 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} joined menu_${adminId}`);
   });
 
-  socket.on('join-order', (orderId) => {
-    socket.join(`order_${orderId}`);
-    console.log(`Socket ${socket.id} joined order_${orderId}`);
+  socket.on('join-order', (payload) => {
+    const orderId = Number(payload?.orderId);
+    const trackingToken = payload?.trackingToken;
+    if (!Number.isInteger(orderId) || !trackingToken) return;
+    try {
+      const claims = jwt.verify(trackingToken, JWT_SECRET);
+      if (claims.purpose !== 'order-tracking' || Number(claims.orderId) !== orderId) return;
+      socket.join(`order_${orderId}`);
+      console.log(`Socket ${socket.id} joined order_${orderId}`);
+    } catch {
+      // Expired or invalid tracking credentials are deliberately ignored.
+    }
   });
 
   socket.on('disconnect', () => {
@@ -774,7 +783,69 @@ app.get('/api/orders', authenticate, async (req, res) => {
         }
       }
     });
-    res.json(orders);
+
+    const ingredientIds = new Set();
+    const optionIds = new Set();
+    const comboMenuIds = new Set();
+    for (const order of orders) {
+      for (const item of order.order_items) {
+        const customizations = item.customizations && typeof item.customizations === 'object' ? item.customizations : {};
+        for (const selection of Array.isArray(customizations.ingredients) ? customizations.ingredients : []) {
+          if (Number.isInteger(Number(selection.ingredientId))) ingredientIds.add(Number(selection.ingredientId));
+        }
+        for (const selection of Array.isArray(customizations.options) ? customizations.options : []) {
+          if (Number.isInteger(Number(selection.optionId))) optionIds.add(Number(selection.optionId));
+        }
+        for (const selection of Array.isArray(customizations.comboChildren) ? customizations.comboChildren : []) {
+          if (Number.isInteger(Number(selection.childMenuId))) comboMenuIds.add(Number(selection.childMenuId));
+        }
+      }
+    }
+
+    const [ingredients, options, comboMenus] = await Promise.all([
+      ingredientIds.size ? prisma.ingredient.findMany({
+        where: { id: { in: [...ingredientIds] }, admin_id: req.user.id },
+        select: { id: true, name_en: true, name_ar: true },
+      }) : [],
+      optionIds.size ? prisma.modifierOption.findMany({
+        where: { id: { in: [...optionIds] } },
+        select: { id: true, name_en: true, name_ar: true },
+      }) : [],
+      comboMenuIds.size ? prisma.menu.findMany({
+        where: { id: { in: [...comboMenuIds] }, user_id: req.user.id },
+        select: { id: true, name_en: true, name_ar: true },
+      }) : [],
+    ]);
+    const ingredientMap = new Map(ingredients.map(item => [item.id, item]));
+    const optionMap = new Map(options.map(item => [item.id, item]));
+    const comboMenuMap = new Map(comboMenus.map(item => [item.id, item]));
+
+    res.json(orders.map(order => ({
+      ...order,
+      order_items: order.order_items.map(item => {
+        const customizations = item.customizations && typeof item.customizations === 'object' ? item.customizations : {};
+        return {
+          ...item,
+          customization_details: {
+            ingredients: (Array.isArray(customizations.ingredients) ? customizations.ingredients : []).map(selection => ({
+              ...selection,
+              name_en: ingredientMap.get(Number(selection.ingredientId))?.name_en || 'Ingredient',
+              name_ar: ingredientMap.get(Number(selection.ingredientId))?.name_ar || null,
+            })),
+            options: (Array.isArray(customizations.options) ? customizations.options : []).map(selection => ({
+              ...selection,
+              name_en: optionMap.get(Number(selection.optionId))?.name_en || 'Option',
+              name_ar: optionMap.get(Number(selection.optionId))?.name_ar || null,
+            })),
+            comboChildren: (Array.isArray(customizations.comboChildren) ? customizations.comboChildren : []).map(selection => ({
+              ...selection,
+              name_en: comboMenuMap.get(Number(selection.childMenuId))?.name_en || 'Combo item',
+              name_ar: comboMenuMap.get(Number(selection.childMenuId))?.name_ar || null,
+            })),
+          },
+        };
+      }),
+    })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1107,10 +1178,39 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       }
     }
 
-    res.status(201).json(fullOrder);
+    const trackingToken = jwt.sign({
+      purpose: 'order-tracking',
+      orderId: fullOrder.id,
+      adminId: fullOrder.admin_id,
+    }, JWT_SECRET, { expiresIn: '24h' });
+    res.status(201).json({ ...fullOrder, tracking_token: trackingToken });
   } catch (err) {
     console.error("Error creating order:", err);
     res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.get('/api/public/orders/:id/status', async (req, res) => {
+  const orderId = Number(req.params.id);
+  const authorization = String(req.headers.authorization || '');
+  const trackingToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!Number.isInteger(orderId) || !trackingToken) {
+    return res.status(400).json({ error: 'Order tracking credentials are required' });
+  }
+
+  try {
+    const claims = jwt.verify(trackingToken, JWT_SECRET);
+    if (claims.purpose !== 'order-tracking' || Number(claims.orderId) !== orderId) {
+      return res.status(403).json({ error: 'Invalid order tracking credentials' });
+    }
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, admin_id: claims.adminId },
+      select: { id: true, status: true, updated_at: true },
+    });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json(order);
+  } catch {
+    res.status(401).json({ error: 'Order tracking session expired' });
   }
 });
 
@@ -1499,7 +1599,13 @@ app.get('/api/admin/monetary', authenticate, async (req, res) => {
   try {
     const admin = await prisma.admin.findUnique({
       where: { id: req.user.id },
-      select: { id: true, pricing_prefs: true, billing_settings: true }
+      select: {
+        id: true,
+        restaurant_name: true,
+        logo_url: true,
+        pricing_prefs: true,
+        billing_settings: true,
+      }
     });
     res.json(admin);
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -64,12 +64,21 @@ interface ApiOrderItem {
   quantity?: number
   menu?: ApiMenuRef | null
   menus?: ApiMenuRef | null
+  note?: string | null
+  customization_details?: {
+    ingredients?: Array<{ name_en?: string; action?: string; qty?: number }>
+    options?: Array<{ name_en?: string; qty?: number }>
+    comboChildren?: Array<{ name_en?: string }>
+  }
 }
 
 interface ApiOrder {
   id: string
+  order_number?: number
   table_id?: string
+  table?: { code?: string } | null
   status?: string
+  type?: 'dine_in' | 'take_away'
   total?: number | string
   created_at: string
   order_items?: ApiOrderItem[]
@@ -231,6 +240,15 @@ export const orderService = {
     } catch (error) {
       console.error('Error fetching order:', error)
       throw error
+    }
+  },
+
+  async getPublicOrderStatus(orderId: number, trackingToken: string) {
+    return await api.getWithToken(`/public/orders/${orderId}/status`, trackingToken) as {
+      id: number
+      order_number?: number
+      status: string
+      updated_at: string
     }
   },
 }

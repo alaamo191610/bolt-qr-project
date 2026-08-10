@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Menu, X, Search, LogOut } from "lucide-react";
+import { ExternalLink, LogOut, Menu, MonitorSmartphone, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -23,6 +23,7 @@ interface ResponsiveLayoutProps {
     email: string;
   };
   onSignOut?: () => void;
+  posUrl?: string;
 }
 
 const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
@@ -32,6 +33,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   setActiveTab,
   userInfo,
   onSignOut,
+  posUrl,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
@@ -39,6 +41,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
   const adminId = userInfo?.id;
   const { restaurantName, logoUrl } = useAdminMonetary(adminId);
+  const resolvedRestaurantName = restaurantName || userInfo?.name || "RestaurantQR";
 
   // Prevent component unmounting on tab switch
   useEffect(() => {
@@ -179,6 +182,18 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               </button>
             );
           })}
+          {posUrl && (
+            <a
+              href={posUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setSidebarOpen(false)}
+              className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-500/20 transition-colors"
+            >
+              <span className="flex items-center gap-3"><MonitorSmartphone className="w-5 h-5" />{isRTL ? "فتح نقطة البيع" : "Open POS"}</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
         </nav>
 
         {/* User Info in Sidebar */}
@@ -229,28 +244,19 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                 {logoUrl ? (
                   <img
                     src={logoUrl}
-                    alt={restaurantName || "Restaurant"}
-                    className="w-10 h-10 rounded-xl object-cover shadow-lg transform transition-transform hover:scale-105"
+                    alt={resolvedRestaurantName}
+                    className="h-12 w-12 object-cover rounded-lg shadow-md transform transition-transform hover:scale-105"
                   />
                 ) : (
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transform transition-transform hover:scale-105"
-                    style={{
-                      background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                    }}
-                  >
-                    <svg
-                      className="w-6 h-6"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
-                    </svg>
+                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md transform transition-transform hover:scale-105">
+                    <span className="text-2xl font-bold text-white">
+                      {resolvedRestaurantName.charAt(0).toUpperCase()}
+                    </span>
                   </div>
                 )}
                 <div>
                   <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                    {restaurantName || "RestaurantQR"}
+                    {resolvedRestaurantName}
                   </h1>
                 </div>
               </div>
@@ -300,6 +306,18 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             <div
               className="flex relative float-right items-center space-x-3 rtl:space-x-reverse ml-4"
             >
+              {posUrl && (
+                <a
+                  href={posUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 transition-colors"
+                >
+                  <MonitorSmartphone className="w-4 h-4" />
+                  <span>{isRTL ? "فتح نقطة البيع" : "Open POS"}</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">

@@ -18,7 +18,10 @@ import {
   Palette,
   Maximize2,
   X,
-  Settings
+  Settings,
+  Users,
+  Link2,
+  Smartphone
 } from 'lucide-react';
 
 interface Table {
@@ -310,78 +313,105 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
       </div>
 
       {/* --- Grid View --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
         {tables.map((table) => (
           <div
             key={table.id}
-            className="group relative bg-white dark:bg-slate-800 rounded-[2rem] shadow-lg border border-slate-100 dark:border-slate-700 overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-1"
+            className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
           >
-            {/* Decorative Header */}
-            <div className={`h-32 ${accentColor.class} relative overflow-hidden flex flex-col items-center justify-center`}>
-              {/* Elegant Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent"></div>
+            <div
+              className="h-1.5 w-full"
+              style={{ background: `linear-gradient(90deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
+            />
 
-              {/* Abstract Circular Pattern */}
-              <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
-              <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-black/10 rounded-full blur-2xl"></div>
-
-              <div className="relative z-10 text-center text-white">
-                <p className="text-white/80 font-medium text-xs uppercase tracking-[0.2em] mb-1">
-                  Table
-                </p>
-                <h3 className="text-4xl font-medium tracking-tight">
-                  {table.number}
-                </h3>
-                <div className="mt-2 text-white/70 text-xs flex items-center justify-center gap-1.5 opacity-80">
-                  <span className="w-1 h-1 rounded-full bg-white/50"></span>
-                  <span>{table.capacity} Guests</span>
-                  <span className="w-1 h-1 rounded-full bg-white/50"></span>
+            <div className="p-5 sm:p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold text-white shadow-md"
+                    style={{ background: `linear-gradient(135deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
+                  >
+                    {table.number}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Dining table</p>
+                    <h3 className="truncate text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                      Table {table.number}
+                    </h3>
+                  </div>
                 </div>
+                <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${getTableStatusStyles(table.status)}`}>
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {table.status || 'available'}
+                </span>
               </div>
-            </div>
 
-            {/* QR Card Body */}
-            <div className="px-8 pb-8 -mt-12 relative z-10">
-              <div className="bg-white dark:bg-slate-700 rounded-2xl shadow-xl p-4 mb-6 transform transition-transform group-hover:scale-[1.02]">
-                <div className="aspect-square bg-white rounded-xl overflow-hidden flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-600 group-hover:border-solid group-hover:border-emerald-500/50 transition-all">
-
-                  {/* Client-side QR Rendering */}
+              <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50">
+                <div
+                  className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-10 blur-2xl"
+                  style={{ backgroundColor: accentColor.value }}
+                />
+                <div
+                  className="pointer-events-none absolute -bottom-20 -left-16 h-40 w-40 rounded-full opacity-10 blur-2xl"
+                  style={{ backgroundColor: accentColor.gradient[1] }}
+                />
+                <div className="relative mx-auto flex w-fit items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-transform duration-300 group-hover:scale-[1.015]">
                   <SingleQRCode
                     tableNumber={table.number}
                     adminId={table.adminId}
-                    size={qrSize * 0.8} // Scale down slightly for card
+                    size={Math.min(qrSize * 0.76, 220)}
                     color={accentColor}
                     dotStyle={dotStyle}
                     cornerStyle={cornerStyle}
                   />
-
+                </div>
+                <div className="relative mt-4 flex items-center justify-center gap-2 text-center">
+                  <Smartphone className="h-4 w-4 text-slate-400" />
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Scan to view menu &amp; order</p>
                 </div>
               </div>
 
-              {/* Actions */}
+              <div className="my-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
+                  <div className="mb-1 flex items-center gap-1.5 text-slate-400">
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Capacity</span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{table.capacity} guests</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
+                  <div className="mb-1 flex items-center gap-1.5 text-slate-400">
+                    <Link2 className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Menu link</span>
+                  </div>
+                  <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">Table {table.number}</p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setShowPreview(table)}
-                  className="col-span-2 flex items-center justify-center gap-2 py-3 px-4 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-colors border border-slate-100 dark:border-slate-600"
+                  className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                 >
-                  <Eye className="w-4 h-4" />
-                  Preview Print
+                  <Eye className="h-4 w-4" />
+                  Preview table card
                 </button>
 
                 <button
                   onClick={() => copyToClipboard(table)}
-                  className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-colors border border-slate-100 dark:border-slate-600"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-200 active:scale-[0.98] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                 >
-                  {copiedTable === table.number ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  {copiedTable === table.number ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
                   {copiedTable === table.number ? 'Copied' : 'Copy'}
                 </button>
 
                 <button
                   onClick={() => downloadQRCode(table)}
-                  className={`flex items-center justify-center gap-2 py-3 px-4 text-white rounded-xl font-bold text-sm transition-all shadow-md active:scale-95 hover:shadow-lg ${accentColor.class}`}
+                  className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
+                  style={{ background: `linear-gradient(135deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
                 >
-                  <Download className="w-4 h-4" />
-                  Save
+                  <Download className="h-4 w-4" />
+                  Download
                 </button>
               </div>
             </div>
@@ -470,6 +500,19 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
       )}
     </div>
   );
+};
+
+const getTableStatusStyles = (status: string) => {
+  switch ((status || '').toLowerCase()) {
+    case 'occupied':
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/25 dark:text-amber-300';
+    case 'reserved':
+      return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800/60 dark:bg-blue-900/25 dark:text-blue-300';
+    case 'unavailable':
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/25 dark:text-rose-300';
+    default:
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/25 dark:text-emerald-300';
+  }
 };
 
 export default QRGenerator;

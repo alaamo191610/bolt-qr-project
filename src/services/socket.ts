@@ -1,10 +1,11 @@
 import { io } from "socket.io-client";
 
-// In production, this should match your backend URL
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const URL = `http://${hostname}:3000`;
+const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+const apiUrl = import.meta.env.VITE_API_URL || `${protocol}//${hostname}:3000/api`;
+const SOCKET_URL = new globalThis.URL(apiUrl).origin;
 
-export const socket = io(URL, {
+export const socket = io(SOCKET_URL, {
     autoConnect: true,
 });
 
@@ -18,6 +19,6 @@ export const joinMenuRoom = (adminId: string) => {
     socket.emit("join-menu", adminId);
 };
 
-export const joinOrderRoom = (orderId: number) => {
-    socket.emit("join-order", orderId);
+export const joinOrderRoom = (orderId: number, trackingToken: string) => {
+    socket.emit("join-order", { orderId, trackingToken });
 };

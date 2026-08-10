@@ -285,7 +285,7 @@ export const createPosRouter = ({ prisma, jwtSecret, authenticateAdmin, authRate
         orderBy: { name: 'asc' },
       }),
     ]);
-    res.json({ branches, roles, employees, registers });
+    res.json({ defaultBranchId: req.pos.branchId, branches, roles, employees, registers });
   }));
 
   router.post('/admin/employees', asyncRoute(async (req, res) => {

@@ -10,16 +10,33 @@ import {
   AlertTriangle,
   History,
   LayoutList,
+  MessageSquareText,
+  SlidersHorizontal,
   Utensils,
   X
 } from 'lucide-react';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 // --- Types ---
+interface CustomizationDetails {
+  ingredients?: Array<{ name_en?: string; action?: string; qty?: number }>;
+  options?: Array<{ name_en?: string; qty?: number }>;
+  comboChildren?: Array<{ name_en?: string }>;
+}
+
+interface OrderItem {
+  name: string;
+  price: number;
+  quantity: number;
+  note?: string | null;
+  customizationDetails?: CustomizationDetails;
+}
+
 interface Order {
   id: number;
   order_number?: number;
   tableNumber: string;
-  items: { name: string; price: number; quantity: number }[];
+  items: OrderItem[];
   total: number;
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
   timestamp: Date | string;
@@ -35,6 +52,7 @@ interface OrderManagementProps {
 // --- Components ---
 
 const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, onStatusChange }) => {
+  const { formatPrice } = useCurrency();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
@@ -256,7 +274,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
 
           <StatCard
             label="Total Sales"
-            value={`$${displayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0).toFixed(2)}`}
+            value={formatPrice(displayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0))}
             color="indigo"
             icon={<DollarSign className="w-5 h-5" />}
           />
@@ -272,6 +290,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
               order={order}
               onStatusClick={handleStatusClick}
               onCancelClick={handleCancelClick}
+              formatPrice={formatPrice}
               onViewDetails={() => {
                 setSelectedOrder(order);
                 setShowDetailsModal(true);
@@ -384,21 +403,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
                   Items Ordered
                 </h4>
                 {(selectedOrder.items || []).map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center py-3 border-b border-slate-50 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-2 px-2 rounded-lg transition-colors">
-                    <div className="flex gap-4 items-center">
-                      <div className="w-8 h-8 bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 rounded-lg flex items-center justify-center text-sm font-bold shadow-sm shrink-0">
-                        {item.quantity}x
-                      </div>
-                      <div>
-                        <p className="text-slate-900 dark:text-white font-bold text-sm">
-                          {item.name}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-slate-600 dark:text-slate-300 font-medium text-sm">
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </span>
-                  </div>
+                  <OrderItemDetails key={idx} item={item} formatPrice={formatPrice} spacious />
                 ))}
               </div>
 
@@ -406,11 +411,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 space-y-3 border border-slate-100 dark:border-slate-700">
                 <div className="flex justify-between text-sm font-medium text-slate-500 dark:text-slate-400">
                   <span>Subtotal</span>
-                  <span>${Number(selectedOrder.total).toFixed(2)}</span>
+                  <span>{formatPrice(Number(selectedOrder.total))}</span>
                 </div>
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex justify-between font-bold text-xl text-slate-900 dark:text-white mt-2">
                   <span>Total</span>
-                  <span>${Number(selectedOrder.total).toFixed(2)}</span>
+                  <span>{formatPrice(Number(selectedOrder.total))}</span>
                 </div>
               </div>
             </div>
@@ -473,11 +478,12 @@ const StatCard = ({ label, count, value, color, icon, onClick, isActive }: {
   );
 };
 
-const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails }: {
+const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatPrice }: {
   order: Order;
   onStatusClick: (order: Order, status: Order['status']) => void;
   onCancelClick: (order: Order) => void;
   onViewDetails: () => void;
+  formatPrice: (amount: number, useSymbol?: boolean) => string;
 }) => {
   const getNextStatus = (s: Order['status']): Order['status'] =>
     s === 'pending' ? 'preparing' :
@@ -487,25 +493,27 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails }: {
   const nextStatus = getNextStatus(order.status);
   const canAdvance = order.status !== 'served' && order.status !== 'cancelled';
   const isTakeAway = order.type === 'take_away';
+  const itemCount = (order.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const hasNotes = (order.items || []).some(item => item.note?.trim());
 
   return (
     <div className="group relative bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-700 p-1 overflow-visible hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-      <div className="p-6 flex flex-col h-full bg-white dark:bg-slate-800 rounded-[1.8rem]">
-        <div className="flex justify-between items-start mb-6">
+      <div className="p-5 flex flex-col h-full bg-white dark:bg-slate-800 rounded-[1.8rem]">
+        <div className="flex justify-between items-start gap-4 mb-5">
           <div className="flex items-start gap-4">
             <div className="flex flex-col items-center">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shadow-lg mb-2 ${isTakeAway
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shadow-sm mb-1.5 ${isTakeAway
                 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                 : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
                 }`}>
-                {isTakeAway ? <LayoutList className="w-7 h-7" /> : (order.tableNumber?.replace(/\D/g, '') || 'N/A')}
+                {isTakeAway ? <LayoutList className="w-6 h-6" /> : (order.tableNumber?.replace(/\D/g, '') || 'N/A')}
               </div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {isTakeAway ? 'Takeaway' : 'Table'}
               </span>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                   Order #{order.order_number || order.id}
@@ -530,21 +538,35 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails }: {
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="w-full h-px bg-slate-100 dark:bg-slate-700/50 mb-4"></div>
-
-        {/* Total Price */}
-        <div className="flex items-center justify-between mb-6">
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            {order.items?.length || 0} Items
-          </span>
-          <span className="text-2xl font-bold text-slate-900 dark:text-white">
-            ${Number(order.total).toFixed(2)}
-          </span>
+        <div className="border-y border-slate-100 dark:border-slate-700/60 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Order items</span>
+              <span className="inline-flex min-w-6 h-6 px-1.5 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
+                {itemCount}
+              </span>
+            </div>
+            {hasNotes && (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-400">
+                <MessageSquareText className="w-3.5 h-3.5" /> Notes
+              </span>
+            )}
+          </div>
+          <div className="space-y-1 max-h-72 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
+            {(order.items || []).map((item, idx) => (
+              <OrderItemDetails key={idx} item={item} formatPrice={formatPrice} />
+            ))}
+          </div>
         </div>
 
         {/* Actions Footer */}
-        <div className="mt-auto pt-4 flex flex-col gap-3">
+        <div className="mt-auto pt-5 flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-4">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Order total</span>
+            <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {formatPrice(Number(order.total))}
+            </span>
+          </div>
           {/* Main Action Button */}
           <div className="flex gap-3">
             <button
@@ -578,6 +600,69 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails }: {
       </div>
     </div>
   );
+};
+
+const OrderItemDetails = ({ item, formatPrice, spacious = false }: {
+  item: OrderItem;
+  formatPrice: (amount: number, useSymbol?: boolean) => string;
+  spacious?: boolean;
+}) => {
+  const customizations = getCustomizationLabels(item);
+
+  return (
+    <div className={`${spacious ? 'py-4' : 'py-3'} border-b border-slate-100 dark:border-slate-700/50 last:border-0`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="inline-flex min-w-8 h-8 px-1.5 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-sm font-extrabold text-slate-700 dark:text-slate-200 shrink-0">
+            {item.quantity}x
+          </span>
+          <div className="min-w-0 pt-1">
+            <p className="font-bold text-sm leading-5 text-slate-900 dark:text-white break-words">{item.name}</p>
+            {customizations.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {customizations.map((label, index) => (
+                  <span key={`${label}-${index}`} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/25 px-2 py-1 text-[11px] font-semibold leading-4 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/50">
+                    <SlidersHorizontal className="w-3 h-3 shrink-0" /> {label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <span className="text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap pt-1">
+          {formatPrice((Number(item.price) || 0) * (Number(item.quantity) || 0))}
+        </span>
+      </div>
+      {item.note?.trim() && (
+        <div className="mt-3 ml-11 flex items-start gap-2 rounded-xl border border-amber-200/80 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs leading-5 text-amber-900 dark:text-amber-200">
+          <MessageSquareText className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-extrabold">Note: </span>
+            <span className="whitespace-pre-wrap break-words">{item.note}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const getCustomizationLabels = (item: OrderItem): string[] => {
+  const details = item.customizationDetails;
+  if (!details) return [];
+
+  const ingredients = (details.ingredients || []).map(ingredient => {
+    const name = ingredient.name_en || 'Ingredient';
+    const quantity = Number(ingredient.qty) > 1 ? ` x${ingredient.qty}` : '';
+    if (ingredient.action === 'remove') return `No ${name}`;
+    if (ingredient.action === 'extra') return `Extra ${name}${quantity}`;
+    return `${name}${quantity}`;
+  });
+  const options = (details.options || []).map(option =>
+    `${option.name_en || 'Option'}${Number(option.qty) > 1 ? ` x${option.qty}` : ''}`
+  );
+  const comboChildren = (details.comboChildren || []).map(child => child.name_en || 'Combo item');
+
+  return [...ingredients, ...options, ...comboChildren];
 };
 
 const getStatusStyles = (status: Order['status']) => {

@@ -147,6 +147,7 @@ const ThemeCustomizer: React.FC<SheetProps> = ({
 
   // Load Google Fonts dynamically
   useEffect(() => {
+    if (!open) return;
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Merriweather:wght@400;700&family=Lora:wght@400;500;600;700&family=Crimson+Text:wght@400;600;700&family=Bebas+Neue&family=Righteous&display=swap';
     link.rel = 'stylesheet';
@@ -154,7 +155,7 @@ const ThemeCustomizer: React.FC<SheetProps> = ({
     return () => {
       document.head.removeChild(link);
     };
-  }, []);
+  }, [open]);
 
   // Resync draft + preset when the sheet opens
   useEffect(() => {

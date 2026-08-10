@@ -34,6 +34,16 @@ export const api = {
     return handleResponse(res);
   },
 
+  async getWithToken(endpoint: string, token: string) {
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return handleResponse(res);
+  },
+
   async post(endpoint: string, body: unknown) {
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
