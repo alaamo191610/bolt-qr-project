@@ -2,7 +2,10 @@ import type { PosBootstrap, PosCheck, PosMenuOptions, PosReceipt } from './types
 
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-const apiRoot = (import.meta.env.VITE_API_URL || `${protocol}//${hostname}:3000/api`).replace(/\/$/, '');
+const fallbackApiUrl = import.meta.env.PROD
+  ? `${protocol}//${hostname}/api`
+  : `${protocol}//${hostname}:3000/api`;
+const apiRoot = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
 const baseUrl = `${apiRoot}/pos/v1`;
 const tokenKey = 'pos_access_token';
 

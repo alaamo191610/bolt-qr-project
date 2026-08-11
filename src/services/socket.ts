@@ -2,7 +2,10 @@ import { io } from "socket.io-client";
 
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-const apiUrl = import.meta.env.VITE_API_URL || `${protocol}//${hostname}:3000/api`;
+const fallbackApiUrl = import.meta.env.PROD
+    ? `${protocol}//${hostname}/api`
+    : `${protocol}//${hostname}:3000/api`;
+const apiUrl = import.meta.env.VITE_API_URL || fallbackApiUrl;
 const SOCKET_URL = new globalThis.URL(apiUrl).origin;
 
 export const socket = io(SOCKET_URL, {

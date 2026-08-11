@@ -1,6 +1,9 @@
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const fallbackProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-const API_URL = (import.meta.env.VITE_API_URL || `${fallbackProtocol}//${hostname}:3000/api`).replace(/\/$/, '');
+const fallbackApiUrl = import.meta.env.PROD
+  ? `${fallbackProtocol}//${hostname}/api`
+  : `${fallbackProtocol}//${hostname}:3000/api`;
+const API_URL = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
 
 const getHeaders = () => {
   const token = localStorage.getItem('auth_token');

@@ -1972,6 +1972,22 @@ app.put('/api/super-admin/restaurants/:id/plan', authenticate, requireSuperAdmin
   }
 });
 
+if (isProduction) {
+  const clientDist = path.resolve(process.cwd(), 'dist');
+  app.use(express.static(clientDist, {
+    index: false,
+    maxAge: '1y',
+    immutable: true,
+  }));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err?.message?.startsWith('Only JPEG')) {
     return res.status(400).json({ error: err.message });
