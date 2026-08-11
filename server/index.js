@@ -23,9 +23,28 @@ const configuredOrigins = (process.env.CORS_ORIGINS || '')
   .map(origin => origin.trim())
   .filter(Boolean);
 
+const allowedOrigins = new Set(configuredOrigins);
+if (process.env.RENDER_EXTERNAL_URL) {
+  allowedOrigins.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
+}
+
+const isAllowedOrigin = (origin, requestHost) => {
+  if (!origin || !isProduction || allowedOrigins.has(origin.replace(/\/$/, ''))) {
+    return true;
+  }
+
+  if (!requestHost) return false;
+
+  try {
+    return new URL(origin).host === requestHost;
+  } catch {
+    return false;
+  }
+};
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || !isProduction || configuredOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Origin not allowed by CORS'));
@@ -102,7 +121,18 @@ const upload = multer({
 });
 
 app.disable('x-powered-by');
-app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  const requestHost = req.get('x-forwarded-host') || req.get('host');
+  cors({
+    ...corsOptions,
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin, requestHost)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Origin not allowed by CORS'));
+    }
+  })(req, res, next);
+});
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
