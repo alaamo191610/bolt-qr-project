@@ -8,6 +8,7 @@ import QRCodeStyling, {
   CornerSquareType,
   CornerDotType
 } from 'qr-code-styling';
+import type { Options } from 'qr-code-styling';
 import {
   QrCode,
   Download,
@@ -87,7 +88,7 @@ const SingleQRCode = ({
     const baseURL = window.location.origin;
     const menuURL = `${baseURL}/menu?table=${encodeURIComponent(tableNumber)}&restaurant=${encodeURIComponent(adminId)}`;
 
-    const qrOptions = {
+    const qrOptions: Partial<Options> = {
       width: size,
       height: size,
       type: 'svg' as DrawType,

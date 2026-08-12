@@ -86,7 +86,7 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
   const onSave = async () => {
     try {
       setSaving(true);
-      await adminService.updateAdminProfile(adminId, form);
+      await adminService.updateAdminProfile(adminId, { ...form, logo_url: form.logo_url || undefined });
 
       // [NEW] Update local cache to reflect changes globally
       const CACHE_KEY = 'monetary:v1';

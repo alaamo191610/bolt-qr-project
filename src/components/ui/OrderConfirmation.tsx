@@ -10,6 +10,7 @@ interface ConfirmedOrder {
   order_number?: number;
   total?: number | string;
   tracking_token?: string;
+  table?: { code?: string } | null;
 }
 
 interface Props {

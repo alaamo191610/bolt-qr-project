@@ -131,12 +131,13 @@ export const orderService = {
         const mergedNote = mergeNotes(it.note, extrasNote)
 
         // map tri-state ingredients -> picks for the function
-        const ingredients = it.checkout_payload?.ingredients ??
-          (it.custom_ingredients ?? []).flatMap((c) => {
-            if (c.action === 'no') return [{ ingredientId: c.id, action: 'remove' as const }]
-            if (c.action === 'extra') return [{ ingredientId: c.id, action: 'extra' as const, qty: 1 }]
-            return []
-          })
+        const ingredients: Array<{ ingredientId: string; action: 'remove' | 'extra'; qty?: number }> = it.checkout_payload?.ingredients
+          ? [...it.checkout_payload.ingredients]
+          : (it.custom_ingredients ?? []).reduce<Array<{ ingredientId: string; action: 'remove' | 'extra'; qty?: number }>>((result, c) => {
+              if (c.action === 'no') result.push({ ingredientId: c.id, action: 'remove' });
+              if (c.action === 'extra') result.push({ ingredientId: c.id, action: 'extra', qty: 1 });
+              return result;
+            }, [])
 
         return {
           menuId: it.menu_item_id,
@@ -204,7 +205,7 @@ export const orderService = {
     const data = await api.get('/orders', { adminId }) as ApiOrder[];
     return (data ?? []).map((o) => ({
       id: o.id,
-      tableNumber: o.table_id, // join tables for code if you want the code instead of id
+      tableNumber: String(o.table_id ?? ''), // join tables for code if you want the code instead of id
       status: o.status ?? 'pending',
       total: Number(o.total) || 0,
       timestamp: new Date(o.created_at),

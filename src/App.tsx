@@ -59,7 +59,7 @@ interface Order {
   }>;
   total: number;
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
-  timestamp: Date;
+  timestamp: Date | string;
   type?: 'dine_in' | 'take_away';
 }
 
@@ -222,9 +222,8 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("qr-generator");
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
-  const [posUrl, setPosUrl] = useState<string>();
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // Individual fetch functions
@@ -259,12 +258,12 @@ const AdminDashboard: React.FC = () => {
   const fetchOrders = useCallback(async () => {
     if (!user) return;
     try {
-      const adminOrders = await orderService.getOrders(user.id);
+      const adminOrders = await orderService.getOrders(user.id) as unknown as ApiOrder[];
       setOrders(
         adminOrders.map((order: ApiOrder) => ({
           id: order.id,
           order_number: order.order_number,
-          tableNumber: order.table?.code || order.table_id,
+          tableNumber: String(order.table?.code ?? order.table_id ?? ''),
           items:
             order.order_items?.map((item: ApiOrderItem) => ({
               name: item.menu?.name_en || "Unknown Item",
@@ -287,7 +286,7 @@ const AdminDashboard: React.FC = () => {
   const fetchMenuItems = useCallback(async () => {
     if (!user) return;
     try {
-      const adminMenuItems = await menuService.getMenuItems(user.id);
+      const adminMenuItems = await menuService.getMenuItems(user.id) as unknown as ApiMenuItem[];
       setMenuItems(
         adminMenuItems.map((item: ApiMenuItem) => ({
           id: item.id,
@@ -309,10 +308,6 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (user && !dataLoaded) {
       fetchProfile();
-      adminService.getPosSetup().then((setup) => {
-        const branch = setup.branches.find((item) => item.id === setup.defaultBranchId) || setup.branches[0];
-        if (branch) setPosUrl(`/pos?branch=${encodeURIComponent(branch.id)}`);
-      }).catch((error) => console.error("Error loading POS branch:", error));
       setDataLoaded(true);
     }
   }, [user, dataLoaded, fetchProfile]);
@@ -353,7 +348,7 @@ const AdminDashboard: React.FC = () => {
       const transformedOrder: Order = {
         id: order.id,
         order_number: order.order_number,
-        tableNumber: order.table?.code || order.table_id,
+        tableNumber: String(order.table?.code ?? order.table_id ?? ''),
         items: order.order_items?.map((item: ApiOrderItem) => ({
           name: item.menu?.name_en || "Unknown Item",
           price: item.price_at_order,
@@ -443,7 +438,7 @@ const AdminDashboard: React.FC = () => {
       case "analytics":
         return <Analytics orders={orders} />;
       case "admin":
-        return <AdminPanel menuItems={menuItems} setMenuItems={setMenuItems} />;
+        return <AdminPanel adminId={user?.id || ''} />;
       default:
         return <QRGenerator tables={tables} />;
     }
@@ -462,7 +457,6 @@ const AdminDashboard: React.FC = () => {
           email: user?.email || "",
         }}
         onSignOut={() => user && signOut()}
-        posUrl={posUrl}
       >
         {renderContent()}
       </ResponsiveLayout>

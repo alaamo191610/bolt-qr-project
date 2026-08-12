@@ -19,10 +19,6 @@ export const adminService = {
     return await api.post('/auth/login', credentials);
   },
 
-  async getPosSetup(): Promise<{ defaultBranchId: string; branches: Array<{ id: string; name: string }> }> {
-    return await api.get('/pos/v1/admin/setup');
-  },
-
   // Get admin profile
   async getAdminProfile(adminId?: string) {
     void adminId;
@@ -62,7 +58,7 @@ export const adminService = {
   async getAnalytics(adminId: string | undefined, days: number = 30) {
     void adminId;
     try {
-      const orders = await api.get('/admin/analytics', { days: String(days) });
+      const orders = await api.get('/admin/analytics', { days: String(days) }) as AnalyticsApiOrder[];
 
       const totalRevenue = orders?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
       const totalOrders = orders?.length || 0;

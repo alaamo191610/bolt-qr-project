@@ -8,8 +8,8 @@ import path from 'path';
 import prisma from './db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { unlink } from 'fs/promises';
-import { createPosRouter } from './pos/routes.js';
+import { readFile, unlink } from 'fs/promises';
+import { ORDER_STATUSES, canTransitionOrder } from './orderTransitions.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -41,6 +41,9 @@ const isAllowedOrigin = (origin, requestHost) => {
     return false;
   }
 };
+
+const isUuid = value => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const corsOptions = {
   origin(origin, callback) {
@@ -84,9 +87,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('join-menu', (adminId) => {
-    socket.join(`menu_${adminId}`);
-    console.log(`Socket ${socket.id} joined menu_${adminId}`);
+  socket.on('join-menu', async (adminId) => {
+    if (!isUuid(adminId)) return;
+    try {
+      const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+        select: { id: true }
+      });
+      if (!admin) return;
+      socket.join(`menu_${adminId}`);
+      console.log(`Socket ${socket.id} joined menu_${adminId}`);
+    } catch {
+      // Invalid or unavailable restaurant identifiers are ignored.
+    }
   });
 
   socket.on('join-order', (payload) => {
@@ -120,6 +133,15 @@ const upload = multer({
   }
 });
 
+const hasImageSignature = (buffer, mimetype) => {
+  if (mimetype === 'image/jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimetype === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mimetype === 'image/gif') return buffer.subarray(0, 4).toString('ascii') === 'GIF8';
+  if (mimetype === 'image/webp') return buffer.subarray(0, 4).toString('ascii') === 'RIFF'
+    && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  return false;
+};
+
 app.disable('x-powered-by');
 app.use((req, res, next) => {
   const requestHost = req.get('x-forwarded-host') || req.get('host');
@@ -138,6 +160,27 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  if (isProduction) {
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "style-src-attr 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "connect-src 'self' https: wss:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "upgrade-insecure-requests",
+    ].join('; '));
+  }
+  if (isProduction && req.get('x-forwarded-proto') === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   next();
 });
 app.use('/uploads', express.static('uploads'));
@@ -328,13 +371,30 @@ const publicAdminSelect = {
   created_at: true,
 };
 
-app.use('/api/pos/v1', createPosRouter({
-  prisma,
-  jwtSecret: JWT_SECRET,
-  authenticateAdmin: authenticate,
-  authRateLimit,
-  io,
-}));
+app.get('/api/health/live', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.get('/api/health/ready', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ready', database: 'ok' });
+  } catch (err) {
+    console.error('Readiness check failed:', err);
+    res.status(503).json({ status: 'not_ready', database: 'unavailable' });
+  }
+});
+
+// Backward-compatible health probe for Render and local smoke checks.
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'ok' });
+  } catch (err) {
+    console.error('Health check failed:', err);
+    res.status(503).json({ status: 'not_ready' });
+  }
+});
 
 // --- Auth Routes ---
 app.post('/api/auth/login', authRateLimit, async (req, res) => {
@@ -1246,19 +1306,26 @@ app.get('/api/public/orders/:id/status', async (req, res) => {
 
 app.put('/api/orders/:id/status', authenticate, async (req, res) => {
   const { status } = req.body;
-  const allowedStatuses = new Set(['pending', 'preparing', 'ready', 'served', 'cancelled']);
-  if (!allowedStatuses.has(status)) return res.status(400).json({ error: 'Invalid order status' });
+  if (!ORDER_STATUSES.has(status)) return res.status(400).json({ error: 'Invalid order status' });
   try {
-    const ownedOrder = await prisma.order.findFirst({
-      where: { id: Number(req.params.id), admin_id: req.user.id },
-      select: { id: true }
-    });
-    if (!ownedOrder) return res.status(404).json({ error: 'Order not found' });
+    const order = await prisma.$transaction(async tx => {
+      const current = await tx.order.findFirst({
+        where: { id: Number(req.params.id), admin_id: req.user.id },
+        select: { id: true, status: true, version: true }
+      });
+      if (!current) throw Object.assign(new Error('Order not found'), { status: 404 });
+      if (current.status === status) return tx.order.findUnique({ where: { id: current.id } });
+      if (!canTransitionOrder(current.status, status)) {
+        throw Object.assign(new Error(`Cannot move order from ${current.status} to ${status}`), { status: 409 });
+      }
 
-    const order = await prisma.order.update({
-      where: { id: Number(req.params.id) },
-      data: { status }
-    });
+      const updated = await tx.order.updateMany({
+        where: { id: current.id, admin_id: req.user.id, version: current.version },
+        data: { status, version: { increment: 1 } }
+      });
+      if (updated.count !== 1) throw Object.assign(new Error('Order changed; refresh and retry'), { status: 409 });
+      return tx.order.findUnique({ where: { id: current.id } });
+    }, { isolationLevel: 'Serializable' });
 
     let releasedTable = null;
     if (order.table_id && ['served', 'cancelled'].includes(status)) {
@@ -1286,7 +1353,7 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
       }
     }
     res.json(order);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.status ? err.message : 'Internal server error' }); }
 });
 
 // --- Tables ---
@@ -1400,6 +1467,9 @@ app.get('/api/public/pricing', async (req, res) => {
     if (!tableCode) {
       return res.status(400).json({ error: 'Table code required' });
     }
+    if (adminId && !isUuid(adminId)) {
+      return res.status(400).json({ error: 'Invalid restaurant ID' });
+    }
 
     // Find table and get admin
     const tables = await prisma.table.findMany({
@@ -1441,7 +1511,7 @@ app.get('/api/public/pricing', async (req, res) => {
     res.json(admin);
   } catch (err) {
     console.error('Public pricing error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Unable to load pricing settings' });
   }
 });
 
@@ -1497,7 +1567,7 @@ app.get('/api/public/promotions/validate', orderRateLimit, async (req, res) => {
 // 🆕 Public endpoint for customer menu (No auth required)
 app.get('/api/public/menus', async (req, res) => {
   const adminId = req.query.adminId;
-  if (!adminId) {
+  if (!isUuid(adminId)) {
     return res.status(400).json({ error: 'Admin ID required' });
   }
 
@@ -1525,8 +1595,21 @@ app.get('/api/public/menus', async (req, res) => {
       has_modifiers: (m.menu_modifier_groups && m.menu_modifier_groups.length > 0) || m.has_modifiers
     }));
 
-    res.json(mapped);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    // Preserve existing records while preventing duplicate catalog rows from
+    // being shown to customers. The newest row wins without deleting data.
+    const seenCatalogItems = new Set();
+    const deduplicated = mapped.filter(item => {
+      const key = `${item.category_id ?? 'uncategorized'}:${String(item.name_en).trim().toLowerCase()}:${item.price}`;
+      if (seenCatalogItems.has(key)) return false;
+      seenCatalogItems.add(key);
+      return true;
+    });
+
+    res.json(deduplicated);
+  } catch (err) {
+    console.error('Public menu error:', err);
+    res.status(500).json({ error: 'Unable to load the menu' });
+  }
 });
 
 // --- Admin ---
@@ -1842,9 +1925,16 @@ app.put('/api/admin/theme', authenticate, async (req, res) => {
 // --- Uploads ---
 app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  // In prod, upload to S3 here. For now, return local path.
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+  readFile(req.file.path).then(buffer => {
+    if (!hasImageSignature(buffer, req.file.mimetype)) {
+      return unlink(req.file.path)
+        .catch(() => {})
+        .then(() => res.status(400).json({ error: 'Uploaded file content does not match its image type' }));
+    }
+    // In prod, upload to S3 here. For now, return local path.
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    return res.json({ url: fileUrl });
+  }).catch(() => res.status(400).json({ error: 'Unable to inspect uploaded file' }));
 });
 
 app.delete('/api/upload/:filename', authenticate, async (req, res) => {

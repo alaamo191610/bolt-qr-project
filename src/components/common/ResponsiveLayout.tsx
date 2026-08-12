@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ExternalLink, LogOut, Menu, MonitorSmartphone, Search, X } from "lucide-react";
+import { LogOut, Menu, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -23,7 +23,6 @@ interface ResponsiveLayoutProps {
     email: string;
   };
   onSignOut?: () => void;
-  posUrl?: string;
 }
 
 const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
@@ -33,7 +32,6 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   setActiveTab,
   userInfo,
   onSignOut,
-  posUrl,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
@@ -182,18 +180,6 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               </button>
             );
           })}
-          {posUrl && (
-            <a
-              href={posUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setSidebarOpen(false)}
-              className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-500/20 transition-colors"
-            >
-              <span className="flex items-center gap-3"><MonitorSmartphone className="w-5 h-5" />{isRTL ? "فتح نقطة البيع" : "Open POS"}</span>
-              <ExternalLink className="w-4 h-4" />
-            </a>
-          )}
         </nav>
 
         {/* User Info in Sidebar */}
@@ -306,18 +292,6 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             <div
               className="flex relative float-right items-center space-x-3 rtl:space-x-reverse ml-4"
             >
-              {posUrl && (
-                <a
-                  href={posUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 transition-colors"
-                >
-                  <MonitorSmartphone className="w-4 h-4" />
-                  <span>{isRTL ? "فتح نقطة البيع" : "Open POS"}</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              )}
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">

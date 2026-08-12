@@ -32,7 +32,7 @@ interface OrderItem {
   customizationDetails?: CustomizationDetails;
 }
 
-interface Order {
+export interface Order {
   id: number;
   order_number?: number;
   tableNumber: string;

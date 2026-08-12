@@ -9,14 +9,15 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useCurrency } from "../contexts/CurrencyContext";
-import OrderTrendChart from "../components/charts/OrderTrendChart";
-import StatusPieChart from "../components/charts/StatusPieChart";
-import TopRevenueItemsChart from "../components/charts/TopRevenueItemsChart";
-import TopTableRevenueChart from "../components/charts/TopTableRevenueChart";
-import HourlyHeatmap from "../components/charts/HourlyHeatmap";
 import ExportOrdersPDFButton from "../components/exports/ExportOrdersPDFButton";
 import type { OrderWithItems as PdfOrder } from "../lib/supabase";
 import { menuService } from "../services/menuService";
+
+const OrderTrendChart = React.lazy(() => import("../components/charts/OrderTrendChart"));
+const StatusPieChart = React.lazy(() => import("../components/charts/StatusPieChart"));
+const TopRevenueItemsChart = React.lazy(() => import("../components/charts/TopRevenueItemsChart"));
+const TopTableRevenueChart = React.lazy(() => import("../components/charts/TopTableRevenueChart"));
+const HourlyHeatmap = React.lazy(() => import("../components/charts/HourlyHeatmap"));
 
 type OrderStatus =
   | "pending"
@@ -42,7 +43,7 @@ interface Order {
   items: OrderItem[];
   total: number;
   status: OrderStatus | string;
-  timestamp: Date;
+  timestamp: Date | string;
 }
 
 interface AnalyticsProps {
@@ -56,10 +57,14 @@ interface TrendDay {
   revenue: number;
 }
 
-const isSameLocalDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
+const isSameLocalDay = (a: Date | string, b: Date) => {
+  const date = new Date(a);
+  return (
+    date.getFullYear() === b.getFullYear() &&
+    date.getMonth() === b.getMonth() &&
+    date.getDate() === b.getDate()
+  );
+};
 
 const toLocalISODate = (d: Date) => {
   const y = d.getFullYear();
@@ -257,7 +262,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
       id: String(o.id),
       user_id: "guest",
       table_id: o.tableNumber,
-      created_at: o.timestamp.toISOString(),
+      created_at: new Date(o.timestamp).toISOString(),
       total: o.total,
       status: o.status as string,
       items: o.items.map((i) => ({
@@ -516,14 +521,14 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
         )}
       </div>
 
-      {/* Hourly Heatmap */}
-      <HourlyHeatmap orders={orders} />
-
-      {/* Charts */}
-      <TopTableRevenueChart data={topTablesByRevenue} t={t} />
-      <TopRevenueItemsChart data={topItemsByRevenue} t={t} />
-      <StatusPieChart data={statusData} t={t} />
-      <OrderTrendChart data={weekTrend} t={t} />
+      <React.Suspense fallback={<div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">{t("common.loading")}</div>}>
+        {/* Hourly Heatmap and chart libraries load only when Analytics is opened. */}
+        <HourlyHeatmap orders={orders} />
+        <TopTableRevenueChart data={topTablesByRevenue} t={t} />
+        <TopRevenueItemsChart data={topItemsByRevenue} t={t} />
+        <StatusPieChart data={statusData} t={t} />
+        <OrderTrendChart data={weekTrend} t={t} />
+      </React.Suspense>
 
       {/* Weekly Trend mini-cards */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">

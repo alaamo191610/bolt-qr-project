@@ -17,9 +17,10 @@ import { orderService } from "../services/orderService";
 import { tableService } from "../services/tableService";
 import { trackMenuEvents } from "../lib/firebase";
 import LanguageToggle from "../components/common/LanguageToggle";
-import CartDrawer from "../components/ui/CartDrawer";
+import CartDrawer, { type CartItem as DrawerCartItem } from "../components/ui/CartDrawer";
 import CategoryFilter from "../components/ui/CategoryFilter";
 import MenuGrid from "../components/ui/MenuGrid";
+import type { MenuItem as CardMenuItem } from "../components/ui/MenuItemCard";
 import OrderConfirmation from "../components/ui/OrderConfirmation";
 import CompareSheet from "../components/ui/CompareSheet"; // 🆕 compare modal
 import StoriesSection from "../components/ui/StoriesSection"; // 🆕 stories
@@ -86,7 +87,9 @@ interface ActiveOrder {
 type OverlayPos = { top: number; left?: number; right?: number };
 
 // scoped cart key per table
-const cartKeyFor = (table: string) => `qr-cart-v1:${table || "unknown"}`;
+const cartKeyFor = (table: string, adminId = "") =>
+  `qr-cart-v2:${adminId || "unknown-restaurant"}:${table || "unknown"}`;
+const orderTypeKeyFor = (table: string) => `qr-order-type-v1:${table || "unknown"}`;
 const activeOrderKeyFor = (adminId: string, table: string) =>
   `qr-active-order-v1:${adminId}:${table || "unknown"}`;
 const ACTIVE_ORDER_TTL_MS = 24 * 60 * 60 * 1000;
@@ -119,6 +122,14 @@ const restoreActiveOrderFromUrl = (): ActiveOrder | null => {
   }
 };
 
+const restoreOrderTypeFromUrl = (): 'dine_in' | 'take_away' | null => {
+  if (typeof window === 'undefined') return null;
+  const table = getTrackingContextFromUrl().table;
+  if (!table) return null;
+  const saved = sessionStorage.getItem(orderTypeKeyFor(table));
+  return saved === 'dine_in' || saved === 'take_away' ? saved : null;
+};
+
 const variantKey = (item: Partial<MenuItem>) =>
   JSON.stringify({
     id: item.id,
@@ -146,6 +157,7 @@ const CustomerMenu: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState("");
+  const [adminId, setAdminId] = useState<string | null>(null);
 
   // ui
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -163,7 +175,7 @@ const CustomerMenu: React.FC = () => {
   // state
   const [loading, setLoading] = useState(true);
   const [isOrdering, setIsOrdering] = useState(false);
-  const [orderType, setOrderType] = useState<'dine_in' | 'take_away' | null>(null);
+  const [orderType, setOrderType] = useState<'dine_in' | 'take_away' | null>(restoreOrderTypeFromUrl);
   const [error, setError] = useState<{ code: string; params?: Record<string, string> } | null>(null);
   // NEW: Store the full active order, not just a boolean
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(restoreActiveOrderFromUrl);
@@ -278,6 +290,11 @@ const CustomerMenu: React.FC = () => {
     trackMenuEvents.menuViewed(tableNumber, language);
   }, [language, tableNumber]);
 
+  useEffect(() => {
+    if (!tableNumber || !orderType) return;
+    sessionStorage.setItem(orderTypeKeyFor(tableNumber), orderType);
+  }, [orderType, tableNumber]);
+
   // load selected category per table
   useEffect(() => {
     if (!tableNumber) return;
@@ -296,22 +313,24 @@ const CustomerMenu: React.FC = () => {
   // cart persistence (per table)
   useEffect(() => {
     if (!tableNumber) return;
+    const restaurantId = adminId || getTrackingContextFromUrl().adminId;
     try {
-      const saved = sessionStorage.getItem(cartKeyFor(tableNumber));
+      const saved = sessionStorage.getItem(cartKeyFor(tableNumber, restaurantId));
       if (saved) setCart(JSON.parse(saved));
     } catch {
       /* ignore */
     }
-  }, [tableNumber]);
+  }, [adminId, tableNumber]);
 
   useEffect(() => {
     if (!tableNumber) return;
+    const restaurantId = adminId || getTrackingContextFromUrl().adminId;
     try {
-      sessionStorage.setItem(cartKeyFor(tableNumber), JSON.stringify(cart));
+      sessionStorage.setItem(cartKeyFor(tableNumber, restaurantId), JSON.stringify(cart));
     } catch {
       /* ignore */
     }
-  }, [cart, tableNumber]);
+  }, [adminId, cart, tableNumber]);
 
   const prefersReducedMotion =
     typeof window !== "undefined" &&
@@ -354,7 +373,11 @@ const CustomerMenu: React.FC = () => {
 
       setAdminId(table.admin_id);
 
-      const items = await menuService.getMenuItems(table.admin_id);
+      const items = await menuService.getMenuItems(table.admin_id) as unknown as Array<MenuItem & {
+        ingredients_details?: { ingredient: Ingredient }[];
+        categories?: Category | null;
+        has_modifiers?: boolean;
+      }>;
       if (!items || items.length === 0) {
         setError({ code: "status.noMenuItems" });
         return;
@@ -401,8 +424,6 @@ const CustomerMenu: React.FC = () => {
   };
 
 
-
-  const [adminId, setAdminId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!adminId || !tableNumber || activeOrder) return;
@@ -627,7 +648,7 @@ const CustomerMenu: React.FC = () => {
       persistActiveOrder(newOrder);
       setShowCart(false);
       setCart([]);
-      sessionStorage.removeItem(cartKeyFor(tableNumber)); // clear persisted cart
+      sessionStorage.removeItem(cartKeyFor(tableNumber, adminId || getTrackingContextFromUrl().adminId)); // clear persisted cart
     } catch (err) {
       setError({ code: "status.failedToPlaceOrder" });
       console.error("Error placing order:", err);
@@ -927,7 +948,7 @@ const CustomerMenu: React.FC = () => {
 
         {/* Menu Items */}
         <MenuGrid
-          items={filteredItems}
+          items={filteredItems as unknown as CardMenuItem[]}
           quantityMap={quantityMap}
           onAdd={addToCart}
           onRemove={removeFromCart}
@@ -1099,7 +1120,7 @@ const CustomerMenu: React.FC = () => {
       {/* Cart Drawer */}
       {showCart && (
         <CartDrawer
-          cart={cart}
+          cart={cart as unknown as DrawerCartItem[]}
           tableNumber={tableNumber}
           isRTL={isRTL}
           isOrdering={isOrdering}
@@ -1305,7 +1326,7 @@ const CustomerMenu: React.FC = () => {
       {/* 🆕 Compare sheet */}
       {showCompare && (
         <CompareSheet
-          items={comparedItems}
+          items={comparedItems as unknown as CardMenuItem[]}
           isRTL={isRTL}
           currency={currency}
           onClose={() => setShowCompare(false)}

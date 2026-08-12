@@ -630,7 +630,7 @@ const DigitalMenu: React.FC = () => {
         }
       }
 
-      const data = await menuService.getMenuItems(user.id);
+      const data = await menuService.getMenuItems(user.id) as unknown as MenuItem[];
 
       console.log("Fetched items:", data); // Debug log
 

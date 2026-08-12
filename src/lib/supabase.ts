@@ -82,6 +82,9 @@ export interface Admin {
   id: string
   email: string
   restaurant_name?: string
+  phone?: string
+  address?: string
+  description?: string
   name?: string
   logo_url?: string
   theme_color?: string

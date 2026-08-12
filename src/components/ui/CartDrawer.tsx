@@ -9,7 +9,7 @@ import type { Promotion } from '../../pricing/types';
 import { HiXMark } from "react-icons/hi2";
 import { getErrorMessage } from '../../utils/errors';
 
-interface CartItem extends MenuItem { quantity: number; }
+export interface CartItem extends MenuItem { quantity: number; }
 
 interface Props {
   cart: CartItem[];

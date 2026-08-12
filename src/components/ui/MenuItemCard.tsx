@@ -25,6 +25,7 @@ type CartLine = {
   options?: { optionId: string; qty?: number }[];
   comboChildren?: { groupId: string; childMenuId: string; notes?: string }[];
   priceDelta?: number;
+  displayLabels?: string[];
 };
 
 /* ---------- Types ---------- */
