@@ -8,8 +8,17 @@ import path from 'path';
 import prisma from './db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import { readFile, unlink } from 'fs/promises';
 import { ORDER_STATUSES, canTransitionOrder } from './orderTransitions.js';
+import {
+  MEMBERSHIP_STATUSES,
+  ORGANIZATION_ROLES,
+  buildTenantClaims,
+  canAssignOrganizationRole,
+  getIdentityIdFromClaims,
+  tenantUserResponse,
+} from './tenantAccess.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -55,6 +64,53 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 };
 
+const resolveTenantSession = async ({ userId, organizationId }) => {
+  if (!isUuid(userId)) return null;
+
+  const membership = await prisma.organizationUser.findFirst({
+    where: {
+      user_id: userId,
+      status: 'ACTIVE',
+      ...(organizationId ? { organization_id: organizationId } : {}),
+      user: { active: true },
+      organization: { active: true },
+    },
+    include: {
+      user: true,
+      organization: true,
+      default_branch: true,
+    },
+    orderBy: { created_at: 'asc' },
+  });
+  if (!membership) return null;
+
+  // Admin remains the compatibility restaurant profile during the transition.
+  // All members of an organization resolve to this same profile/data owner.
+  const admin = await prisma.admin.findFirst({
+    where: { organization_id: membership.organization_id },
+    orderBy: { created_at: 'asc' },
+  });
+  if (!admin) return null;
+
+  return { membership, user: membership.user, organization: membership.organization, admin };
+};
+
+const resolveTenantClaims = claims => resolveTenantSession({
+  userId: getIdentityIdFromClaims(claims),
+  organizationId: claims.organizationId,
+});
+
+const issueTenantToken = session => jwt.sign(
+  buildTenantClaims(session),
+  JWT_SECRET,
+  { subject: session.user.id, expiresIn: '24h' },
+);
+
+const tenantResponse = (session, token) => ({
+  token,
+  user: tenantUserResponse(session),
+});
+
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
@@ -71,14 +127,10 @@ io.on('connection', (socket) => {
     if (!adminId || !token) return;
 
     try {
-      const user = jwt.verify(token, JWT_SECRET);
-      if (user.role !== 'RESTAURANT_ADMIN' || user.id !== adminId) return;
-
-      const admin = await prisma.admin.findUnique({
-        where: { id: user.id },
-        select: { id: true }
-      });
-      if (!admin) return;
+      const claims = jwt.verify(token, JWT_SECRET);
+      if (claims.role !== 'RESTAURANT_ADMIN') return;
+      const session = await resolveTenantClaims(claims);
+      if (!session || session.admin.id !== adminId) return;
 
       socket.join(`admin_${adminId}`);
       console.log(`Socket ${socket.id} joined admin_${adminId}`);
@@ -216,25 +268,34 @@ const authenticate = async (req, res, next) => {
 
   try {
     const token = authHeader.slice('Bearer '.length).trim();
-    const user = jwt.verify(token, JWT_SECRET);
-    if (!user?.id) return res.status(403).json({ error: 'Invalid token' });
+    const claims = jwt.verify(token, JWT_SECRET);
+    if (!claims?.id && !claims?.sub) return res.status(403).json({ error: 'Invalid token' });
 
-    if (user.role === 'SUPER_ADMIN') {
+    if (claims.role === 'SUPER_ADMIN') {
       const superAdmin = await prisma.superAdmin.findUnique({
-        where: { id: user.id },
+        where: { id: claims.id },
         select: { id: true }
       });
       if (!superAdmin) return res.status(403).json({ error: 'Invalid token' });
+      req.user = claims;
     } else {
-      const admin = await prisma.admin.findUnique({
-        where: { id: user.id },
-        select: { id: true }
-      });
-      if (!admin) return res.status(403).json({ error: 'Invalid token' });
-      user.role = 'RESTAURANT_ADMIN';
-    }
+      const session = await resolveTenantClaims(claims);
+      if (!session) return res.status(403).json({ error: 'Tenant access is inactive or unavailable' });
 
-    req.user = user;
+      req.auth = {
+        userId: session.user.id,
+        organizationId: session.organization.id,
+        branchId: session.membership.default_branch_id || session.admin.default_branch_id || null,
+        membershipRole: session.membership.role,
+      };
+      req.user = {
+        ...claims,
+        id: session.admin.id,
+        userId: session.user.id,
+        organizationId: session.organization.id,
+        role: 'RESTAURANT_ADMIN',
+      };
+    }
     next();
   } catch {
     return res.status(403).json({ error: 'Invalid or expired token' });
@@ -244,6 +305,13 @@ const authenticate = async (req, res, next) => {
 const requireSuperAdmin = (req, res, next) => {
   if (req.user?.role !== 'SUPER_ADMIN') {
     return res.status(403).json({ error: 'Super-admin access required' });
+  }
+  next();
+};
+
+const requireOrganizationRole = (...roles) => (req, res, next) => {
+  if (!req.auth?.membershipRole || !roles.includes(req.auth.membershipRole)) {
+    return res.status(403).json({ error: 'Insufficient organization permissions' });
   }
   next();
 };
@@ -398,27 +466,254 @@ app.get('/api/health', async (_req, res) => {
 
 // --- Auth Routes ---
 app.post('/api/auth/login', authRateLimit, async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const admin = await prisma.admin.findUnique({ where: { email } });
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  const organizationId = req.body.organizationId ? String(req.body.organizationId) : undefined;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (organizationId && !isUuid(organizationId)) return res.status(400).json({ error: 'Invalid organization' });
 
-    if (!admin) {
-      return res.status(401).json({ error: 'User not found. Please Sign Up first.' });
+  try {
+    const identity = await prisma.user.findUnique({ where: { email } });
+    if (!identity?.password_hash || !identity.active || !(await bcrypt.compare(password, identity.password_hash))) {
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
-    if (!admin.password) {
-      return res.status(401).json({ error: 'Account exists but has no password. Please use Sign Up to set one.' });
-    }
-    if (!(await bcrypt.compare(password, admin.password))) {
-      return res.status(401).json({ error: 'Incorrect password' });
-    }
-    const token = jwt.sign(
-      { id: admin.id, email: admin.email, role: 'RESTAURANT_ADMIN' },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    res.json({ token, user: { id: admin.id, email: admin.email, name: admin.restaurant_name } });
-  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+
+    const session = await resolveTenantSession({ userId: identity.id, organizationId });
+    if (!session) return res.status(403).json({ error: 'No active restaurant membership is available' });
+
+    await prisma.user.update({ where: { id: identity.id }, data: { last_login_at: new Date() } });
+    res.json(tenantResponse(session, issueTenantToken(session)));
+  } catch (err) {
+    console.error('Tenant login failed:', err);
+    res.status(500).json({ error: 'Unable to sign in' });
+  }
 });
+
+app.get('/api/auth/session', authenticate, async (req, res) => {
+  if (!req.auth?.userId) return res.status(403).json({ error: 'Restaurant membership required' });
+  try {
+    const session = await resolveTenantSession({
+      userId: req.auth.userId,
+      organizationId: req.auth.organizationId,
+    });
+    if (!session) return res.status(403).json({ error: 'Tenant access is inactive or unavailable' });
+    res.json({
+      user: tenantResponse(session, null).user,
+      profile: {
+        id: session.admin.id,
+        restaurantName: session.admin.restaurant_name,
+        preferredLanguage: session.admin.preferred_language,
+      },
+    });
+  } catch (err) {
+    console.error('Session lookup failed:', err);
+    res.status(500).json({ error: 'Unable to restore session' });
+  }
+});
+
+app.get('/api/auth/organizations', authenticate, async (req, res) => {
+  if (!req.auth?.userId) return res.status(403).json({ error: 'Restaurant membership required' });
+  try {
+    const memberships = await prisma.organizationUser.findMany({
+      where: { user_id: req.auth.userId, status: 'ACTIVE', organization: { active: true } },
+      include: { organization: true, default_branch: true },
+      orderBy: { created_at: 'asc' },
+    });
+    res.json(memberships.map(membership => ({
+      id: membership.organization.id,
+      name: membership.organization.name,
+      slug: membership.organization.slug,
+      role: membership.role,
+      defaultBranch: membership.default_branch,
+      current: membership.organization_id === req.auth.organizationId,
+    })));
+  } catch (err) {
+    console.error('Organization list failed:', err);
+    res.status(500).json({ error: 'Unable to load organizations' });
+  }
+});
+
+app.post('/api/auth/switch-organization', authenticate, async (req, res) => {
+  const organizationId = String(req.body.organizationId || '');
+  if (!isUuid(organizationId) || !req.auth?.userId) {
+    return res.status(400).json({ error: 'Valid organization ID required' });
+  }
+  try {
+    const session = await resolveTenantSession({ userId: req.auth.userId, organizationId });
+    if (!session) return res.status(403).json({ error: 'You do not have access to this organization' });
+    res.json(tenantResponse(session, issueTenantToken(session)));
+  } catch (err) {
+    console.error('Organization switch failed:', err);
+    res.status(500).json({ error: 'Unable to switch organization' });
+  }
+});
+
+app.get(
+  '/api/organization/members',
+  authenticate,
+  requireOrganizationRole('OWNER', 'MANAGER'),
+  async (req, res) => {
+    try {
+      const memberships = await prisma.organizationUser.findMany({
+        where: { organization_id: req.auth.organizationId },
+        include: { user: true, default_branch: true },
+        orderBy: { created_at: 'asc' },
+      });
+      res.json(memberships.map(membership => ({
+        userId: membership.user_id,
+        email: membership.user.email,
+        name: membership.user.name,
+        role: membership.role,
+        status: membership.status,
+        defaultBranch: membership.default_branch,
+        createdAt: membership.created_at,
+      })));
+    } catch (err) {
+      console.error('Organization member list failed:', err);
+      res.status(500).json({ error: 'Unable to load organization members' });
+    }
+  },
+);
+
+app.post(
+  '/api/organization/members',
+  authenticate,
+  requireOrganizationRole('OWNER', 'MANAGER'),
+  async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const name = String(req.body.name || '').trim() || null;
+    const password = String(req.body.password || '');
+    const role = String(req.body.role || 'STAFF').toUpperCase();
+    if (!email || !ORGANIZATION_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Valid email and role required' });
+    }
+    if (!canAssignOrganizationRole(req.auth.membershipRole, role)) {
+      return res.status(403).json({ error: 'Only an owner can add another owner' });
+    }
+
+    try {
+      const staffCount = await prisma.organizationUser.count({
+        where: {
+          organization_id: req.auth.organizationId,
+          role: { not: 'OWNER' },
+          status: { in: ['ACTIVE', 'INVITED'] },
+        },
+      });
+      const restaurant = await prisma.admin.findFirst({
+        where: { organization_id: req.auth.organizationId },
+        select: { max_staff_accounts: true, default_branch_id: true },
+      });
+      if (role !== 'OWNER' && restaurant && staffCount >= restaurant.max_staff_accounts) {
+        return res.status(409).json({ error: 'The organization member limit has been reached' });
+      }
+
+      const existingIdentity = await prisma.user.findUnique({ where: { email } });
+      if (!existingIdentity && password.length < 8) {
+        return res.status(400).json({ error: 'A password of at least 8 characters is required for a new user' });
+      }
+
+      const membership = await prisma.$transaction(async tx => {
+        const identity = existingIdentity || await tx.user.create({
+          data: {
+            email,
+            name,
+            password_hash: await bcrypt.hash(password, 10),
+          },
+        });
+        return tx.organizationUser.create({
+          data: {
+            organization_id: req.auth.organizationId,
+            user_id: identity.id,
+            default_branch_id: restaurant?.default_branch_id || null,
+            role,
+            status: 'ACTIVE',
+          },
+          include: { user: true, default_branch: true },
+        });
+      });
+
+      res.status(201).json({
+        userId: membership.user_id,
+        email: membership.user.email,
+        name: membership.user.name,
+        role: membership.role,
+        status: membership.status,
+        defaultBranch: membership.default_branch,
+      });
+    } catch (err) {
+      if (err.code === 'P2002') return res.status(409).json({ error: 'This user is already a member' });
+      console.error('Organization member creation failed:', err);
+      res.status(500).json({ error: 'Unable to add organization member' });
+    }
+  },
+);
+
+app.patch(
+  '/api/organization/members/:userId',
+  authenticate,
+  requireOrganizationRole('OWNER'),
+  async (req, res) => {
+    const userId = String(req.params.userId || '');
+    const role = req.body.role ? String(req.body.role).toUpperCase() : undefined;
+    const status = req.body.status ? String(req.body.status).toUpperCase() : undefined;
+    if (!isUuid(userId) || (role && !ORGANIZATION_ROLES.includes(role)) ||
+      (status && !MEMBERSHIP_STATUSES.includes(status))) {
+      return res.status(400).json({ error: 'Invalid membership update' });
+    }
+    if (userId === req.auth.userId && status === 'SUSPENDED') {
+      return res.status(409).json({ error: 'You cannot suspend your own membership' });
+    }
+    try {
+      const updated = await prisma.$transaction(async tx => {
+        const current = await tx.organizationUser.findUnique({
+          where: {
+            organization_id_user_id: {
+              organization_id: req.auth.organizationId,
+              user_id: userId,
+            },
+          },
+        });
+        if (!current) throw Object.assign(new Error('Membership not found'), { status: 404 });
+        const removesActiveOwner = current.role === 'OWNER' && current.status === 'ACTIVE' &&
+          ((Boolean(role) && role !== 'OWNER') || (Boolean(status) && status !== 'ACTIVE'));
+        if (removesActiveOwner) {
+          const activeOwnerCount = await tx.organizationUser.count({
+            where: { organization_id: req.auth.organizationId, role: 'OWNER', status: 'ACTIVE' },
+          });
+          if (activeOwnerCount <= 1) {
+            throw Object.assign(new Error('An organization must retain at least one active owner'), { status: 409 });
+          }
+        }
+        return tx.organizationUser.update({
+          where: {
+            organization_id_user_id: {
+              organization_id: req.auth.organizationId,
+              user_id: userId,
+            },
+          },
+          data: {
+            ...(role ? { role } : {}),
+            ...(status ? { status } : {}),
+          },
+          include: { user: true, default_branch: true },
+        });
+      }, { isolationLevel: 'Serializable' });
+      res.json({
+        userId: updated.user_id,
+        email: updated.user.email,
+        name: updated.user.name,
+        role: updated.role,
+        status: updated.status,
+        defaultBranch: updated.default_branch,
+      });
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      if (err.code === 'P2025') return res.status(404).json({ error: 'Membership not found' });
+      console.error('Organization member update failed:', err);
+      res.status(500).json({ error: 'Unable to update organization member' });
+    }
+  },
+);
 
 // --- Menus ---
 app.get('/api/menus', authenticate, async (req, res) => {
@@ -1636,22 +1931,73 @@ app.get('/api/admins', authenticate, requireSuperAdmin, async (req, res) => {
 
 app.post('/api/admins', authRateLimit, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
-  const { password, restaurant_name } = req.body;
+  const password = String(req.body.password || '');
+  const restaurantName = String(req.body.restaurant_name || '').trim() || email.split('@')[0] || 'Restaurant';
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (String(password).length < 8) {
+  if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
 
   try {
-    const targetUser = await prisma.admin.findUnique({ where: { email } });
-    if (targetUser) return res.status(409).json({ error: 'An account with this email already exists' });
+    const [existingIdentity, existingAdmin] = await Promise.all([
+      prisma.user.findUnique({ where: { email }, select: { id: true } }),
+      prisma.admin.findUnique({ where: { email }, select: { id: true } }),
+    ]);
+    if (existingIdentity || existingAdmin) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const admin = await prisma.admin.create({
-      data: { email, password: hashedPassword, restaurant_name },
-      select: publicAdminSelect
+    const result = await prisma.$transaction(async tx => {
+      const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+      const slugBase = restaurantName
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 40) || 'restaurant';
+      const organization = await tx.organization.create({
+        data: { name: restaurantName, slug: `${slugBase}-${suffix}` },
+      });
+      const branch = await tx.branch.create({
+        data: {
+          organization_id: organization.id,
+          code: 'MAIN',
+          name: 'Main Branch',
+          timezone: process.env.DEFAULT_TIMEZONE || 'Asia/Amman',
+          currency: process.env.DEFAULT_CURRENCY || 'JOD',
+        },
+      });
+      const identity = await tx.user.create({
+        data: { email, password_hash: hashedPassword, name: restaurantName },
+      });
+      await tx.organizationUser.create({
+        data: {
+          organization_id: organization.id,
+          user_id: identity.id,
+          default_branch_id: branch.id,
+          role: 'OWNER',
+          status: 'ACTIVE',
+        },
+      });
+      const admin = await tx.admin.create({
+        data: {
+          organization_id: organization.id,
+          default_branch_id: branch.id,
+          email,
+          // Transitional copy; User.password_hash is now authoritative.
+          password: hashedPassword,
+          restaurant_name: restaurantName,
+        },
+        select: publicAdminSelect,
+      });
+      return { admin, organization, identity };
     });
-    res.status(201).json(admin);
+    res.status(201).json({
+      ...result.admin,
+      identity_id: result.identity.id,
+      organization_id: result.organization.id,
+    });
   } catch (err) {
     if (err.code === 'P2002') {
       return res.status(409).json({ error: 'An account with this email already exists' });

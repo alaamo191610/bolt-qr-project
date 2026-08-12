@@ -85,6 +85,54 @@ enum OrderItemStatus {
   VOIDED
 }
 
+enum OrganizationRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique
+  password_hash String?
+  name          String?
+  active        Boolean   @default(true)
+  last_login_at DateTime? @db.Timestamptz
+  created_at    DateTime  @default(now()) @db.Timestamptz
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  memberships OrganizationUser[]
+
+  @@index([active])
+  @@map("users")
+}
+
+model OrganizationUser {
+  organization_id   String           @db.Uuid
+  user_id           String           @db.Uuid
+  default_branch_id String?          @db.Uuid
+  role              OrganizationRole @default(STAFF)
+  status            MembershipStatus @default(ACTIVE)
+  created_at        DateTime         @default(now()) @db.Timestamptz
+  updated_at        DateTime         @default(now()) @updatedAt @db.Timestamptz
+
+  organization   Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  default_branch Branch?      @relation(fields: [default_branch_id], references: [id], onDelete: SetNull)
+
+  @@id([organization_id, user_id])
+  @@index([user_id, status])
+  @@index([organization_id, role, status])
+  @@index([default_branch_id])
+  @@map("organization_users")
+}
+
 model Admin {
   id                 String   @id @default(uuid()) @db.Uuid
   organization_id    String?  @db.Uuid
@@ -419,6 +467,7 @@ model Organization {
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
 
   admins       Admin[]
+  users        OrganizationUser[]
   branches     Branch[]
   employees    Employee[]
   pos_roles    PosRole[]
@@ -442,6 +491,7 @@ model Branch {
 
   organization       Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   default_for_admins Admin[]              @relation("AdminDefaultBranch")
+  default_for_users  OrganizationUser[]
   categories         Category[]
   ingredients        Ingredient[]
   menus              Menu[]

@@ -6,23 +6,39 @@ import { getErrorMessage } from "../utils/errors";
 
 export interface User {
   id: string;
+  identityId?: string;
   email: string;
   name?: string;
+  organizationId?: string;
+  organizationName?: string;
+  role?: "OWNER" | "MANAGER" | "STAFF";
+}
+
+export interface OrganizationMembership {
+  id: string;
+  name: string;
+  slug: string;
+  role: "OWNER" | "MANAGER" | "STAFF";
+  current: boolean;
 }
 
 type AuthCtxType = {
   user: User | null;
+  organizations: OrganizationMembership[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  switchOrganization: (organizationId: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthCtx = React.createContext<AuthCtxType>({
   user: null,
+  organizations: [],
   loading: true,
   signIn: async () => {},
   signUp: async () => {},
+  switchOrganization: async () => {},
   signOut: async () => {},
 });
 
@@ -30,9 +46,15 @@ export const useAuth = () => React.useContext(AuthCtx);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
+  const [organizations, setOrganizations] = React.useState<OrganizationMembership[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  const initAuth = async () => {
+  const loadOrganizations = React.useCallback(async () => {
+    const memberships = await api.get("/auth/organizations");
+    setOrganizations(Array.isArray(memberships) ? memberships : []);
+  }, []);
+
+  const initAuth = React.useCallback(async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) {
       setLoading(false);
@@ -40,17 +62,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Fetch profile using the token to validate session and get user info
-      const profile = await api.get("/admin/profile");
-      if (profile) {
-        setUser({
-          id: profile.id,
-          email: profile.email,
-          name: profile.restaurant_name,
-        });
+      const session = await api.get("/auth/session");
+      if (session?.user) {
+        setUser(session.user);
+        await loadOrganizations();
 
         // Handle language preference
-        const pref = profile.preferred_language;
+        const pref = session.profile?.preferredLanguage;
         if (pref) {
           const saved = localStorage.getItem("restaurant-language");
           if (saved !== pref) {
@@ -66,14 +84,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Session restoration failed:", error);
       localStorage.removeItem("auth_token");
+      setOrganizations([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadOrganizations]);
 
   React.useEffect(() => {
-    initAuth();
-  }, []);
+    void initAuth();
+  }, [initAuth]);
 
   // methods
   const signIn = async (email: string, password: string) => {
@@ -83,11 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       localStorage.setItem("auth_token", token);
-      setUser({
-        id: authUser.id,
-        email: authUser.email,
-        name: authUser.name,
-      });
+      setUser(authUser);
+      await loadOrganizations();
     } catch (error) {
       console.error("Login failed:", error);
       throw error;
@@ -112,14 +128,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const switchOrganization = async (organizationId: string) => {
+    const { token, user: authUser } = await api.post("/auth/switch-organization", { organizationId });
+    localStorage.setItem("auth_token", token);
+    setUser(authUser);
+    await loadOrganizations();
+  };
+
   const signOut = async () => {
     localStorage.removeItem("auth_token");
     sessionStorage.clear();
     setUser(null);
+    setOrganizations([]);
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthCtx.Provider value={{ user, organizations, loading, signIn, signUp, switchOrganization, signOut }}>
       {children}
     </AuthCtx.Provider>
   );
