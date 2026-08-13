@@ -729,7 +729,7 @@ prepared; no implementation item below is marked Done.
 
 | Order | Work item | Owner | Status | Completion test/evidence |
 |---|---|---|---|---|
-| 0 | Record the four D1 decisions: tracking expiry, takeaway entry point, POS disposition, and log retention. | Yazan + Alaa | **Blocked — decision required** | Signed decision log / ADR; takeaway decision is required before G1 can ship. |
+| 0 | Record the four D1 decisions: tracking expiry, takeaway entry point, POS disposition, and log retention. | Yazan + Alaa | **Drafted, pending Yazan sign-off** | Decisions recorded in `D1-Decision-Log.md`: 6h tracking token/no refresh; takeaway disabled for Release 1 (dine-in only); QR code stays permanent, only the scan-time session token expires; POS schema parked; 30-day redacted log retention. Awaiting Yazan's signature to flip to Done. |
 | 1 | Establish test infrastructure: isolated test DB, fixture/seeding helper, HTTP harness, and E2E runner. | Both | **Frontend half done** | Vitest + Testing Library + jsdom + MSW installed and passing (`npm run test:frontend`); Playwright + axe installed with a smoke spec (`npm run test:e2e`). Backend half (test DB, fixtures, HTTP harness for Express) not started. |
 | 2 | Extract route modules mechanically, with no behaviour change. | Yazan | Not started | Existing unit tests plus endpoint smoke tests pass before and after extraction; review confirms no logic change. |
 | 3 | Add request ID, structured request logging, centralized safe error responses, and redaction. | Yazan | Not started | Unit tests for redaction/error normalization; integration tests verify `X-Request-Id`, safe 500 response, and no raw Prisma message. |
