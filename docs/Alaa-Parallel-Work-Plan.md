@@ -140,6 +140,17 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
    (network/server-aware) error message and leaves the customer on the cart to retry. Not
    unit-tested (1346-line component, disproportionate mocking for this fix) — verified by
    direct review, typecheck, and build.
+8. ~~Admin menu screen showed the wrong empty state on a failed load~~ — **Done**
+   (`codex/api-response-typing` @ `36aa958`). `DigitalMenu.tsx`'s `fetchItems` caught every
+   error and left `items` as `[]`, which rendered the exact same "No items yet, add your
+   first item" onboarding empty state as a genuinely empty menu — a network/server error
+   could mislead an admin into thinking their menu was wiped. Now a distinct `loadError`
+   state shows the real message with a retry button. Same pass also fixed two silent
+   failures in the same file: `handleAddCategory`/`handleAddIngredient` logged to console
+   and gave zero user feedback on failure (form just sat there); both now toast the real
+   error. Also stopped the image-upload handler from computing `getErrorMessage(err)` and
+   then discarding it in favor of a hardcoded string. Not unit-tested (1500+ line
+   component) — verified by direct review, typecheck, lint, and build.
 
 ### A1 — M1 frontend safety and tenant UX (Weeks 2–3)
 
