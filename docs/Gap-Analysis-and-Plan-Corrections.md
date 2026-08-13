@@ -46,7 +46,7 @@ optional, it is marked as such.
 | G6 | No frontend error boundary | Missing work | P1 | [G6](#g6) |
 | G7 | API client discards HTTP status codes | Missing work | P1 | [G7](#g7) |
 | G8 | No log redaction helper | Missing work | P2 | [G8](#g8) |
-| G9 | Two parallel SuperAdmin auth paths | Missing work | P2 | [G9](#g9) |
+| G9 | Two parallel SuperAdmin auth paths | Missing work — **Done, pending Yazan review** | P2 | [G9](#g9) |
 | G10 | No pagination on any list endpoint | Missing work | P2 | [G10](#g10) |
 | G11 | `ApiError` shipped but unconsumed: false logout on network/5xx errors | Missing work — found and fixed during A0 journey inventory | P1 | [Part 6](#part-6--execution-runbook-and-completion-evidence) |
 | S1 | Backend modularization scheduled after the P0 edits | Sequencing | High | [S1](#s1) |
@@ -513,6 +513,21 @@ the M4 security test pass rather than after.
 **Owner:** Alaa, reviewed by Yazan. **Milestone:** M2 or M3. Optional if capacity is tight —
 flag it as accepted risk rather than silently skipping.
 
+**Status: Done, pending Yazan's review.** `codex/api-response-typing` @ `828c46c`.
+`superAdminService.ts` no longer hand-rolls `fetch`/URL-resolution/error-parsing; it calls
+`api.get`/`api.put` from `src/services/api.ts` with a new `TokenNamespace`
+(`'restaurant' | 'superAdmin'`) parameter backed by a `tokenStore.get/set/clear`
+abstraction. Only the transport (fetch, error normalization, retry semantics) is shared —
+restaurant admin and SuperAdmin keep separate storage keys, separate expiry, and separate
+logout paths, exactly as this finding's "what to implement" specifies. All ~54 existing
+restaurant-admin call sites default to the `'restaurant'` namespace and needed no changes.
+Net deletion of 49 lines of duplicated logic in `superAdminService.ts`. New tests in
+`api.test.ts` and `superAdminService.test.ts` prove namespace isolation: a SuperAdmin token
+is never attached to a default request and vice versa, and login sends no `Authorization`
+header (no session exists yet at that point). Still needs Yazan's review before merging to
+`main`, per the plan's own PR checklist ("Yazan reviewed contract/security/session
+changes").
+
 ---
 
 ### <a name="g10"></a>G10. No pagination on any list endpoint — P2
@@ -777,7 +792,7 @@ command and review; a merged code change without test evidence remains **In prog
 
 | Item | Status | PR / commit | Test command and result | Verified by | Date |
 |---|---|---|---|---|---|
-| D1 decisions | Blocked | — | — | — | — |
+| D1 decisions | Drafted, pending Yazan sign-off | `codex/api-response-typing` @ `6100b48` | `docs/D1-Decision-Log.md` | Alaa | 14 Aug 2026 |
 | Test infrastructure (E3) | Frontend done, backend not started | `codex/tenant-transition` @ `cd03ed9` | `npm run test:frontend` (5/5 pass), `npm run test:e2e` (2/2 pass) | Claude | 13 Aug 2026 |
 | Route extraction (S1) | Not started | — | — | — | — |
 | Error handler + redaction (G4, G8) | Not started | — | — | — | — |
@@ -787,6 +802,11 @@ command and review; a merged code change without test evidence remains **In prog
 | API errors + error boundaries (G6, G7) | **Done** | `codex/tenant-transition` @ `cd03ed9` | `npm run test:frontend` (`api.test.ts`, `ErrorBoundary.test.tsx`) | Claude | 13 Aug 2026 |
 | Stale-file cleanup (E1) | **Done** | `codex/api-response-typing` @ `de31099` | `npm run typecheck` + `npm run build` clean after removal | Claude | 13 Aug 2026 |
 | False-logout on network/5xx errors (G11, new finding) | **Done** | `codex/api-response-typing` @ `1b02db1` | `npm run test:frontend` (`isUnauthenticatedError` cases, `superAdminService.test.ts`) | Claude | 13 Aug 2026 |
+| OrderManagement optimistic-update rollback (backlog item 1) | **Done** | `codex/api-response-typing` @ `a3ec619` | `npm run test:frontend` (`OrderManagement.test.tsx`, 2/2) | Claude | 14 Aug 2026 |
+| UserManagement loading/empty/error states (backlog item 2) | **Done** | `codex/api-response-typing` @ `52f1d0e` | `npm run test:frontend` (`UserManagement.test.tsx`, 4/4) | Claude | 14 Aug 2026 |
+| `getErrorMessage` branches on `ApiError.code` (backlog item 3) | **Done** | `codex/api-response-typing` @ `45c2643` | `npm run test:frontend` (`errors.test.ts`, 5/5) | Claude | 14 Aug 2026 |
+| TableManagement/admin socket reconnect rejoin (backlog item 4) | **Done** | `codex/api-response-typing` @ `e095f82` | Not unit-tested (real socket.io-client instance, unexported component) — verified by direct comparison to `CustomerMenu`'s proven pattern, dev server, and build | Claude | 14 Aug 2026 |
+| SuperAdmin auth consolidation (G9, backlog item 5) | **Done, pending Yazan review** | `codex/api-response-typing` @ `828c46c` | `npm run test:frontend` (`api.test.ts` 9/9, `superAdminService.test.ts` 4/4) | Claude | 14 Aug 2026 |
 | Bounded public order creation (G1) | Blocked | — | — | — | — |
 
 ### Definition of done for this correction set

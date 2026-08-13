@@ -103,8 +103,18 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
    currently reads only `.message`), so `NETWORK_ERROR` gets distinct "check your
    connection" copy from `VALIDATION_ERROR`/`SERVER_ERROR`.
 4. Add socket-reconnect rejoin to `TableManagement` to match `CustomerMenu`'s pattern.
-5. Consolidate the SuperAdmin/session boundary further per G9 in
-   `Gap-Analysis-and-Plan-Corrections.md` (not urgent — flagged there as M2/M3).
+5. ~~Consolidate the SuperAdmin/session boundary per G9~~ — **Done**
+   (`codex/api-response-typing` @ `828c46c`). `superAdminService.ts` no longer duplicates
+   `api.ts`'s fetch/error logic by hand; it now calls `api.get`/`api.put` with a
+   `TokenNamespace` (`'restaurant' | 'superAdmin'`) backed by a `tokenStore` abstraction.
+   Restaurant admin and SuperAdmin still use separate storage keys, expiry, and logout paths
+   — only the transport mechanics are shared, per the constraint above. All ~54 existing
+   restaurant-admin call sites default to the `'restaurant'` namespace and are unaffected.
+   Covered by new tests in `src/services/api.test.ts` and
+   `src/services/superAdminService.test.ts` proving token isolation (a SuperAdmin token is
+   never sent on a default request and vice versa). Needs Yazan's review before merge to
+   main, per the plan's session/security PR checklist item, even though it's built and
+   tested.
 
 ### A1 — M1 frontend safety and tenant UX (Weeks 2–3)
 
