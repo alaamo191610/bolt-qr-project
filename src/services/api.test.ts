@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api, handleResponse } from './api';
+import { ApiError, api, handleResponse, isUnauthenticatedError } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -48,5 +48,19 @@ describe('ApiError response contract', () => {
       status: 0,
       code: 'NETWORK_ERROR',
     } satisfies Partial<ApiError>);
+  });
+});
+
+describe('isUnauthenticatedError', () => {
+  it('is true for a 401 status or an AUTHENTICATION_REQUIRED code', () => {
+    expect(isUnauthenticatedError(new ApiError({ message: 'nope', status: 401, code: 'UNKNOWN_ERROR' }))).toBe(true);
+    expect(isUnauthenticatedError(new ApiError({ message: 'nope', status: 200, code: 'AUTHENTICATION_REQUIRED' }))).toBe(true);
+  });
+
+  it('is false for network failures and server errors, so a transient outage does not force a logout', () => {
+    expect(isUnauthenticatedError(new ApiError({ message: 'offline', code: 'NETWORK_ERROR' }))).toBe(false);
+    expect(isUnauthenticatedError(new ApiError({ message: 'boom', status: 500, code: 'SERVER_ERROR' }))).toBe(false);
+    expect(isUnauthenticatedError(new Error('plain error'))).toBe(false);
+    expect(isUnauthenticatedError(null)).toBe(false);
   });
 });

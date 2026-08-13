@@ -34,19 +34,27 @@ related work from being correctly implemented.
 | Restaurant ordering pause and capacity behaviour | Both | Day 5 | Defines safe operation during overload or kitchen closure. |
 | SuperAdmin MFA/re-authentication and session duration | Both | Day 5 | Sets the platform-admin security bar before external production use. |
 
-## M0 baseline record — 13 August 2026
+## M0 baseline record — 13 August 2026 (updated 13 August 2026, post-frontend-harness)
 
 | Check | Result | Evidence / follow-up |
 |---|---|---|
-| Existing unit suite | Pass | `npm test`: 5 assertions passed. Coverage is two unit-test files only; no HTTP integration, migration, component, or E2E tests exist yet. |
-| ESLint | Blocked locally | `npm run lint` cannot find `eslint` after a clean install attempt, indicating an incomplete/broken local dependency installation. Reinstall with a supported Node 20–22 runtime before accepting the M0 baseline. |
-| Production build | Blocked locally | Before the clean install, `npm run build` could not resolve declared dependency `qr-code-styling`; rerun after the supported-runtime reinstall. |
-| Prisma validation | Pending | Run after the supported-runtime dependency reinstall so Prisma tooling is available. |
+| Existing unit suite (backend) | Pass | `npm test` (`node --test tests/*.test.js`): 5 assertions across 2 files (`tenantAccess.test.js`, `orderTransitions.test.js`). Still pure unit coverage only — zero HTTP integration, migration, or database tests. |
+| Frontend unit/component suite | Pass (new) | `npm run test:frontend` (Vitest + jsdom + Testing Library): 5 assertions across 2 files (`api.test.ts` for the `ApiError` contract, `ErrorBoundary.test.tsx`). |
+| E2E smoke | Pass (new) | `npm run test:e2e` (Playwright + `@axe-core/playwright`): 1 smoke spec (SuperAdmin login, desktop + mobile-chrome projects), including a zero-violations accessibility assertion. |
+| TypeScript | Pass | `npm run typecheck` (`tsc -b`) is clean. |
+| ESLint | Pass | `npm run lint` is clean. No longer blocked; the earlier "cannot find eslint" report was a broken local install, not a repo defect. |
+| Production build | Pass | `npm run build` succeeds (Vite). No longer blocked; the earlier `qr-code-styling` resolution failure was the same broken local install. |
+| Prisma validation | Pass | `npx prisma validate --schema server/prisma/schema.prisma`: schema is valid. |
 
-**M0 immediate action:** use Node 20–22, remove only the local `node_modules` directory,
-run `npm ci`, then re-run `npm test`, `npm run lint`, `npx prisma validate --schema
-server/prisma/schema.prisma`, and `npm run build`. Record the command output below before
-starting implementation work.
+**Still zero at M0, unchanged from the original baseline:** HTTP/API integration tests,
+migration tests, and any test evidence for tenant isolation, capability enforcement, or
+idempotency. The E2E suite above is one smoke spec, not the golden customer-order journey
+required by the M0 exit gate — that remains open (see Alaa-Parallel-Work-Plan.md A0/A1).
+
+**Resolved this pass:** the frontend/E2E test harness now exists (Vitest, Playwright,
+Testing Library, MSW, axe), the typed `ApiError`/error-boundary work from A1 landed early,
+and stale schema/hook files (E1) are deleted. See
+`docs/Gap-Analysis-and-Plan-Corrections.md` Part 6 completion register for item-level status.
 
 ## Milestone plan
 
@@ -137,8 +145,8 @@ recorded in the completion register. “Code is written” is not a completion s
 | Item | Status | PR / commit | Tests/evidence | Verified by | Date |
 |---|---|---|---|---|---|
 | D1 decisions | Blocked | — | Signed decisions | — | — |
-| M0 test foundation | In progress | — | Baseline: 5 unit assertions pass; supported-runtime dependency reinstall and remaining checks pending. | — | 13 Aug 2026 |
-| M1 safety baseline | Not started | — | — | — | — |
+| M0 test foundation | In progress | `codex/tenant-transition` @ `cd03ed9`, `codex/api-response-typing` @ `de31099` | Backend: 5 unit assertions (`npm test`). Frontend: 5 unit/component assertions (`npm run test:frontend`). E2E: 1 smoke spec, 2 projects (`npm run test:e2e`). Typecheck/lint/build/Prisma-validate all pass. Still missing: HTTP integration harness, migration tests, golden E2E journey. | Claude (frontend), pending Yazan review | 13 Aug 2026 |
+| M1 safety baseline | In progress (frontend half only) | `codex/tenant-transition` @ `cd03ed9` | Typed `ApiError` (status/code/requestId/retryAfter) + separate customer/admin error boundaries, unit-tested. Backend half (route extraction, centralized error handler, request IDs, rate-limiter eviction, tenant columns) not started — see Gap-Analysis-and-Plan-Corrections.md Part 6. | Claude (frontend), pending Yazan | 13 Aug 2026 |
 | M2 bounded order cycle | Blocked by D1 takeaway decision | — | — | — | — |
 | M3 production infrastructure | Not started | — | — | — | — |
 | M4 quality hardening | Not started | — | — | — | — |

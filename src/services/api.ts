@@ -68,6 +68,9 @@ const parseRetryAfter = (value: string | null) => {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 };
 
+export const isUnauthenticatedError = (error: unknown): boolean =>
+  error instanceof ApiError && (error.code === 'AUTHENTICATION_REQUIRED' || error.status === 401);
+
 export const handleResponse = async <T>(res: Response): Promise<T> => {
   if (!res.ok) {
     let errorMsg = `API Error: ${res.statusText}`;

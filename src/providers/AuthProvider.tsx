@@ -1,7 +1,7 @@
 // src/providers/AuthProvider.tsx
 import React from "react";
 import { adminService } from "../services/adminService";
-import { api } from "../services/api";
+import { api, isUnauthenticatedError } from "../services/api";
 import { getErrorMessage } from "../utils/errors";
 
 export interface User {
@@ -83,8 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error("Session restoration failed:", error);
-      localStorage.removeItem("auth_token");
-      setOrganizations([]);
+      if (isUnauthenticatedError(error)) {
+        localStorage.removeItem("auth_token");
+        setOrganizations([]);
+      }
+      // Network/server errors leave the token in place; the user stays
+      // signed in locally and can retry once connectivity is restored.
     } finally {
       setLoading(false);
     }

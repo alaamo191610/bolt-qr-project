@@ -1,5 +1,7 @@
 // Super Admin Service for API calls
 
+import { handleResponse } from './api';
+
 const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const fallbackProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
 const fallbackApiUrl = import.meta.env.PROD
@@ -43,12 +45,7 @@ export const superAdminService = {
             body: JSON.stringify({ email, password }),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Login failed');
-        }
-
-        return response.json();
+        return handleResponse<{ token: string; user: { name?: string } }>(response);
     },
 
     async getRestaurants(token: string): Promise<Restaurant[]> {
@@ -58,8 +55,7 @@ export const superAdminService = {
             },
         });
 
-        if (!response.ok) throw new Error('Failed to fetch restaurants');
-        return response.json();
+        return handleResponse<Restaurant[]>(response);
     },
 
     async getStats(token: string): Promise<SuperAdminStats> {
@@ -69,8 +65,7 @@ export const superAdminService = {
             },
         });
 
-        if (!response.ok) throw new Error('Failed to fetch stats');
-        return response.json();
+        return handleResponse<SuperAdminStats>(response);
     },
 
     async updateRestaurantPlan(
@@ -89,7 +84,6 @@ export const superAdminService = {
             body: JSON.stringify({ plan, status, subscription_end }),
         });
 
-        if (!response.ok) throw new Error('Failed to update plan');
-        return response.json();
+        return handleResponse(response);
     },
 };

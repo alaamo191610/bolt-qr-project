@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings } from 'lucide-react';
 import { superAdminService, type Restaurant, type SubscriptionPlan } from '../../services/superAdminService';
+import { isUnauthenticatedError } from '../../services/api';
 import PlanManagementModal from './PlanManagementModal';
 import toast from 'react-hot-toast';
 
@@ -31,9 +32,13 @@ const SuperAdminDashboard: React.FC = () => {
             setRestaurants(restaurantsData);
         } catch (error) {
             console.error('Error loading data:', error);
-            localStorage.removeItem('superAdminToken');
-            toast.error('Your session expired. Please sign in again.');
-            navigate('/super-admin/login');
+            if (isUnauthenticatedError(error)) {
+                localStorage.removeItem('superAdminToken');
+                toast.error('Your session expired. Please sign in again.');
+                navigate('/super-admin/login');
+            } else {
+                toast.error('Could not load dashboard data. Please try again.');
+            }
         } finally {
             setLoading(false);
         }

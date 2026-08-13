@@ -53,9 +53,52 @@ documentation, fixture, or regression task instead of waiting.
 |---|---|---|
 | Repair/test local frontend path | Pair with Yazan: Alaa verifies frontend/E2E commands; Yazan owns server/CI commands. | Build/lint/test commands captured in plan. |
 | E2E skeleton | Configure runner and create smoke flows for login/admin shell and QR/menu page using isolated fixtures or mocks; pair with Yazan on deterministic backend fixtures. | Smoke suite runs locally and in CI/staging. |
-| Journey/state inventory | Map customer, admin, team, and SuperAdmin success/loading/empty/validation/permission/offline/failure states. | Prioritized UI backlog shared with Yazan. |
-| Typed API design | Define `ApiError` and request/response typing approach from Yazan’s draft contract. | Types/mocks compile independently of final server implementation. |
-| Cleanup | Delete stale schema/hook files and confirm the client build stays clean. | Build and repository search evidence. |
+| Journey/state inventory | Map customer, admin, team, and SuperAdmin success/loading/empty/validation/permission/offline/failure states. | **Done** — see backlog below. |
+| Typed API design | Define `ApiError` and request/response typing approach from Yazan’s draft contract. | `ApiError` shipped (`src/services/api.ts`) with unit tests. Response-body typing still defaults to `any`; see `codex/api-response-typing`. |
+| Cleanup | Delete stale schema/hook files and confirm the client build stays clean. | **Done** — `useAuthhhhh.tsx`, `schema.sql`, `schema.prisma.bak` removed; typecheck/build clean. |
+
+## Journey/state inventory — 13 August 2026
+
+Read every render path for the screens below (not just grep) and recorded which of the
+seven states each one actually handles: loading, empty, validation, 401/403, offline/network
+failure, and reconnect recovery. This is the backlog A0 calls for.
+
+| Screen | Loading | Empty | Validation | 401/403 | Offline/network | Notes |
+|---|---|---|---|---|---|---|
+| CustomerMenu | Yes (spinner) | Yes, but conflates "no menu" with an error state | N/A | No — generic catch, own ad hoc error-code enum, not `ApiError` | No — network vs server error not distinguished | `placeOrder` failure has no retry affordance beyond reopening the cart |
+| DigitalMenu (admin) | Yes (spinner + 10s timeout hack) | Yes, dedicated `EmptyState` | Yes, inline field errors | No — generic catches throughout | No | Best-covered admin screen; still no `ApiError` branching |
+| OrderManagement (admin) | **No** — no own fetch/loading state | Yes | N/A | N/A | N/A | Status changes are optimistic with no rollback/error UI if the update fails |
+| TableManagement | **No** — no own fetch/loading state | No explicit empty state | No inline validation | No | No | Socket `table-updated` is not rejoined on reconnect, unlike CustomerMenu |
+| QRGenerator | N/A | N/A | N/A | N/A | N/A | `copyToClipboard` reports success even when the copy call fails |
+| AdminPanel | Yes (plain text) | N/A | No inline errors | No | No | Toast-only error surfacing |
+| UserManagement | **No** | **No** | No inline errors | No — catch discards the real error entirely | No | Weakest screen: no loading, no empty state, error is fully swallowed |
+| SuperAdminLogin | Yes | N/A | Client-side only | No | No | Fixed this pass: missing `<main>` landmark (axe violation) |
+| SuperAdminDashboard | Yes | Yes, search-aware | N/A | **Fixed this pass** — was force-logging-out on any error, including network/5xx | **Fixed this pass** | See "Resolved this pass" below |
+| AuthProvider | Yes (`loading` gates app root) | N/A | N/A | **Fixed this pass** — same false-logout bug as SuperAdminDashboard | **Fixed this pass** | `signIn`/`signUp` still rethrow raw errors for callers |
+| AuthForm | Yes | N/A | Client `required` only | No | No | String-only server error display, no code branching |
+
+**Resolved this pass:** `AuthProvider.initAuth` and `SuperAdminDashboard.loadData` both
+treated *any* error from their session/data-load calls — network blip, 500, or a real 401 —
+as "session expired," clearing the token and forcing a re-login. Fixed by adding
+`isUnauthenticatedError()` to `src/services/api.ts` (checks `ApiError.code ===
+'AUTHENTICATION_REQUIRED'` or `status === 401`) and branching on it in both call sites.
+Also found and fixed: `superAdminService.ts` had its own hand-rolled `fetch`/error-parsing
+duplicate of `api.ts` that threw plain `Error` instead of `ApiError`, which would have made
+the `SuperAdminDashboard` fix a silent no-op. It now reuses the shared `handleResponse()`.
+Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the new
+`src/services/superAdminService.test.ts`.
+
+**Prioritized backlog (not yet done, highest risk first):**
+1. Give `OrderManagement`'s optimistic status-change a rollback/error path — a failed status
+   update currently shows nothing wrong to the admin.
+2. Add loading and empty states to `UserManagement`; stop discarding the real error in its
+   catch block.
+3. Make error messaging branch on `ApiError.code` across admin screens (`getErrorMessage`
+   currently reads only `.message`), so `NETWORK_ERROR` gets distinct "check your
+   connection" copy from `VALIDATION_ERROR`/`SERVER_ERROR`.
+4. Add socket-reconnect rejoin to `TableManagement` to match `CustomerMenu`'s pattern.
+5. Consolidate the SuperAdmin/session boundary further per G9 in
+   `Gap-Analysis-and-Plan-Corrections.md` (not urgent — flagged there as M2/M3).
 
 ### A1 — M1 frontend safety and tenant UX (Weeks 2–3)
 
