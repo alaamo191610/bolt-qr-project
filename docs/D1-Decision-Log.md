@@ -94,16 +94,57 @@ rehearsal explicitly includes them so their presence is never a surprise at that
 
 ## D1.5 — Log retention window and contents
 
-**Decision:** 30-day retention. Logs pass through the redaction helper (G8: strip
-`password`, `password_hash`, `token`, `authorization`, `note`/`notes` and similar sensitive
-keys) before being written. Access restricted to Alaa and Yazan (or whoever is on-call),
-not broadly available.
+This decision covers two different kinds of data that must not be conflated: operational
+logs (for debugging) and business/product analytics (for understanding the market and
+planning expansion). They have different owners, different retention rules, and — most
+importantly — should never live in the same storage or be governed by the same policy.
+
+### D1.5.a — Operational logs (structured request/error logs, G4/G5/G8)
+
+**Decision:** 30-day retention. Every log line passes through the redaction helper (G8:
+strip `password`, `password_hash`, `token`, `authorization`, `note`/`notes`, and similar
+sensitive keys) before being written. Access restricted to Alaa and Yazan (or whoever is
+on-call), not broadly available.
 
 **Reasoning:** No regulatory driver names a specific retention period for this product. 30
-days is enough to investigate "my order vanished last week"-style reports without turning
-logs into an uncontrolled second copy of customer data.
+days is enough to investigate "my order vanished last week"-style support reports without
+turning logs into an uncontrolled second copy of customer data. This is raw, per-request
+diagnostic detail (stack traces, request IDs, timestamps) — it is operational tooling, not
+a business asset, and should be deleted on a schedule for exactly that reason.
 
 **Owner:** Yazan, alongside G4/G5/G8 (centralized error handler, request IDs, redaction).
+
+### D1.5.b — Business/product analytics (usage, orders, growth, market data)
+
+**Decision:** Retained long-term (no fixed deletion schedule), separate from operational
+logs. This covers aggregate and per-transaction business data the owners need for market
+understanding and expansion decisions — order volumes, category/item popularity, revenue
+trends, restaurant growth and churn, usage patterns across regions/verticals, and similar
+product-analytics signals.
+
+**Reasoning:** This is a different category of data with a different purpose. Operational
+logs exist to debug a specific incident and rot in value after days or weeks. Business
+analytics exist to answer questions like "which vertical should we expand into next" or
+"what's our month-over-month order growth," and that value compounds the longer the history
+runs — a 30-day retention window would actively destroy the thing we need. Treating them
+as one policy was the mistake this decision corrects: analytics data must live in its own
+storage (proper database tables / a data warehouse — not the request-log stream) and be
+governed by its own rule, not the incident-response log's 30-day clock.
+
+**Required discipline, not optional:**
+- Store business analytics as structured, aggregated records (e.g. daily/monthly rollups,
+  order and menu-performance tables) — not as raw request logs being kept "just in case."
+  Raw request logs still expire at 30 days per D1.5.a even if some of the same underlying
+  events also feed analytics tables.
+- Strip or aggregate away anything that identifies an individual customer (name, phone,
+  free-text order notes) before it lands in long-lived analytics storage. Restaurant- and
+  organization-level aggregates are the target, not a permanent copy of personal data.
+- This is a data-architecture decision, not just a retention-window number — it needs a
+  concrete design (which tables, which rollups, who can query them) before M3, alongside
+  the observability work in G5.
+
+**Owner:** Yazan designs the storage/aggregation approach; both owners define what
+questions the analytics need to answer (input to what gets tracked).
 
 ---
 

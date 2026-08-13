@@ -144,7 +144,7 @@ recorded in the completion register. “Code is written” is not a completion s
 
 | Item | Status | PR / commit | Tests/evidence | Verified by | Date |
 |---|---|---|---|---|---|
-| D1 decisions | Drafted, pending Yazan sign-off | — | `docs/D1-Decision-Log.md`: 6h tracking token/no refresh, takeaway off for Release 1, QR stays permanent, POS parked, 30-day redacted logs | Alaa | 14 Aug 2026 |
+| D1 decisions | Drafted, pending Yazan sign-off | — | `docs/D1-Decision-Log.md`: 6h tracking token/no refresh, takeaway off for Release 1, QR stays permanent, POS parked, 30-day redacted operational logs kept separate from long-lived business/product analytics | Alaa | 14 Aug 2026 |
 | M0 test foundation | In progress | `codex/tenant-transition` @ `cd03ed9`, `codex/api-response-typing` @ `de31099` | Backend: 5 unit assertions (`npm test`). Frontend: 5 unit/component assertions (`npm run test:frontend`). E2E: 1 smoke spec, 2 projects (`npm run test:e2e`). Typecheck/lint/build/Prisma-validate all pass. Still missing: HTTP integration harness, migration tests, golden E2E journey. | Claude (frontend), pending Yazan review | 13 Aug 2026 |
 | M1 safety baseline | In progress (frontend half only) | `codex/tenant-transition` @ `cd03ed9` | Typed `ApiError` (status/code/requestId/retryAfter) + separate customer/admin error boundaries, unit-tested. Backend half (route extraction, centralized error handler, request IDs, rate-limiter eviction, tenant columns) not started — see Gap-Analysis-and-Plan-Corrections.md Part 6. | Claude (frontend), pending Yazan | 13 Aug 2026 |
 | M2 bounded order cycle | Blocked by D1 takeaway decision | — | — | — | — |
