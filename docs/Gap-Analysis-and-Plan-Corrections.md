@@ -3,7 +3,7 @@
 **Companion document to:** `Yazan-Alaa-Production-Delivery-Plan.docx` v1.0
 **Baseline audited:** `codex/tenant-transition` @ `ac663f2`
 **Date:** 13 August 2026
-**Status:** Proposed. Requires Yazan + Alaa sign-off before it changes any milestone.
+**Status:** Execution-ready. Requires Yazan + Alaa sign-off before it changes any milestone.
 
 ---
 
@@ -702,6 +702,80 @@ POS disposition ([E4](#e4)), tracking token lifetime, takeaway entry point, log 
 - `Admin.password` auth already removed ([E2](#e2))
 - §11 signal targets are currently unmeasurable ([S2](#s2))
 - Timeline: 12 weeks, or a written list of what gets cut ([S3](#s3))
+
+---
+
+## Part 6 — Execution runbook and completion evidence
+
+This section turns the findings above into small, testable changes. It is the source of
+truth for implementation status; an item is only **Done** when its code, migration, and
+listed test evidence are all merged and passing. As of 13 August 2026, this runbook is
+prepared; no implementation item below is marked Done.
+
+### Delivery rules
+
+1. Work one row at a time in a small PR. Do not combine a mechanical extraction with a
+   behavioural change.
+2. Each backend change needs a unit test where logic can be isolated and an HTTP-level
+   integration test for the affected endpoint or middleware.
+3. Tenant and public-write changes require an explicit negative test: tenant A must not
+   access, modify, or create data for tenant B.
+4. A migration is not Done until it has been applied to a fresh test database, backfilled
+   where required, verified, and exercised by an integration test.
+5. Record the pull request, commit, test command, and date in the completion table below.
+
+### Execution sequence
+
+| Order | Work item | Owner | Status | Completion test/evidence |
+|---|---|---|---|---|
+| 0 | Record the four D1 decisions: tracking expiry, takeaway entry point, POS disposition, and log retention. | Yazan + Alaa | **Blocked — decision required** | Signed decision log / ADR; takeaway decision is required before G1 can ship. |
+| 1 | Establish test infrastructure: isolated test DB, fixture/seeding helper, HTTP harness, and E2E runner. | Both | Not started | `npm test` includes unit and integration suites; one smoke E2E test runs in CI. |
+| 2 | Extract route modules mechanically, with no behaviour change. | Yazan | Not started | Existing unit tests plus endpoint smoke tests pass before and after extraction; review confirms no logic change. |
+| 3 | Add request ID, structured request logging, centralized safe error responses, and redaction. | Yazan | Not started | Unit tests for redaction/error normalization; integration tests verify `X-Request-Id`, safe 500 response, and no raw Prisma message. |
+| 4 | Add expired-bucket eviction (or bounded LRU) to the in-memory limiter. | Yazan | Not started | Unit test proves expired keys are removed; integration test confirms 429 and `Retry-After` behaviour. |
+| 5 | Add tenant ownership columns and migration for modifier/combo records, then scope every query. | Yazan | Not started | Fresh-DB migration test; tenant-A-to-tenant-B read/write integration tests return 404/403 as appropriate. |
+| 6 | Add frontend `ApiError` status/request-ID propagation and separate customer/admin error boundaries. | Alaa | Not started | Unit tests for `ApiError`; component tests for fallback/retry UI; manual browser smoke on customer menu and admin workspace. |
+| 7 | Delete stale schema and unused authentication-hook files. | Alaa | Not started | Typecheck/build succeeds; repository search confirms the stale files are absent. |
+| 8 | Implement bounded public order creation using the signed table-session design selected in step 0. | Yazan | **Blocked — takeaway decision required** | Integration: no token returns 401; valid table token creates only for its bound restaurant/table; cross-tenant token attempt is denied. |
+| 9 | Run regression, migration rehearsal, performance checks, and pilot readiness review. | Both | Not started | M4 and Go/No-Go evidence attached; no unresolved P0/P1 issues. |
+
+### Minimum test suite to add
+
+| Layer | First tests required | Gates |
+|---|---|---|
+| Unit | Rate-limiter eviction; log redaction; error normalization; API error parsing; table-session-token claims. | Steps 3, 4, 6, and 8 |
+| Integration (HTTP + test DB) | Public order auth; rate-limit 429; safe internal-error contract; tenant isolation for modifiers/combos; migration/backfill integrity. | M1/M2 exits |
+| Component | Customer-menu boundary; admin-workspace boundary; 401 re-auth and 403 access-denied states. | M1 exit |
+| E2E | QR/table-session → menu → order → order tracking; restaurant-admin role path; cross-tenant denial. | M2 and M4 exits |
+
+### Completion register
+
+Update this table in the same PR that implements each item. “Done” requires a passing test
+command and review; a merged code change without test evidence remains **In progress**.
+
+| Item | Status | PR / commit | Test command and result | Verified by | Date |
+|---|---|---|---|---|---|
+| D1 decisions | Blocked | — | — | — | — |
+| Test infrastructure (E3) | Not started | — | — | — | — |
+| Route extraction (S1) | Not started | — | — | — | — |
+| Error handler + redaction (G4, G8) | Not started | — | — | — | — |
+| Request IDs + structured logs (G5) | Not started | — | — | — | — |
+| Rate-limiter eviction (G2) | Not started | — | — | — | — |
+| Modifier/combo tenant migration (G3) | Not started | — | — | — | — |
+| API errors + error boundaries (G6, G7) | Not started | — | — | — | — |
+| Stale-file cleanup (E1) | Not started | — | — | — | — |
+| Bounded public order creation (G1) | Blocked | — | — | — | — |
+
+### Definition of done for this correction set
+
+- All P0 items (G1 and G2) are Done, and G1 is covered by a cross-tenant integration test.
+- G3 has completed expand → backfill → verify → enforce → contract, with a rehearsed
+  rollback/runbook decision where applicable.
+- The test suite contains unit and HTTP-level integration coverage for every M1/M2 security
+  change; E2E covers the customer order journey before pilot.
+- The completion register has passing command output and reviewer/date for every row.
+- The four D1 decisions and the schedule choice (12 weeks or named scope cuts) are recorded
+  and signed off by both owners.
 
 ---
 
