@@ -786,7 +786,7 @@ command and review; a merged code change without test evidence remains **In prog
 | Modifier/combo tenant migration (G3) | Not started | — | — | — | — |
 | API errors + error boundaries (G6, G7) | **Done** | `codex/tenant-transition` @ `cd03ed9` | `npm run test:frontend` (`api.test.ts`, `ErrorBoundary.test.tsx`) | Claude | 13 Aug 2026 |
 | Stale-file cleanup (E1) | **Done** | `codex/api-response-typing` @ `de31099` | `npm run typecheck` + `npm run build` clean after removal | Claude | 13 Aug 2026 |
-| False-logout on network/5xx errors (G11, new finding) | **Done** | `codex/api-response-typing` (pending commit) | `npm run test:frontend` (`isUnauthenticatedError` cases, `superAdminService.test.ts`) | Claude | 13 Aug 2026 |
+| False-logout on network/5xx errors (G11, new finding) | **Done** | `codex/api-response-typing` @ `1b02db1` | `npm run test:frontend` (`isUnauthenticatedError` cases, `superAdminService.test.ts`) | Claude | 13 Aug 2026 |
 | Bounded public order creation (G1) | Blocked | — | — | — | — |
 
 ### Definition of done for this correction set
