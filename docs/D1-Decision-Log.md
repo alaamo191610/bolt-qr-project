@@ -25,8 +25,17 @@ the product requires a customer to check order status the next day.
 inventory) to build a clear "this tracking link has expired, please ask staff for your order
 status" screen instead of a raw 401. That UI is required alongside this change, not optional.
 
+**Status: frontend half done.** `codex/api-response-typing` @ `2f88908`. The 401 case
+(`server/index.js:1590-1598`, `'Order tracking session expired'`) already exists today at
+the current 24h expiry, so the UI work did not need to wait on the backend change below.
+`OrderConfirmation.tsx` now detects it via `isUnauthenticatedError()`, stops retrying with
+the dead token, and shows a dedicated expired-link screen with EN/AR copy instead of
+freezing on the last known status forever. Covered by
+`src/components/ui/OrderConfirmation.test.tsx`.
+
 **Owner:** Yazan implements the expiry (`server/index.js:1570`, change `expiresIn: '24h'` to
-`'6h'`). Alaa ships the expired-link UI state.
+`'6h'`) — **not started**. Alaa's expired-link UI state is done and works against either
+expiry value.
 
 ---
 

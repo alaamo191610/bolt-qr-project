@@ -807,6 +807,7 @@ command and review; a merged code change without test evidence remains **In prog
 | `getErrorMessage` branches on `ApiError.code` (backlog item 3) | **Done** | `codex/api-response-typing` @ `45c2643` | `npm run test:frontend` (`errors.test.ts`, 5/5) | Claude | 14 Aug 2026 |
 | TableManagement/admin socket reconnect rejoin (backlog item 4) | **Done** | `codex/api-response-typing` @ `e095f82` | Not unit-tested (real socket.io-client instance, unexported component) — verified by direct comparison to `CustomerMenu`'s proven pattern, dev server, and build | Claude | 14 Aug 2026 |
 | SuperAdmin auth consolidation (G9, backlog item 5) | **Done, pending Yazan review** | `codex/api-response-typing` @ `828c46c` | `npm run test:frontend` (`api.test.ts` 9/9, `superAdminService.test.ts` 4/4) | Claude | 14 Aug 2026 |
+| Expired order-tracking link UI (D1.1 frontend half) | **Done** — backend expiry change (24h → 6h) not started | `codex/api-response-typing` @ `2f88908` | `npm run test:frontend` (`OrderConfirmation.test.tsx`, 3/3) | Claude | 14 Aug 2026 |
 | Bounded public order creation (G1) | Blocked | — | — | — | — |
 
 ### Definition of done for this correction set
