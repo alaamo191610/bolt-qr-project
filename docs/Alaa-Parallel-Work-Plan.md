@@ -94,8 +94,11 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
    reverts the optimistic update on failure, and shows an inline "update failed, try again"
    banner on the affected order card plus a saving spinner while in flight. Covered by
    `src/components/orders/OrderManagement.test.tsx` (rollback and success paths).
-2. Add loading and empty states to `UserManagement`; stop discarding the real error in its
-   catch block.
+2. ~~Add loading and empty states to `UserManagement`~~ — **Done**
+   (`codex/api-response-typing` @ `52f1d0e`). Skeleton loading grid, dedicated empty state
+   with an add-user action, and a real error state with retry that surfaces the actual
+   `ApiError` message instead of a bare catch discarding it. Covered by
+   `src/components/admin/UserManagement.test.tsx`.
 3. Make error messaging branch on `ApiError.code` across admin screens (`getErrorMessage`
    currently reads only `.message`), so `NETWORK_ERROR` gets distinct "check your
    connection" copy from `VALIDATION_ERROR`/`SERVER_ERROR`.
