@@ -28,3 +28,9 @@ dist-ssr
 .netlify
 uploads/
 src/services/uploads/
+
+# Test artifacts
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo

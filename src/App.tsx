@@ -19,6 +19,7 @@ import { menuService } from "./services/menuService";
 import { orderService } from "./services/orderService";
 import AuthForm from "./components/Auth/AuthForm";
 import ResponsiveLayout from "./components/common/ResponsiveLayout";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import { Toaster, toast } from "react-hot-toast";
 import { socket, joinAdminRoom } from "./services/socket";
 
@@ -147,19 +148,19 @@ function App() {
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 {/* Customer Menu Routes */}
-                <Route path="/menu" element={<CustomerMenu />} />
-                <Route path="/ar/menu" element={<CustomerMenu />} />
-                <Route path="/en/menu" element={<CustomerMenu />} />
-                <Route path="/menu/:lang" element={<CustomerMenu />} />
+                <Route path="/menu" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
+                <Route path="/ar/menu" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
+                <Route path="/en/menu" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
+                <Route path="/menu/:lang" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
 
                 {/* Super Admin Routes */}
-                <Route path="/super-admin/login" element={<SuperAdminLogin />} />
-                <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+                <Route path="/super-admin/login" element={<ErrorBoundary scope="admin"><SuperAdminLogin /></ErrorBoundary>} />
+                <Route path="/super-admin/dashboard" element={<ErrorBoundary scope="admin"><SuperAdminDashboard /></ErrorBoundary>} />
 
                 {/* Main Admin Route */}
                 <Route
                   path="/"
-                  element={user ? <AdminDashboard /> : <AuthForm />}
+                  element={<ErrorBoundary scope="admin">{user ? <AdminDashboard /> : <AuthForm />}</ErrorBoundary>}
                 />
               </Routes>
             </Suspense>

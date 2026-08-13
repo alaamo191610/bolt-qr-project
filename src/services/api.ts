@@ -5,6 +5,45 @@ const fallbackApiUrl = import.meta.env.PROD
   : `${fallbackProtocol}//${hostname}:3000/api`;
 const API_URL = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
 
+export type ApiErrorCode =
+  | 'NETWORK_ERROR'
+  | 'AUTHENTICATION_REQUIRED'
+  | 'ACCESS_DENIED'
+  | 'VALIDATION_ERROR'
+  | 'CONFLICT'
+  | 'RATE_LIMITED'
+  | 'SERVER_ERROR'
+  | 'UNKNOWN_ERROR'
+  | string;
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: ApiErrorCode;
+  readonly requestId?: string;
+  readonly retryAfter?: number;
+
+  constructor({
+    message,
+    status = 0,
+    code = 'UNKNOWN_ERROR',
+    requestId,
+    retryAfter,
+  }: {
+    message: string;
+    status?: number;
+    code?: ApiErrorCode;
+    requestId?: string;
+    retryAfter?: number;
+  }) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+    this.retryAfter = retryAfter;
+  }
+}
+
 const getHeaders = () => {
   const token = localStorage.getItem('auth_token');
   return {
@@ -13,73 +52,115 @@ const getHeaders = () => {
   };
 };
 
-const handleResponse = async (res: Response) => {
+const fallbackErrorCode = (status: number): ApiErrorCode => {
+  if (status === 401) return 'AUTHENTICATION_REQUIRED';
+  if (status === 403) return 'ACCESS_DENIED';
+  if (status === 409) return 'CONFLICT';
+  if (status === 429) return 'RATE_LIMITED';
+  if (status >= 400 && status < 500) return 'VALIDATION_ERROR';
+  if (status >= 500) return 'SERVER_ERROR';
+  return 'UNKNOWN_ERROR';
+};
+
+const parseRetryAfter = (value: string | null) => {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+};
+
+export const handleResponse = async <T>(res: Response): Promise<T> => {
   if (!res.ok) {
     let errorMsg = `API Error: ${res.statusText}`;
+    let errorCode: ApiErrorCode = fallbackErrorCode(res.status);
+    let requestId = res.headers.get('X-Request-Id') || undefined;
     try {
-      const errorData = await res.json();
+      const errorData = await res.json() as {
+        error?: string;
+        code?: string;
+        requestId?: string;
+      };
       if (errorData && errorData.error) {
         errorMsg = errorData.error;
       }
+      if (errorData?.code) errorCode = errorData.code;
+      if (errorData?.requestId) requestId = errorData.requestId;
     } catch {
       // Not JSON or no error field, backup to statusText
     }
-    throw new Error(errorMsg);
+    throw new ApiError({
+      message: errorMsg,
+      status: res.status,
+      code: errorCode,
+      requestId,
+      retryAfter: parseRetryAfter(res.headers.get('Retry-After')),
+    });
   }
-  return res.json();
+  return res.json() as Promise<T>;
+};
+
+const request = async <T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> => {
+  try {
+    return await handleResponse<T>(await fetch(input, init));
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError({
+      message: 'Unable to reach the server. Please check your connection and try again.',
+      code: 'NETWORK_ERROR',
+    });
+  }
 };
 
 export const api = {
-  async get(endpoint: string, params?: Record<string, string>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async get<T = any>(endpoint: string, params?: Record<string, string>): Promise<T> {
     const url = new URL(`${API_URL}${endpoint}`);
     if (params) Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-    const res = await fetch(url.toString(), { headers: getHeaders() });
-    return handleResponse(res);
+    return request<T>(url.toString(), { headers: getHeaders() });
   },
 
-  async getWithToken(endpoint: string, token: string) {
-    const res = await fetch(`${API_URL}${endpoint}`, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getWithToken<T = any>(endpoint: string, token: string): Promise<T> {
+    return request<T>(`${API_URL}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
     });
-    return handleResponse(res);
   },
 
-  async post(endpoint: string, body: unknown) {
-    const res = await fetch(`${API_URL}${endpoint}`, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async post<T = any>(endpoint: string, body: unknown): Promise<T> {
+    return request<T>(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    return handleResponse(res);
   },
 
-  async put(endpoint: string, body: unknown) {
-    const res = await fetch(`${API_URL}${endpoint}`, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async put<T = any>(endpoint: string, body: unknown): Promise<T> {
+    return request<T>(`${API_URL}${endpoint}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    return handleResponse(res);
   },
 
-  async delete(endpoint: string) {
-    const res = await fetch(`${API_URL}${endpoint}`, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async delete<T = any>(endpoint: string): Promise<T> {
+    return request<T>(`${API_URL}${endpoint}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
-    return handleResponse(res);
   },
 
-  async upload(endpoint: string, body: FormData) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async upload<T = any>(endpoint: string, body: FormData): Promise<T> {
     const token = localStorage.getItem('auth_token');
-    const res = await fetch(`${API_URL}${endpoint}`, {
+    return request<T>(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       body,
     });
-    return handleResponse(res);
   },
 };
