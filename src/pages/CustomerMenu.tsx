@@ -30,6 +30,7 @@ import { useAdminMonetary } from "../hooks/useAdminMonetary";
 import { formatPrice } from "../pricing/usePrice";
 import { socket, joinMenuRoom } from "../services/socket";
 import { LandingPage } from '../components/ui/LandingPage';
+import { getErrorMessage } from "../utils/errors";
 
 interface Ingredient {
   id: string;
@@ -650,8 +651,11 @@ const CustomerMenu: React.FC = () => {
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber, adminId || getTrackingContextFromUrl().adminId)); // clear persisted cart
     } catch (err) {
-      setError({ code: "status.failedToPlaceOrder" });
+      // Stay on the cart/checkout view so the customer can retry without
+      // losing their place - a failed checkout is recoverable, unlike a
+      // failed menu load, so it must not trigger the full-page error state.
       console.error("Error placing order:", err);
+      toast.error(getErrorMessage(err, t("status.failedToPlaceOrder")));
     } finally {
       setIsOrdering(false);
     }
