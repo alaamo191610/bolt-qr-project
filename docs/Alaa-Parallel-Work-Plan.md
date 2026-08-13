@@ -151,6 +151,33 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
    error. Also stopped the image-upload handler from computing `getErrorMessage(err)` and
    then discarding it in favor of a hardcoded string. Not unit-tested (1500+ line
    component) — verified by direct review, typecheck, lint, and build.
+9. ~~`FeesTaxSettings`/`KDSSettings`/`OrderWorkflowRules` silently fell back to defaults on a
+   load failure~~ — **Done** (`codex/api-response-typing` @ `3cc6848`, `ae81c19`). Same
+   copy-pasted bug in all three settings panels: a failed `getAdminSettings`/
+   `getAdminMonetarySettings` call was caught and silently replaced with
+   `DEFAULT_BILLING`/`DEFAULT_KDS`/`DEFAULT_FLOW`, with the save form left fully usable. If
+   the admin saved while the failure was masked, it would overwrite their real billing/KDS/
+   workflow settings with defaults — a destructive-write risk, not just a UX gap. Also fixed
+   the same class of bug in `PromotionsManager.tsx` (lower severity — an empty list, not a
+   destructive default). All four now show a distinct error state with retry and block the
+   save form until the real settings load. Covered by `FeesTaxSettings.test.tsx`,
+   `KDSSettings.test.tsx`, `OrderWorkflowRules.test.tsx`, `PromotionsManager.test.tsx`.
+10. ~~Copy-link button claimed success when the copy actually failed~~ — **Done**
+    (`codex/api-response-typing` @ `b84d0e0`). `QRGenerator.copyToClipboard`'s catch block
+    explicitly showed the success checkmark regardless of outcome ("Still show success
+    message as the fallback might have worked"). `document.execCommand('copy')`'s boolean
+    return value was being discarded; a genuine failure (deprecated API, permission denied)
+    looked identical to success, so an admin could share a QR link and paste nothing. Now
+    checks the return value and shows an error toast on real failure. Not unit-tested
+    (canvas-based QR rendering library not implemented in jsdom) — verified by direct review.
+11. ~~Theme customizer silently pretended a failed save succeeded~~ — **Done**
+    (`codex/api-response-typing` @ `56f6eb0`). `ThemeCustomizer.applyChanges` applied the new
+    theme locally, then on a failed `updateAdminTheme` call just logged to console and closed
+    the panel exactly as if it had saved — the admin believes their theme is saved and it
+    silently reverts on next page load. Now toasts a warning instead of closing silently.
+    Also fixed `copyCssVars`'s copy-to-clipboard fallback, same missing-return-value-check bug
+    as item 10 but with total silence on failure instead of a false positive. Not
+    unit-tested (625-line component, context-heavy) — verified by direct review.
 
 ### A1 — M1 frontend safety and tenant UX (Weeks 2–3)
 
