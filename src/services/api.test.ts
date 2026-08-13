@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api, handleResponse, isUnauthenticatedError } from './api';
+import { ApiError, api, handleResponse, isUnauthenticatedError, tokenStore } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -62,5 +62,55 @@ describe('isUnauthenticatedError', () => {
     expect(isUnauthenticatedError(new ApiError({ message: 'boom', status: 500, code: 'SERVER_ERROR' }))).toBe(false);
     expect(isUnauthenticatedError(new Error('plain error'))).toBe(false);
     expect(isUnauthenticatedError(null)).toBe(false);
+  });
+});
+
+describe('token namespaces (G9: shared transport, separate session lifecycles)', () => {
+  it('keeps restaurant and superAdmin tokens in separate storage keys', () => {
+    tokenStore.set('restaurant', 'restaurant-token');
+    tokenStore.set('superAdmin', 'super-admin-token');
+
+    expect(localStorage.getItem('auth_token')).toBe('restaurant-token');
+    expect(localStorage.getItem('superAdminToken')).toBe('super-admin-token');
+    expect(tokenStore.get('restaurant')).toBe('restaurant-token');
+    expect(tokenStore.get('superAdmin')).toBe('super-admin-token');
+  });
+
+  it('clearing one namespace does not touch the other', () => {
+    tokenStore.set('restaurant', 'restaurant-token');
+    tokenStore.set('superAdmin', 'super-admin-token');
+
+    tokenStore.clear('superAdmin');
+
+    expect(tokenStore.get('restaurant')).toBe('restaurant-token');
+    expect(tokenStore.get('superAdmin')).toBeNull();
+  });
+
+  it('api.get defaults to the restaurant namespace, unaffected by a superAdmin token being set', async () => {
+    tokenStore.set('restaurant', 'restaurant-token');
+    tokenStore.set('superAdmin', 'super-admin-token');
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.get('/some-restaurant-endpoint');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer restaurant-token');
+  });
+
+  it('api.get with the superAdmin namespace sends the superAdmin token, not the restaurant token', async () => {
+    tokenStore.set('restaurant', 'restaurant-token');
+    tokenStore.set('superAdmin', 'super-admin-token');
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.get('/some-super-admin-endpoint', undefined, 'superAdmin');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer super-admin-token');
   });
 });

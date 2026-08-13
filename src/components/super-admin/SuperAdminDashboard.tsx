@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings } from 'lucide-react';
 import { superAdminService, type Restaurant, type SubscriptionPlan } from '../../services/superAdminService';
-import { isUnauthenticatedError } from '../../services/api';
+import { isUnauthenticatedError, tokenStore } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
 import PlanManagementModal from './PlanManagementModal';
 import toast from 'react-hot-toast';
 
@@ -17,23 +18,22 @@ const SuperAdminDashboard: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const loadData = useCallback(async () => {
-        const token = localStorage.getItem('superAdminToken');
-        if (!token) {
+        if (!tokenStore.get('superAdmin')) {
             navigate('/super-admin/login');
             return;
         }
 
         try {
             const [statsData, restaurantsData] = await Promise.all([
-                superAdminService.getStats(token),
-                superAdminService.getRestaurants(token),
+                superAdminService.getStats(),
+                superAdminService.getRestaurants(),
             ]);
             setStats(statsData);
             setRestaurants(restaurantsData);
         } catch (error) {
             console.error('Error loading data:', error);
             if (isUnauthenticatedError(error)) {
-                localStorage.removeItem('superAdminToken');
+                tokenStore.clear('superAdmin');
                 toast.error('Your session expired. Please sign in again.');
                 navigate('/super-admin/login');
             } else {
@@ -49,19 +49,18 @@ const SuperAdminDashboard: React.FC = () => {
     }, [loadData]);
 
     const handleLogout = () => {
-        localStorage.removeItem('superAdminToken');
+        tokenStore.clear('superAdmin');
         navigate('/super-admin/login');
     };
 
     const handleUpgradePlan = async (restaurantId: string, newPlan: string, status?: string, endDate?: string) => {
-        const token = localStorage.getItem('superAdminToken');
-        if (!token) return;
+        if (!tokenStore.get('superAdmin')) return;
 
         try {
-            await superAdminService.updateRestaurantPlan(token, restaurantId, newPlan, status, endDate);
+            await superAdminService.updateRestaurantPlan(restaurantId, newPlan, status, endDate);
             loadData(); // Reload data
-        } catch {
-            toast.error('Failed to update plan');
+        } catch (error) {
+            toast.error(getErrorMessage(error, 'Failed to update plan'));
         }
     };
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, Lock, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { superAdminService } from '../../services/superAdminService';
+import { tokenStore } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 
 const SuperAdminLogin: React.FC = () => {
@@ -22,7 +23,7 @@ const SuperAdminLogin: React.FC = () => {
         setLoading(true);
         try {
             const { token, user } = await superAdminService.login(email, password);
-            localStorage.setItem('superAdminToken', token);
+            tokenStore.set('superAdmin', token);
             toast.success(`Welcome, ${user.name || 'Super Admin'}!`);
             navigate('/super-admin/dashboard');
         } catch (error) {
