@@ -42,13 +42,15 @@ function Row({
 export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
   const [flow, setFlow] = useState<OrderFlowRules>(DEFAULT_FLOW);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     let mounted = true;
     (async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const settings = await adminService.getAdminSettings(adminId);
         const incoming: OrderFlowRules | undefined = settings?.order_rules;
@@ -58,7 +60,10 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
         setDirty(false);
       } catch (e) {
         console.error(e);
-        setFlow(DEFAULT_FLOW);
+        // Do not silently fall back to DEFAULT_FLOW here - if the admin
+        // saves while this failure is masked, it would overwrite their
+        // real order-workflow rules with defaults.
+        if (mounted) setLoadError(getErrorMessage(e, "Failed to load order rules"));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -66,6 +71,11 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
     return () => {
       mounted = false;
     };
+  };
+
+  useEffect(() => {
+    return load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminId]);
 
   const statusKeys = useMemo(() => flow.statuses.map((s) => s.key), [flow]);
@@ -125,6 +135,19 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
   if (loading)
     return (
       <div className="p-6 rounded-xl border bg-white">Loading order rules…</div>
+    );
+
+  if (loadError)
+    return (
+      <div className="p-6 rounded-xl border bg-white space-y-3" role="alert">
+        <p className="text-red-700 text-sm">{loadError}</p>
+        <button
+          onClick={load}
+          className="px-4 py-2 rounded-lg text-sm font-medium border shadow-sm bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
+        >
+          Try again
+        </button>
+      </div>
     );
 
   return (
