@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { UserCog, Plus, Trash2, Mail, Store } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { UserCog, Plus, Trash2, Mail, Store, Users, RotateCw } from "lucide-react";
 import { adminService } from "../../services/adminService";
 import { toast } from "react-hot-toast";
 import type { Admin } from "../../lib/supabase";
@@ -7,6 +7,8 @@ import { getErrorMessage } from "../../utils/errors";
 
 const UserManagement: React.FC = () => {
   const [admins, setAdmins] = useState<Admin[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newUser, setNewUser] = useState({
     email: "",
@@ -15,18 +17,22 @@ const UserManagement: React.FC = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadAdmins();
-  }, []);
-
-  const loadAdmins = async () => {
+  const loadAdmins = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const data = await adminService.getAllAdmins();
       setAdmins(data);
-    } catch {
-      toast.error("Failed to load users");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load users"));
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadAdmins();
+  }, [loadAdmins]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +58,8 @@ const UserManagement: React.FC = () => {
       await adminService.deleteAdmin(id);
       toast.success("User deleted");
       setAdmins((prev) => prev.filter((a) => a.id !== id));
-    } catch {
-      toast.error("Failed to delete user");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to delete user"));
     }
   };
 
@@ -86,41 +92,93 @@ const UserManagement: React.FC = () => {
       </div>
 
       {/* Users List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {admins.map((admin) => (
-          <div
-            key={admin.id}
-            className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 hover:shadow-md transition-shadow"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400">
-                  <Store className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white">
-                    {admin.restaurant_name || "Unnamed Restaurant"}
-                  </h3>
-                  <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    <Mail className="w-3 h-3 mr-1" />
-                    {admin.email}
-                  </div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-busy="true" aria-label="Loading users">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 animate-pulse"
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
                 </div>
               </div>
-              <button
-                onClick={() => handleDeleteUser(admin.id)}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Delete User"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="h-3 bg-slate-100 dark:bg-slate-700/60 rounded w-1/3 border-t border-slate-100 dark:border-slate-700 pt-3 mt-2" />
             </div>
-            <div className="text-xs text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-3 mt-2">
-              ID: <span className="font-mono">{admin.id}</span>
-            </div>
+          ))}
+        </div>
+      ) : loadError ? (
+        <div className="text-center p-16 bg-white/50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-red-300 dark:border-red-700/50" role="alert">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <UserCog className="w-8 h-8 text-red-500 dark:text-red-400" />
           </div>
-        ))}
-      </div>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Could not load users</h3>
+          <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">{loadError}</p>
+          <button
+            onClick={() => loadAdmins()}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <RotateCw className="w-4 h-4" />
+            <span>Try again</span>
+          </button>
+        </div>
+      ) : admins.length === 0 ? (
+        <div className="text-center p-16 bg-white/50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-slate-400" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No users yet</h3>
+          <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+            Add a restaurant administrator to give them access.
+          </p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add User</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {admins.map((admin) => (
+            <div
+              key={admin.id}
+              className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 hover:shadow-md transition-shadow"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white">
+                      {admin.restaurant_name || "Unnamed Restaurant"}
+                    </h3>
+                    <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <Mail className="w-3 h-3 mr-1" />
+                      {admin.email}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDeleteUser(admin.id)}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                  title="Delete User"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="text-xs text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-3 mt-2">
+                ID: <span className="font-mono">{admin.id}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add User Modal */}
       {showAddModal && (
