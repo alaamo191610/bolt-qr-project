@@ -1,8 +1,9 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { Clock, CheckCircle2, PartyPopper, ArrowRight, UtensilsCrossed } from 'lucide-react';
+import { Clock, CheckCircle2, PartyPopper, ArrowRight, UtensilsCrossed, TimerReset } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { socket, joinOrderRoom } from '../../services/socket';
 import { orderService } from '../../services/orderService';
+import { isUnauthenticatedError } from '../../services/api';
 
 interface ConfirmedOrder {
   id: number;
@@ -24,6 +25,7 @@ const EMOJIS = ['🍔', '🍕', '🍟', '🥗', '🍰', '🥤', '🌮', '🍣', 
 const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrder, onOrderChange }) => {
   const { t, isRTL } = useLanguage();
   const [order, setOrder] = useState(initialOrder);
+  const [isTrackingExpired, setIsTrackingExpired] = useState(false);
   const onOrderChangeRef = useRef(onOrderChange);
   const initialOrderRef = useRef(initialOrder);
   initialOrderRef.current = initialOrder;
@@ -50,6 +52,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
   // reconcile with the server whenever the connection/page becomes active.
   useEffect(() => {
     if (!orderId || !trackingToken) return;
+    let expired = false;
 
     const applyStatus = (status: string) => {
       const updated = { ...initialOrderRef.current, status };
@@ -57,14 +60,24 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
       onOrderChangeRef.current?.(updated);
     };
     const refreshStatus = async () => {
+      if (expired) return;
       try {
         const latest = await orderService.getPublicOrderStatus(orderId, trackingToken);
         applyStatus(latest.status);
       } catch (error) {
+        if (isUnauthenticatedError(error)) {
+          // The tracking token expired server-side; stop retrying with a
+          // dead token and let the customer know instead of silently
+          // freezing on the last known status forever.
+          expired = true;
+          setIsTrackingExpired(true);
+          return;
+        }
         console.warn('Unable to refresh order status:', error);
       }
     };
     const joinAndRefresh = () => {
+      if (expired) return;
       joinOrderRoom(orderId, trackingToken);
       void refreshStatus();
     };
@@ -98,6 +111,31 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
     id: i, emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
     left: Math.random() * 100, delay: Math.random() * 800, duration: 1600 + Math.random() * 800
   })), []);
+
+  if (isTrackingExpired) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4" role="alert">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <TimerReset className="w-10 h-10 text-amber-600 dark:text-amber-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            {t('status.trackingExpired')}
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-8">
+            {t('status.trackingExpiredDescription')}
+          </p>
+          <button
+            onClick={onStartNewOrder}
+            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <span>{t('menu.startNewOrder')}</span>
+            <ArrowRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4">

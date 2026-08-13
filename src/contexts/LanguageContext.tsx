@@ -665,6 +665,8 @@ const translations: Record<Language, TranslationTree> = {
       completed: "Completed 🎉",
       current: "Current Status",
       served: "Served ✔️",
+      trackingExpired: "This tracking link has expired",
+      trackingExpiredDescription: "For your privacy, order tracking links expire after a few hours. Please ask restaurant staff for your order status.",
     },
 
     language: {
@@ -1310,6 +1312,8 @@ const translations: Record<Language, TranslationTree> = {
       completed: "مكتمل 🎉",
       current: "الوضع الحالي",
       served: "اتقدّم ✔️",
+      trackingExpired: "انتهت صلاحية رابط التتبع",
+      trackingExpiredDescription: "لحمايتك، روابط تتبع الطلب تنتهي بعد كم ساعة. تواصل مع موظف المطعم لمعرفة حالة طلبك.",
     },
 
     language: {
