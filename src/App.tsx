@@ -345,6 +345,13 @@ const AdminDashboard: React.FC = () => {
 
     joinAdminRoom(user.id);
 
+    const handleConnect = () => {
+      // Socket.IO room membership does not survive a disconnect/reconnect;
+      // without this, table/order updates silently stop arriving after any
+      // network blip until the page is refreshed.
+      joinAdminRoom(user.id);
+    };
+
     const handleNewOrder = (order: ApiOrder) => {
       const transformedOrder: Order = {
         id: order.id,
@@ -367,9 +374,11 @@ const AdminDashboard: React.FC = () => {
       toast.success(`New Order #${order.order_number || order.id} received!`);
     };
 
+    socket.on("connect", handleConnect);
     socket.on("new-order", handleNewOrder);
 
     return () => {
+      socket.off("connect", handleConnect);
       socket.off("new-order", handleNewOrder);
     };
   }, [user]);
