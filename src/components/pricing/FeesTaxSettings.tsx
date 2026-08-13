@@ -10,13 +10,15 @@ export default function FeesTaxSettings({ adminId }:{ adminId: string }){
 
   const [settings, setSettings] = useState<BillingSettings>(DEFAULT_BILLING);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  useEffect(()=>{
+  const load = () => {
     let mounted = true;
     (async ()=>{
       setLoading(true);
+      setLoadError(null);
       try{
         const data = await adminService.getAdminMonetarySettings(adminId);
         const incoming = data?.billing_settings;
@@ -24,10 +26,18 @@ export default function FeesTaxSettings({ adminId }:{ adminId: string }){
         setDirty(false);
       }catch(e){
         console.error(e);
-        setSettings(DEFAULT_BILLING);
+        // Do not silently fall back to DEFAULT_BILLING here - if the admin
+        // saves while this failure is masked, it would overwrite their real
+        // billing settings with defaults (0% VAT, no fees).
+        if (mounted) setLoadError(getErrorMessage(e, 'Failed to load billing settings'));
       } finally { if(mounted) setLoading(false); }
     })();
-    return ()=>{ mounted=false };
+    return () => { mounted = false; };
+  };
+
+  useEffect(()=>{
+    return load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[adminId]);
 
   const save = async()=>{
@@ -65,6 +75,20 @@ export default function FeesTaxSettings({ adminId }:{ adminId: string }){
 
   if (loading) {
     return <div className="p-6 rounded-xl border bg-white">{t('fees.loading') || 'Loading…'}</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6 rounded-xl border bg-white space-y-3" role="alert">
+        <p className="text-red-700 text-sm">{loadError}</p>
+        <button
+          onClick={load}
+          className="px-4 py-2 rounded-lg text-sm font-medium border shadow-sm bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
+        >
+          {t('status.tryAgain') || 'Try again'}
+        </button>
+      </div>
+    );
   }
 
   return (
