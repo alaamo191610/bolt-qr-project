@@ -55,16 +55,26 @@ describe('UserManagement loading/empty/error states', () => {
   it('shows the real error message and a retry action instead of swallowing the failure', async () => {
     const user = userEvent.setup();
     vi.mocked(adminService.getAllAdmins)
-      .mockRejectedValueOnce(new ApiError({ message: 'Restaurant database is unreachable', status: 503, code: 'SERVER_ERROR' }))
+      .mockRejectedValueOnce(new ApiError({ message: 'Restaurant slug is invalid', status: 422, code: 'VALIDATION_ERROR' }))
       .mockResolvedValueOnce([admin]);
 
     render(<UserManagement />);
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Restaurant database is unreachable'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Restaurant slug is invalid'));
 
     await user.click(screen.getByRole('button', { name: /try again/i }));
 
     await waitFor(() => expect(screen.getByText('Test Restaurant')).toBeInTheDocument());
     expect(adminService.getAllAdmins).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a distinct connection message for a network failure, not a raw error string', async () => {
+    vi.mocked(adminService.getAllAdmins).mockRejectedValue(
+      new ApiError({ message: 'TypeError: Failed to fetch', code: 'NETWORK_ERROR' }),
+    );
+
+    render(<UserManagement />);
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Check your internet connection'));
   });
 });
