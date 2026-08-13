@@ -88,9 +88,12 @@ the `SuperAdminDashboard` fix a silent no-op. It now reuses the shared `handleRe
 Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the new
 `src/services/superAdminService.test.ts`.
 
-**Prioritized backlog (not yet done, highest risk first):**
-1. Give `OrderManagement`'s optimistic status-change a rollback/error path — a failed status
-   update currently shows nothing wrong to the admin.
+**Prioritized backlog (highest risk first):**
+1. ~~Give `OrderManagement`'s optimistic status-change a rollback/error path~~ — **Done**
+   (`codex/api-response-typing` @ `a3ec619`). `confirmAction` now awaits `onStatusChange`,
+   reverts the optimistic update on failure, and shows an inline "update failed, try again"
+   banner on the affected order card plus a saving spinner while in flight. Covered by
+   `src/components/orders/OrderManagement.test.tsx` (rollback and success paths).
 2. Add loading and empty states to `UserManagement`; stop discarding the real error in its
    catch block.
 3. Make error messaging branch on `ApiError.code` across admin screens (`getErrorMessage`
