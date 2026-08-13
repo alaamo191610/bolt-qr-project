@@ -99,10 +99,19 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
    with an add-user action, and a real error state with retry that surfaces the actual
    `ApiError` message instead of a bare catch discarding it. Covered by
    `src/components/admin/UserManagement.test.tsx`.
-3. Make error messaging branch on `ApiError.code` across admin screens (`getErrorMessage`
-   currently reads only `.message`), so `NETWORK_ERROR` gets distinct "check your
-   connection" copy from `VALIDATION_ERROR`/`SERVER_ERROR`.
-4. Add socket-reconnect rejoin to `TableManagement` to match `CustomerMenu`'s pattern.
+3. ~~Make error messaging branch on `ApiError.code` across admin screens~~ — **Done**
+   (`codex/api-response-typing` @ `45c2643`). `getErrorMessage` now returns distinct
+   "check your connection" / "try again in a moment" copy for `NETWORK_ERROR` /
+   `SERVER_ERROR`; every other code still passes the real message through unchanged. Fixed
+   centrally so all 17 existing call sites benefit without individual edits. Covered by
+   `src/utils/errors.test.ts`.
+4. ~~Add socket-reconnect rejoin to `TableManagement`~~ — **Done**
+   (`codex/api-response-typing` @ `e095f82`). Fixed at the source in `App.tsx`'s
+   `AdminDashboard` (where `joinAdminRoom` is actually called), mirroring `CustomerMenu`'s
+   proven `socket.on('connect', ...)` pattern. Covers both `TableManagement`'s
+   `table-updated` listener and the new-order handler in the same room. Not unit-tested
+   (real `socket.io-client` instance, unexported inner component) — verified by direct
+   comparison to `CustomerMenu` and a dev-server/build check.
 5. ~~Consolidate the SuperAdmin/session boundary per G9~~ — **Done**
    (`codex/api-response-typing` @ `828c46c`). `superAdminService.ts` no longer duplicates
    `api.ts`'s fetch/error logic by hand; it now calls `api.get`/`api.put` with a
@@ -115,6 +124,22 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
    never sent on a default request and vice versa). Needs Yazan's review before merge to
    main, per the plan's session/security PR checklist item, even though it's built and
    tested.
+
+**Found and fixed after the original five (still highest-risk-first):**
+
+6. ~~`OrderConfirmation` freezes forever on an expired tracking link~~ — **Done**
+   (`codex/api-response-typing` @ `2f88908`). The backend already returns 401 "Order
+   tracking session expired" once the tracking JWT expires; the frontend never handled it.
+   Now shows a dedicated expired-link screen (EN/AR) instead of silently freezing on the
+   last known status. This is the UI D1.1 requires and works independent of Yazan's pending
+   24h→6h expiry change. Covered by `src/components/ui/OrderConfirmation.test.tsx`.
+7. ~~Checkout failure bounced the customer out of the cart~~ — **Done**
+   (`codex/api-response-typing` @ `47a194d`). `placeOrder`'s catch block triggered the same
+   full-page error takeover used for "menu never loaded," with a "reload page" button —
+   the wrong response to a recoverable checkout failure. Now shows a toast with the real
+   (network/server-aware) error message and leaves the customer on the cart to retry. Not
+   unit-tested (1346-line component, disproportionate mocking for this fix) — verified by
+   direct review, typecheck, and build.
 
 ### A1 — M1 frontend safety and tenant UX (Weeks 2–3)
 
