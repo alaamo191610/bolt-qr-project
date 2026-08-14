@@ -1,6 +1,9 @@
 export const ORGANIZATION_ROLES = Object.freeze(['OWNER', 'MANAGER', 'STAFF']);
 export const MEMBERSHIP_STATUSES = Object.freeze(['ACTIVE', 'INVITED', 'SUSPENDED']);
 
+export const isUuid = value => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 export const getIdentityIdFromClaims = claims => claims?.userId || claims?.sub || claims?.id || null;
 
 export const buildTenantClaims = session => ({

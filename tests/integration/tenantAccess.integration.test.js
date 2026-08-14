@@ -1,0 +1,557 @@
+import test, { after, before, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import { createTestDatabase } from '../helpers/testDatabase.js';
+import { runTenantOwnershipVerification } from '../../server/prisma/verification/runTenantOwnershipVerification.js';
+
+let database;
+let applicationDatabase;
+let app;
+let httpServer;
+let baseUrl;
+let tenantA;
+let tenantB;
+let rateLimiters;
+
+const postJson = async (path, body) => fetch(`${baseUrl}${path}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
+const authenticatedRequest = (token, path, init = {}) => fetch(`${baseUrl}${path}`, {
+  ...init,
+  headers: {
+    ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+    Authorization: `Bearer ${token}`,
+    ...(init.headers || {}),
+  },
+});
+
+const createTenantFixture = async (label) => {
+  const id = randomUUID();
+  const branchId = randomUUID();
+  const userId = randomUUID();
+  const adminId = randomUUID();
+  const password = `Fixture-${label}-password!`;
+  const passwordHash = await bcrypt.hash(password, 4);
+
+  const organization = await database.prisma.organization.create({
+    data: { id, name: `Fixture ${label}`, slug: `fixture-${label.toLowerCase()}-${id.slice(0, 8)}` },
+  });
+  await database.prisma.branch.create({
+    data: { id: branchId, organization_id: organization.id, code: 'MAIN', name: 'Main Branch' },
+  });
+  const admin = await database.prisma.admin.create({
+    data: {
+      id: adminId,
+      organization_id: organization.id,
+      default_branch_id: branchId,
+      email: `admin-${label.toLowerCase()}-${id.slice(0, 8)}@example.com`,
+      password: passwordHash,
+      restaurant_name: `Fixture ${label}`,
+    },
+  });
+  const user = await database.prisma.user.create({
+    data: {
+      id: userId,
+      email: `user-${label.toLowerCase()}-${id.slice(0, 8)}@example.com`,
+      password_hash: passwordHash,
+      name: `User ${label}`,
+    },
+  });
+  await database.prisma.organizationUser.create({
+    data: {
+      organization_id: organization.id,
+      user_id: user.id,
+      default_branch_id: branchId,
+      role: 'OWNER',
+      status: 'ACTIVE',
+    },
+  });
+  const category = await database.prisma.category.create({
+    data: {
+      admin_id: admin.id,
+      organization_id: organization.id,
+      branch_id: branchId,
+      name_en: `${label} Category`,
+    },
+  });
+  const menu = await database.prisma.menu.create({
+    data: {
+      user_id: admin.id,
+      organization_id: organization.id,
+      branch_id: branchId,
+      category_id: category.id,
+      name_en: `${label} Menu Item`,
+      price: 10,
+      tags: [],
+      suggested_items_ids: [],
+    },
+  });
+  const ingredient = await database.prisma.ingredient.create({
+    data: {
+      admin_id: admin.id,
+      organization_id: organization.id,
+      branch_id: branchId,
+      name_en: `${label} Ingredient`,
+    },
+  });
+  await database.prisma.menuIngredient.create({
+    data: { menu_id: menu.id, ingredient_id: ingredient.id },
+  });
+  const table = await database.prisma.table.create({
+    data: {
+      admin_id: admin.id,
+      organization_id: organization.id,
+      branch_id: branchId,
+      code: `${label.toUpperCase()}-01`,
+    },
+  });
+  const promotion = await database.prisma.promotion.create({
+    data: {
+      admin_id: admin.id,
+      organization_id: organization.id,
+      branch_id: branchId,
+      code: `${label.toUpperCase()}10`,
+      value: 10,
+    },
+  });
+  const order = await database.prisma.order.create({
+    data: {
+      admin_id: admin.id,
+      organization_id: organization.id,
+      branch_id: branchId,
+      table_id: table.id,
+      promotion_id: promotion.id,
+      subtotal: 10,
+      total: 10,
+    },
+  });
+  const modifierGroup = await database.prisma.modifierGroup.create({
+    data: {
+      organization_id: organization.id,
+      name_en: `${label} Modifier Group`,
+    },
+  });
+  await database.prisma.menuModifierGroup.create({
+    data: { menu_id: menu.id, group_id: modifierGroup.id },
+  });
+
+  return {
+    organization,
+    branchId,
+    admin,
+    user,
+    category,
+    menu,
+    ingredient,
+    table,
+    promotion,
+    order,
+    modifierGroup,
+    password,
+  };
+};
+
+before(async () => {
+  database = await createTestDatabase();
+  process.env.DATABASE_URL = database.databaseUrl;
+  const application = await import(`../../server/index.js?integration=${Date.now()}`);
+  ({ app } = application);
+  rateLimiters = [
+    application.tableExchangeIpRateLimit,
+    application.tableExchangeCapabilityRateLimit,
+    application.tableSessionOrderRateLimit,
+    application.organizationOrderRateLimit,
+  ];
+  ({ default: applicationDatabase } = await import('../../server/db.js'));
+  httpServer = createServer(app);
+  await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));
+  baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
+});
+
+beforeEach(async () => {
+  await database.reset();
+  for (const limiter of rateLimiters) limiter.reset();
+  tenantA = await createTenantFixture('Alpha');
+  tenantB = await createTenantFixture('Beta');
+});
+
+after(async () => {
+  await new Promise((resolve, reject) => httpServer.close(error => error ? reject(error) : resolve()));
+  await applicationDatabase.$disconnect();
+  await database.close();
+});
+
+test('authentication resolves the active tenant and rejects cross-tenant organization selection', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const loginBody = await login.json();
+
+  assert.equal(login.status, 200);
+  assert.equal(loginBody.user.organizationId, tenantA.organization.id);
+  assert.equal(loginBody.user.identityId, tenantA.user.id);
+  assert.ok(loginBody.token);
+
+  const crossTenantLogin = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+    organizationId: tenantB.organization.id,
+  });
+  const crossTenantBody = await crossTenantLogin.json();
+
+  assert.equal(crossTenantLogin.status, 403);
+  assert.equal(crossTenantBody.code, 'ACCESS_DENIED');
+  assert.equal(crossTenantBody.requestId, crossTenantLogin.headers.get('x-request-id'));
+});
+
+test('tenant-scoped reads and writes fail closed for another tenant', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token } = await login.json();
+
+  const menus = await authenticatedRequest(token, '/api/menus');
+  const menuBody = await menus.json();
+  assert.equal(menus.status, 200);
+  assert.deepEqual(menuBody.map(item => item.id), [tenantA.menu.id]);
+
+  const attemptedUpdate = await authenticatedRequest(token, `/api/menus/${tenantB.menu.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name_en: 'Cross-tenant mutation' }),
+  });
+  const updateBody = await attemptedUpdate.json();
+  assert.equal(attemptedUpdate.status, 404);
+  assert.equal(updateBody.code, 'VALIDATION_ERROR');
+
+  const betaMenu = await database.prisma.menu.findUnique({ where: { id: tenantB.menu.id } });
+  assert.equal(betaMenu.name_en, 'Beta Menu Item');
+
+  const categories = await authenticatedRequest(token, '/api/categories');
+  const categoryBody = await categories.json();
+  assert.equal(categories.status, 200);
+  assert.deepEqual(categoryBody.map(category => category.id), [tenantA.category.id]);
+
+  const createdCategoryResponse = await authenticatedRequest(token, '/api/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name_en: 'Alpha Created Category' }),
+  });
+  const createdCategory = await createdCategoryResponse.json();
+  assert.equal(createdCategoryResponse.status, 201);
+  assert.equal(createdCategory.organization_id, tenantA.organization.id);
+
+  const createdMenuResponse = await authenticatedRequest(token, '/api/menus', {
+    method: 'POST',
+    body: JSON.stringify({
+      name_en: 'Alpha Created Menu',
+      price: 8.5,
+      category_id: createdCategory.id,
+      available: true,
+    }),
+  });
+  const createdMenu = await createdMenuResponse.json();
+  assert.equal(createdMenuResponse.status, 201);
+  assert.equal(createdMenu.organization_id, tenantA.organization.id);
+
+  const createdTableResponse = await authenticatedRequest(token, '/api/tables', {
+    method: 'POST',
+    body: JSON.stringify({ code: 'ALPHA-99', capacity: 2 }),
+  });
+  const createdTable = await createdTableResponse.json();
+  assert.equal(createdTableResponse.status, 200);
+  assert.equal(createdTable.organization_id, tenantA.organization.id);
+
+  const createdModifierResponse = await authenticatedRequest(
+    token,
+    `/api/menus/${createdMenu.id}/modifiers`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        groups: [{
+          name_en: 'Alpha Created Modifier',
+          selection_type: 'single',
+          options: [],
+        }],
+      }),
+    },
+  );
+  assert.equal(createdModifierResponse.status, 200);
+  const createdModifier = await database.prisma.modifierGroup.findFirst({
+    where: {
+      name_en: 'Alpha Created Modifier',
+      organization_id: tenantA.organization.id,
+    },
+  });
+  assert.ok(createdModifier);
+});
+
+test('cross-tenant links and destructive mutations are denied for every exposed root', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token } = await login.json();
+
+  const categoryLink = await authenticatedRequest(token, '/api/menus', {
+    method: 'POST',
+    body: JSON.stringify({
+      name_en: 'Invalid Category Link',
+      price: 5,
+      category_id: tenantB.category.id,
+      available: true,
+    }),
+  });
+  assert.equal(categoryLink.status, 400);
+
+  const ingredientLink = await authenticatedRequest(token, `/api/menus/${tenantA.menu.id}/ingredients`, {
+    method: 'POST',
+    body: JSON.stringify({ ingredients: [{ ingredient_id: tenantB.ingredient.id }] }),
+  });
+  assert.equal(ingredientLink.status, 400);
+
+  const modifierLink = await authenticatedRequest(token, `/api/menus/${tenantA.menu.id}/modifiers`, {
+    method: 'POST',
+    body: JSON.stringify({ groups: [{ id: tenantB.modifierGroup.id, name_en: 'Cross-tenant' }] }),
+  });
+  assert.equal(modifierLink.status, 404);
+
+  const menuDelete = await authenticatedRequest(token, `/api/menus/${tenantB.menu.id}`, {
+    method: 'DELETE',
+  });
+  assert.equal(menuDelete.status, 404);
+
+  const tableDelete = await authenticatedRequest(token, `/api/tables/${tenantB.table.id}`, {
+    method: 'DELETE',
+  });
+  assert.equal(tableDelete.status, 404);
+
+  const orderUpdate = await authenticatedRequest(token, `/api/orders/${tenantB.order.id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status: 'preparing' }),
+  });
+  assert.equal(orderUpdate.status, 404);
+
+  const promotionUpdate = await authenticatedRequest(
+    token,
+    `/api/promotions/${tenantB.promotion.id}/active`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ active: false }),
+    },
+  );
+  assert.equal(promotionUpdate.status, 404);
+
+  const [betaMenu, betaTable, betaOrder, betaPromotion, betaModifier] = await Promise.all([
+    database.prisma.menu.findUnique({ where: { id: tenantB.menu.id } }),
+    database.prisma.table.findUnique({ where: { id: tenantB.table.id } }),
+    database.prisma.order.findUnique({ where: { id: tenantB.order.id } }),
+    database.prisma.promotion.findUnique({ where: { id: tenantB.promotion.id } }),
+    database.prisma.modifierGroup.findUnique({ where: { id: tenantB.modifierGroup.id } }),
+  ]);
+  assert.ok(betaMenu);
+  assert.ok(betaTable);
+  assert.equal(betaOrder.status, 'pending');
+  assert.equal(betaPromotion.active, true);
+  assert.equal(betaModifier.name_en, 'Beta Modifier Group');
+});
+
+test('takeaway ordering is disabled for Release 1 without creating an order', async () => {
+  const beforeCount = await database.prisma.order.count({
+    where: { organization_id: tenantA.organization.id },
+  });
+  const response = await postJson('/api/orders', {
+    adminId: tenantA.admin.id,
+    type: 'take_away',
+    items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 403);
+  assert.equal(body.code, 'ORDER_TYPE_DISABLED');
+  assert.equal(body.error, 'Takeaway ordering is disabled for Release 1');
+  assert.equal(
+    await database.prisma.order.count({ where: { organization_id: tenantA.organization.id } }),
+    beforeCount,
+  );
+});
+
+test('table capability exchange authorizes dine-in identity and ignores body tenant identifiers', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token: adminToken } = await login.json();
+  const rotation = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantA.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const rotated = await rotation.json();
+
+  assert.equal(rotation.status, 200);
+  assert.equal(rotated.capability.length, 43);
+  const stored = await database.prisma.tableCapability.findUnique({
+    where: { table_id: tenantA.table.id },
+  });
+  assert.match(stored.secret_hash, /^[0-9a-f]{64}$/);
+  assert.notEqual(stored.secret_hash, rotated.capability);
+
+  const exchange = await postJson('/api/public/table-session', {
+    capability: rotated.capability,
+  });
+  const session = await exchange.json();
+  assert.equal(exchange.status, 200);
+  assert.equal(session.expiresIn, 1800);
+  assert.equal(session.organizationId, tenantA.organization.id);
+  assert.equal(session.restaurantId, tenantA.admin.id);
+  assert.deepEqual(session.table, { id: tenantA.table.id, code: tenantA.table.code });
+
+  const order = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'dine_in',
+      adminId: tenantB.admin.id,
+      tableCode: tenantB.table.code,
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+  const created = await order.json();
+
+  assert.equal(order.status, 201);
+  assert.equal(created.admin_id, tenantA.admin.id);
+  assert.equal(created.organization_id, tenantA.organization.id);
+  assert.equal(created.branch_id, tenantA.branchId);
+  assert.equal(created.table_id, tenantA.table.id);
+});
+
+test('dine-in order creation requires a valid current table session before mutation', async () => {
+  const beforeCount = await database.prisma.order.count();
+  const missing = await postJson('/api/orders', {
+    type: 'dine_in',
+    adminId: tenantA.admin.id,
+    tableCode: tenantA.table.code,
+    items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+  });
+  const missingBody = await missing.json();
+
+  assert.equal(missing.status, 401);
+  assert.equal(missingBody.code, 'TABLE_SESSION_REQUIRED');
+  assert.equal(await database.prisma.order.count(), beforeCount);
+
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token: adminToken } = await login.json();
+  const firstRotation = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantA.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const firstCapability = await firstRotation.json();
+  const exchange = await postJson('/api/public/table-session', {
+    capability: firstCapability.capability,
+  });
+  const oldSession = await exchange.json();
+
+  await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantA.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const rotatedOrder = await authenticatedRequest(oldSession.token, '/api/orders', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+  const rotatedBody = await rotatedOrder.json();
+
+  assert.equal(rotatedOrder.status, 403);
+  assert.equal(rotatedBody.code, 'TABLE_SESSION_INVALID');
+  assert.equal(await database.prisma.order.count(), beforeCount);
+});
+
+test('capability management is tenant-scoped and revocation fails closed', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token: adminToken } = await login.json();
+  const crossTenant = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantB.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  assert.equal(crossTenant.status, 404);
+
+  await assert.rejects(
+    database.prisma.tableCapability.create({
+      data: {
+        table_id: tenantA.table.id,
+        organization_id: tenantB.organization.id,
+        secret_hash: 'a'.repeat(64),
+      },
+    }),
+    /Foreign key constraint violated/,
+  );
+
+  const rotation = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantA.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const { capability } = await rotation.json();
+  const revoke = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantA.table.id}/capability`,
+    { method: 'DELETE' },
+  );
+  assert.equal(revoke.status, 200);
+
+  const exchange = await postJson('/api/public/table-session', { capability });
+  const body = await exchange.json();
+  assert.equal(exchange.status, 403);
+  assert.equal(body.code, 'TABLE_SESSION_INVALID');
+});
+
+test('table session exchange enforces the accepted per-capability limit', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token: adminToken } = await login.json();
+  const rotation = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenantA.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const { capability } = await rotation.json();
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const response = await postJson('/api/public/table-session', { capability });
+    assert.equal(response.status, 200);
+  }
+  const limited = await postJson('/api/public/table-session', { capability });
+  const limitedBody = await limited.json();
+  assert.equal(limited.status, 429);
+  assert.equal(limitedBody.code, 'RATE_LIMITED');
+  assert.ok(Number(limited.headers.get('retry-after')) > 0);
+});
+
+test('read-only tenant verification command approves the clean deployment fixture', async () => {
+  const report = await runTenantOwnershipVerification({
+    databaseUrl: database.databaseUrl,
+    output: () => undefined,
+  });
+
+  assert.equal(report.length, 7);
+  assert.ok(report.every(root => root.enforcement_ready));
+});
