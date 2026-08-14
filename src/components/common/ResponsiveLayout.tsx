@@ -226,22 +226,22 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               </button>
 
               {/* Branding */}
-              <div className="hidden lg:flex items-center space-x-3 rtl:space-x-reverse">
+              <div className="hidden lg:flex items-center space-x-3 rtl:space-x-reverse min-w-0 max-w-[220px] shrink-0">
                 {logoUrl ? (
                   <img
                     src={logoUrl}
                     alt={resolvedRestaurantName}
-                    className="h-12 w-12 object-cover rounded-lg shadow-md transform transition-transform hover:scale-105"
+                    className="h-12 w-12 object-cover rounded-lg shadow-md transform transition-transform hover:scale-105 shrink-0"
                   />
                 ) : (
-                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md transform transition-transform hover:scale-105">
+                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md transform transition-transform hover:scale-105 shrink-0">
                     <span className="text-2xl font-bold text-white">
                       {resolvedRestaurantName.charAt(0).toUpperCase()}
                     </span>
                   </div>
                 )}
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                <div className="min-w-0">
+                  <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
                     {resolvedRestaurantName}
                   </h1>
                 </div>
@@ -278,7 +278,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               </div>
 
               {/* Search bar (always visible) */}
-              <div className="flex items-center relative w-full max-w-sm ml-auto mr-4 lg:mr-0">
+              <div className="flex items-center relative w-full min-w-[120px] max-w-sm ml-auto mr-4 lg:mr-0">
                 <Search className="absolute ltr:left-4 rtl:right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
@@ -296,8 +296,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               {userInfo && (
                 <DropdownMenu as="div" className="relative">
                   <DropdownMenu.Button className="flex items-center gap-3 rounded-full bg-slate-50 dark:bg-slate-800/50 p-1.5 pl-4 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 group">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">
+                    <div className="text-right hidden sm:block max-w-[140px]">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white leading-none truncate">
                         {userInfo.name.split(" ")[0]}
                       </p>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
