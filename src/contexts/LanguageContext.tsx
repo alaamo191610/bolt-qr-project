@@ -667,6 +667,10 @@ const translations: Record<Language, TranslationTree> = {
       served: "Served ✔️",
       trackingExpired: "This tracking link has expired",
       trackingExpiredDescription: "For your privacy, order tracking links expire after a few hours. Please ask restaurant staff for your order status.",
+      tableSessionMissing: "This link is missing a table code. Please scan the table's QR code to order.",
+      tableSessionInvalid: "This QR code is no longer valid. Please scan the table's current QR code to order.",
+      tableSessionVerifying: "Verifying your table…",
+      tableSessionError: "Couldn't verify this table right now.",
     },
 
     language: {
@@ -1314,6 +1318,10 @@ const translations: Record<Language, TranslationTree> = {
       served: "اتقدّم ✔️",
       trackingExpired: "انتهت صلاحية رابط التتبع",
       trackingExpiredDescription: "لحمايتك، روابط تتبع الطلب تنتهي بعد كم ساعة. تواصل مع موظف المطعم لمعرفة حالة طلبك.",
+      tableSessionMissing: "هالرابط ناقصو رمز الطاولة. لازم تمسح كود QR الطاولة عشان تطلب.",
+      tableSessionInvalid: "كود QR هذا ما عاد صالح. امسح كود QR الحالي على الطاولة عشان تطلب.",
+      tableSessionVerifying: "عم نتحقق من الطاولة…",
+      tableSessionError: "ما قدرنا نتحقق من الطاولة هلق.",
     },
 
     language: {
