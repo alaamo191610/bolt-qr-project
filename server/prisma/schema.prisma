@@ -182,56 +182,63 @@ model Admin {
 }
 
 model Category {
-  id         Int      @id @default(autoincrement())
-  admin_id   String   @db.Uuid
-  branch_id  String?  @db.Uuid
-  name_en    String
-  name_ar    String?
-  sort_order Int?     @default(0)
-  created_at DateTime @default(now()) @db.Timestamptz
+  id              Int      @id @default(autoincrement())
+  admin_id        String   @db.Uuid
+  organization_id String?  @db.Uuid
+  branch_id       String?  @db.Uuid
+  name_en         String
+  name_ar         String?
+  sort_order      Int?     @default(0)
+  created_at      DateTime @default(now()) @db.Timestamptz
 
-  admin  Admin   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
-  branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
-  menus  Menu[]
+  admin        Admin         @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  branch       Branch?       @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  menus        Menu[]
 
   @@unique([admin_id, name_en])
   @@index([admin_id])
+  @@index([organization_id])
   @@index([branch_id])
   @@map("categories")
 }
 
 model Ingredient {
-  id         Int      @id @default(autoincrement())
-  admin_id   String   @db.Uuid
-  branch_id  String?  @db.Uuid
-  name_en    String
-  name_ar    String?
-  created_at DateTime @default(now()) @db.Timestamptz
+  id              Int      @id @default(autoincrement())
+  admin_id        String   @db.Uuid
+  organization_id String?  @db.Uuid
+  branch_id       String?  @db.Uuid
+  name_en         String
+  name_ar         String?
+  created_at      DateTime @default(now()) @db.Timestamptz
 
   admin            Admin            @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  organization     Organization?    @relation(fields: [organization_id], references: [id], onDelete: SetNull)
   branch           Branch?          @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   menu_ingredients MenuIngredient[]
 
   @@unique([admin_id, name_en])
   @@index([admin_id])
+  @@index([organization_id])
   @@index([branch_id])
   @@map("ingredients")
 }
 
 model Menu {
-  id             Int       @id @default(autoincrement())
-  user_id        String?   @db.Uuid
-  branch_id      String?   @db.Uuid
-  category_id    Int?
-  name_en        String
-  name_ar        String?
-  description_en String?
-  description_ar String?
-  price          Decimal   @default(0) @db.Decimal(10, 2)
-  image_url      String?
-  available      Boolean?  @default(true)
-  deleted_at     DateTime? @db.Timestamptz
-  created_at     DateTime  @default(now()) @db.Timestamptz
+  id              Int       @id @default(autoincrement())
+  user_id         String?   @db.Uuid
+  organization_id String?   @db.Uuid
+  branch_id       String?   @db.Uuid
+  category_id     Int?
+  name_en         String
+  name_ar         String?
+  description_en  String?
+  description_ar  String?
+  price           Decimal   @default(0) @db.Decimal(10, 2)
+  image_url       String?
+  available       Boolean?  @default(true)
+  deleted_at      DateTime? @db.Timestamptz
+  created_at      DateTime  @default(now()) @db.Timestamptz
 
   // 🆕 UX Enhancement Fields
   tags                String[] @default([]) // ["spicy", "vegan", "best_seller", "new", "popular"]
@@ -240,6 +247,7 @@ model Menu {
   suggested_items_ids Int[]    @default([]) // Manual upsell suggestions (array of menu IDs)
 
   admin                Admin?              @relation(fields: [user_id], references: [id])
+  organization         Organization?       @relation(fields: [organization_id], references: [id], onDelete: SetNull)
   branch               Branch?             @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   category             Category?           @relation(fields: [category_id], references: [id])
   menu_ingredients     MenuIngredient[]
@@ -249,6 +257,7 @@ model Menu {
   combo_items          ComboGroupItem[]
 
   @@index([user_id])
+  @@index([organization_id])
   @@index([branch_id])
   @@index([branch_id, available, deleted_at])
   @@index([user_id, available, deleted_at])
@@ -273,18 +282,21 @@ model MenuIngredient {
 }
 
 model ModifierGroup {
-  id             Int      @id @default(autoincrement())
-  name_en        String
-  name_ar        String?
-  selection_type String?  @default("single")
-  min_select     Int?     @default(0)
-  max_select     Int?     @default(1)
-  required       Boolean? @default(false)
-  created_at     DateTime @default(now()) @db.Timestamptz
+  id              Int      @id @default(autoincrement())
+  organization_id String?  @db.Uuid
+  name_en         String
+  name_ar         String?
+  selection_type  String?  @default("single")
+  min_select      Int?     @default(0)
+  max_select      Int?     @default(1)
+  required        Boolean? @default(false)
+  created_at      DateTime @default(now()) @db.Timestamptz
 
+  organization         Organization?       @relation(fields: [organization_id], references: [id], onDelete: SetNull)
   modifier_options     ModifierOption[]
   menu_modifier_groups MenuModifierGroup[]
 
+  @@index([organization_id])
   @@map("modifier_groups")
 }
 
@@ -346,56 +358,82 @@ model ComboGroupItem {
 }
 
 model Table {
-  id         Int      @id @default(autoincrement())
-  admin_id   String?  @db.Uuid
-  branch_id  String?  @db.Uuid
-  code       String
-  capacity   Int?     @default(4)
-  status     String?  @default("available")
-  created_at DateTime @default(now()) @db.Timestamptz
+  id              Int      @id @default(autoincrement())
+  admin_id        String?  @db.Uuid
+  organization_id String?  @db.Uuid
+  branch_id       String?  @db.Uuid
+  code            String
+  capacity        Int?     @default(4)
+  status          String?  @default("available")
+  created_at      DateTime @default(now()) @db.Timestamptz
 
-  admin           Admin?          @relation(fields: [admin_id], references: [id])
-  branch          Branch?         @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  admin           Admin?           @relation(fields: [admin_id], references: [id])
+  organization    Organization?    @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  branch          Branch?          @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   orders          Order[]
   promotions      Promotion[]
   dining_sessions DiningSession[]
+  capability      TableCapability?
 
   @@unique([admin_id, code])
+  @@unique([id, organization_id])
   @@index([branch_id, status])
+  @@index([organization_id])
   @@map("tables")
 }
 
-model Order {
-  id             Int         @id @default(autoincrement())
-  admin_id       String?     @db.Uuid
-  branch_id      String?     @db.Uuid
-  check_id       String?     @db.Uuid
-  table_id       Int?
-  total          Decimal?    @default(0) @db.Decimal(10, 2)
-  subtotal       Decimal     @default(0) @db.Decimal(10, 2)
-  discount       Decimal     @default(0) @db.Decimal(10, 2)
-  vat            Decimal     @default(0) @db.Decimal(10, 2)
-  service_charge Decimal     @default(0) @db.Decimal(10, 2)
-  delivery_fee   Decimal     @default(0) @db.Decimal(10, 2)
-  tip            Decimal     @default(0) @db.Decimal(10, 2)
-  promotion_id   String?     @db.Uuid
-  promotion_code String?
-  status         String?     @default("pending")
-  type           String?     @default("dine_in") // "dine_in" or "take_away"
-  source         OrderSource @default(QR)
-  version        Int         @default(1)
-  created_at     DateTime    @default(now()) @db.Timestamptz
-  updated_at     DateTime    @default(now()) @updatedAt @db.Timestamptz
+model TableCapability {
+  id              String   @id @default(uuid()) @db.Uuid
+  table_id        Int      @unique
+  organization_id String   @db.Uuid
+  secret_hash     String   @unique
+  version         Int      @default(1)
+  active          Boolean  @default(true)
+  created_at      DateTime @default(now()) @db.Timestamptz
+  rotated_at      DateTime @default(now()) @db.Timestamptz
 
-  admin       Admin?      @relation(fields: [admin_id], references: [id])
-  branch      Branch?     @relation(fields: [branch_id], references: [id], onDelete: SetNull)
-  check       Check?      @relation(fields: [check_id], references: [id], onDelete: SetNull)
-  table       Table?      @relation(fields: [table_id], references: [id])
-  order_items OrderItem[]
-  promotion   Promotion?  @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
+  table        Table        @relation(fields: [table_id, organization_id], references: [id, organization_id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([table_id, organization_id])
+  @@index([organization_id, active])
+  @@map("table_capabilities")
+}
+
+model Order {
+  id              Int         @id @default(autoincrement())
+  admin_id        String?     @db.Uuid
+  organization_id String?     @db.Uuid
+  branch_id       String?     @db.Uuid
+  check_id        String?     @db.Uuid
+  table_id        Int?
+  total           Decimal?    @default(0) @db.Decimal(10, 2)
+  subtotal        Decimal     @default(0) @db.Decimal(10, 2)
+  discount        Decimal     @default(0) @db.Decimal(10, 2)
+  vat             Decimal     @default(0) @db.Decimal(10, 2)
+  service_charge  Decimal     @default(0) @db.Decimal(10, 2)
+  delivery_fee    Decimal     @default(0) @db.Decimal(10, 2)
+  tip             Decimal     @default(0) @db.Decimal(10, 2)
+  promotion_id    String?     @db.Uuid
+  promotion_code  String?
+  status          String?     @default("pending")
+  type            String?     @default("dine_in") // "dine_in" or "take_away"
+  source          OrderSource @default(QR)
+  version         Int         @default(1)
+  created_at      DateTime    @default(now()) @db.Timestamptz
+  updated_at      DateTime    @default(now()) @updatedAt @db.Timestamptz
+
+  admin        Admin?        @relation(fields: [admin_id], references: [id])
+  organization Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  branch       Branch?       @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  check        Check?        @relation(fields: [check_id], references: [id], onDelete: SetNull)
+  table        Table?        @relation(fields: [table_id], references: [id])
+  order_items  OrderItem[]
+  promotion    Promotion?    @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
 
   @@index([admin_id])
   @@index([branch_id, created_at])
+  @@index([organization_id])
   @@index([branch_id, status, created_at])
   @@index([check_id, created_at])
   @@index([status])
@@ -431,30 +469,33 @@ model OrderItem {
 }
 
 model Promotion {
-  id          String    @id @default(uuid()) @db.Uuid
-  admin_id    String    @db.Uuid
-  branch_id   String?   @db.Uuid
-  code        String
-  type        String    @default("percent")
-  value       Decimal   @db.Decimal(10, 2)
-  min_order   Decimal?  @db.Decimal(10, 2)
-  start_at    DateTime? @db.Timestamptz
-  end_at      DateTime? @db.Timestamptz
-  usage_limit Int?
-  times_used  Int       @default(0)
-  active      Boolean   @default(true)
-  applies_to  String    @default("global")
-  table_id    Int?
-  created_at  DateTime  @default(now()) @db.Timestamptz
+  id              String    @id @default(uuid()) @db.Uuid
+  admin_id        String    @db.Uuid
+  organization_id String?   @db.Uuid
+  branch_id       String?   @db.Uuid
+  code            String
+  type            String    @default("percent")
+  value           Decimal   @db.Decimal(10, 2)
+  min_order       Decimal?  @db.Decimal(10, 2)
+  start_at        DateTime? @db.Timestamptz
+  end_at          DateTime? @db.Timestamptz
+  usage_limit     Int?
+  times_used      Int       @default(0)
+  active          Boolean   @default(true)
+  applies_to      String    @default("global")
+  table_id        Int?
+  created_at      DateTime  @default(now()) @db.Timestamptz
 
-  admin  Admin   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
-  branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
-  table  Table?  @relation(fields: [table_id], references: [id], onDelete: SetNull)
-  orders Order[]
+  admin        Admin         @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  branch       Branch?       @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  table        Table?        @relation(fields: [table_id], references: [id], onDelete: SetNull)
+  orders       Order[]
 
   @@unique([admin_id, code])
   @@index([admin_id, active])
   @@index([branch_id, active])
+  @@index([organization_id])
   @@map("promotions")
 }
 
@@ -466,12 +507,20 @@ model Organization {
   created_at DateTime @default(now()) @db.Timestamptz
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
 
-  admins       Admin[]
-  users        OrganizationUser[]
-  branches     Branch[]
-  employees    Employee[]
-  pos_roles    PosRole[]
-  audit_events AuditEvent[]
+  admins             Admin[]
+  categories         Category[]
+  ingredients        Ingredient[]
+  menus              Menu[]
+  tables             Table[]
+  table_capabilities TableCapability[]
+  orders             Order[]
+  promotions         Promotion[]
+  modifier_groups    ModifierGroup[]
+  users              OrganizationUser[]
+  branches           Branch[]
+  employees          Employee[]
+  pos_roles          PosRole[]
+  audit_events       AuditEvent[]
 
   @@index([active])
   @@map("organizations")

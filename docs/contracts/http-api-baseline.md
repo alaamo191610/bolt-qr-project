@@ -27,12 +27,21 @@ mapping is `401/AUTHENTICATION_REQUIRED`, `403/ACCESS_DENIED`, `409/CONFLICT`,
 Server exception details, SQL/Prisma messages, stacks, tokens, and request bodies are not
 returned or logged by the foundation boundary.
 
+Endpoint-specific policy errors may override the generic status mapping. For Release 1,
+`POST /api/orders` with `type: take_away` returns `403` with
+`code: ORDER_TYPE_DISABLED` and performs no order, promotion, or table mutation.
+
 ## Authentication classes
 
 Restaurant endpoints require a verified `restaurant-session` token. SuperAdmin endpoints
 require `super-admin-session`. Customer status and the corresponding socket room require
 `order-tracking`; it is read-only and cannot authenticate an admin route. All classes carry
 issuer, audience, purpose, subject where applicable, and expiry claims.
+
+Dine-in order creation requires the separate 30-minute `table-session` class with audience
+`table-ordering`. It is issued only by exchanging a current high-entropy table capability and
+cannot authenticate restaurant, SuperAdmin, tracking, or socket-admin routes. See the
+[table-capability contract](table-capability.md) for its claims and lifecycle.
 
 ## Limiting
 
@@ -42,6 +51,11 @@ a shared limiter while PostgreSQL remains the durable source for committed-order
 
 ## Compatibility and ownership
 
-The existing success response shapes remain unchanged in this foundation slice. New tenant,
-capability, and idempotency endpoints must publish method/path, request/response types,
+The existing success response shapes remain unchanged in the foundation slice. New tenant and
+idempotency endpoints must publish method/path, request/response types,
 authorization rules, and stable error codes before frontend consumption.
+
+Takeaway is disabled for Release 1. Dine-in now derives organization, restaurant, branch, and table
+identity from a database-revalidated table capability/session and ignores public request-body
+identity for authorization. Idempotency, open-order capacity, pause behavior, a production shared
+limiter, and Alaa's frontend/E2E handoff remain launch blockers.

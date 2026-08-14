@@ -69,7 +69,7 @@ const truncateApplicationTables = async prisma => {
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
 };
 
-export const createTestDatabase = async () => {
+const allocateTestDatabase = async ({ migrate = true } = {}) => {
   const sourceUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
   if (!sourceUrl) throw new Error('DATABASE_URL or TEST_DATABASE_URL is required for integration tests');
 
@@ -95,21 +95,30 @@ export const createTestDatabase = async () => {
     await maintenanceClient.end();
   }
 
+  let prisma = null;
+  let client = null;
   try {
-    runMigrations(databaseUrl);
-    const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
-    await prisma.$connect();
-    await truncateApplicationTables(prisma);
+    if (migrate) runMigrations(databaseUrl);
+    prisma = migrate ? new PrismaClient({ datasources: { db: { url: databaseUrl } } }) : null;
+    client = migrate ? null : new Client({ connectionString: databaseUrl });
+    if (prisma) {
+      await prisma.$connect();
+      await truncateApplicationTables(prisma);
+    } else {
+      await client.connect();
+    }
 
     return {
       databaseName,
       databaseUrl,
       prisma,
+      client,
       async reset() {
         await truncateApplicationTables(prisma);
       },
       async close() {
-        await prisma.$disconnect();
+        if (prisma) await prisma.$disconnect();
+        if (client) await client.end();
         if (!ownedDatabase) return;
         const dropClient = new Client({ connectionString: maintenanceConnectionString(sourceUrl) });
         await dropClient.connect();
@@ -121,6 +130,8 @@ export const createTestDatabase = async () => {
       },
     };
   } catch (error) {
+    if (prisma) await prisma.$disconnect().catch(() => undefined);
+    if (client) await client.end().catch(() => undefined);
     if (ownedDatabase) {
       const cleanupClient = new Client({ connectionString: maintenanceConnectionString(sourceUrl) });
       await cleanupClient.connect();
@@ -133,3 +144,7 @@ export const createTestDatabase = async () => {
     throw error;
   }
 };
+
+export const createTestDatabase = () => allocateTestDatabase({ migrate: true });
+
+export const createBareTestDatabase = () => allocateTestDatabase({ migrate: false });

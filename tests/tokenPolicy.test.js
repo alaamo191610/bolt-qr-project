@@ -24,6 +24,21 @@ test('token classes carry explicit issuer, audience, purpose, and expiry', () =>
   assert.equal(verifyAuthToken(token, secret).id, 'restaurant-1');
 });
 
+test('table sessions use a dedicated audience and 30-minute lifetime', () => {
+  const token = issueToken(TOKEN_TYPES.TABLE_SESSION, {
+    capabilityId: 'capability-1',
+    tableId: 42,
+  }, secret, { subject: 'capability-1' });
+  const decoded = jwt.decode(token);
+
+  assert.equal(decoded.aud, 'table-ordering');
+  assert.equal(decoded.purpose, TOKEN_TYPES.TABLE_SESSION);
+  assert.equal(decoded.sub, 'capability-1');
+  assert.equal(decoded.exp - decoded.iat, 30 * 60);
+  assert.equal(verifyToken(TOKEN_TYPES.TABLE_SESSION, token, secret).tableId, 42);
+  assert.throws(() => verifyAuthToken(token, secret), /Invalid authentication token/);
+});
+
 test('authentication verification rejects tracking tokens and wrong audiences', () => {
   const trackingToken = issueToken(TOKEN_TYPES.ORDER_TRACKING, { orderId: 42 }, secret);
 

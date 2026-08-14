@@ -4,6 +4,7 @@ export const TOKEN_TYPES = Object.freeze({
   RESTAURANT_SESSION: 'restaurant-session',
   SUPER_ADMIN_SESSION: 'super-admin-session',
   ORDER_TRACKING: 'order-tracking',
+  TABLE_SESSION: 'table-session',
 });
 
 const tokenDefinitions = Object.freeze({
@@ -18,6 +19,10 @@ const tokenDefinitions = Object.freeze({
   [TOKEN_TYPES.ORDER_TRACKING]: {
     audience: 'order-tracking',
     expiresIn: '24h',
+  },
+  [TOKEN_TYPES.TABLE_SESSION]: {
+    audience: 'table-ordering',
+    expiresIn: '30m',
   },
 });
 

@@ -13,20 +13,25 @@ import { ORDER_STATUSES, canTransitionOrder } from './orderTransitions.js';
 import {
   MEMBERSHIP_STATUSES,
   ORGANIZATION_ROLES,
-  buildTenantClaims,
   canAssignOrganizationRole,
-  getIdentityIdFromClaims,
-  tenantUserResponse,
+  isUuid,
 } from './tenantAccess.js';
+import { createTenantSessionService } from './tenantSession.js';
+import {
+  assertCatalogOwnership,
+  createAuthenticate,
+  requireOrganizationRole,
+  requireSuperAdmin,
+} from './accessControl.js';
 import { createRateLimiter } from './rateLimit.js';
-import { sendError, logSafeError } from './errors.js';
+import { ERROR_CODES, sendError, logSafeError } from './errors.js';
 import { createRequestContextMiddleware } from './requestContext.js';
 import {
   TOKEN_TYPES,
   issueToken,
-  verifyAuthToken,
   verifyToken,
 } from './tokenPolicy.js';
+import { createTableCapabilityService, hashTableCapability } from './tableCapability.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -59,9 +64,6 @@ const isAllowedOrigin = (origin, requestHost) => {
   }
 };
 
-const isUuid = value => typeof value === 'string'
-  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
 const corsOptions = {
   origin(origin, callback) {
     if (isAllowedOrigin(origin)) {
@@ -72,53 +74,20 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 };
 
-const resolveTenantSession = async ({ userId, organizationId }) => {
-  if (!isUuid(userId)) return null;
+const {
+  resolveTenantSession,
+  resolveTenantClaims,
+  issueTenantToken,
+  tenantResponse,
+} = createTenantSessionService({ db: prisma, tokenSecret: JWT_SECRET });
 
-  const membership = await prisma.organizationUser.findFirst({
-    where: {
-      user_id: userId,
-      status: 'ACTIVE',
-      ...(organizationId ? { organization_id: organizationId } : {}),
-      user: { active: true },
-      organization: { active: true },
-    },
-    include: {
-      user: true,
-      organization: true,
-      default_branch: true,
-    },
-    orderBy: { created_at: 'asc' },
-  });
-  if (!membership) return null;
-
-  // Admin remains the compatibility restaurant profile during the transition.
-  // All members of an organization resolve to this same profile/data owner.
-  const admin = await prisma.admin.findFirst({
-    where: { organization_id: membership.organization_id },
-    orderBy: { created_at: 'asc' },
-  });
-  if (!admin) return null;
-
-  return { membership, user: membership.user, organization: membership.organization, admin };
-};
-
-const resolveTenantClaims = claims => resolveTenantSession({
-  userId: getIdentityIdFromClaims(claims),
-  organizationId: claims.organizationId,
+const authenticate = createAuthenticate({
+  db: prisma,
+  tokenSecret: JWT_SECRET,
+  resolveTenantClaims,
 });
 
-const issueTenantToken = session => issueToken(
-  TOKEN_TYPES.RESTAURANT_SESSION,
-  buildTenantClaims(session),
-  JWT_SECRET,
-  { subject: session.user.id },
-);
-
-const tenantResponse = (session, token) => ({
-  token,
-  user: tenantUserResponse(session),
-});
+const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
 
 const app = express();
 const server = createServer(app);
@@ -253,85 +222,34 @@ app.use('/uploads', express.static('uploads'));
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
 const orderRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
+const tableExchangeIpRateLimit = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  key: req => `table-exchange-ip:${req.ip}`,
+});
+const tableExchangeCapabilityRateLimit = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  key: req => `table-exchange-capability:${hashTableCapability(req.body?.capability)}`,
+});
+const tableSessionOrderRateLimit = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 6,
+  key: req => `table-order-session:${req.tableSession?.capabilityId || 'invalid'}`,
+});
+const organizationOrderRateLimit = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 120,
+  key: req => `table-order-organization:${req.tableSession?.organizationId || 'invalid'}`,
+});
 
-const authenticate = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  try {
-    const token = authHeader.slice('Bearer '.length).trim();
-    const claims = verifyAuthToken(token, JWT_SECRET);
-    if (!claims?.id && !claims?.sub) return res.status(403).json({ error: 'Invalid token' });
-
-    if (claims.role === 'SUPER_ADMIN') {
-      const superAdmin = await prisma.superAdmin.findUnique({
-        where: { id: claims.id },
-        select: { id: true }
-      });
-      if (!superAdmin) return res.status(403).json({ error: 'Invalid token' });
-      req.user = claims;
-    } else {
-      const session = await resolveTenantClaims(claims);
-      if (!session) return res.status(403).json({ error: 'Tenant access is inactive or unavailable' });
-
-      req.auth = {
-        userId: session.user.id,
-        organizationId: session.organization.id,
-        branchId: session.membership.default_branch_id || session.admin.default_branch_id || null,
-        membershipRole: session.membership.role,
-      };
-      req.user = {
-        ...claims,
-        id: session.admin.id,
-        userId: session.user.id,
-        organizationId: session.organization.id,
-        role: 'RESTAURANT_ADMIN',
-      };
-    }
-    next();
-  } catch {
-    return res.status(403).json({ error: 'Invalid or expired token' });
-  }
-};
-
-const requireSuperAdmin = (req, res, next) => {
-  if (req.user?.role !== 'SUPER_ADMIN') {
-    return res.status(403).json({ error: 'Super-admin access required' });
-  }
-  next();
-};
-
-const requireOrganizationRole = (...roles) => (req, res, next) => {
-  if (!req.auth?.membershipRole || !roles.includes(req.auth.membershipRole)) {
-    return res.status(403).json({ error: 'Insufficient organization permissions' });
-  }
-  next();
-};
+const enforceRateLimit = (limiter, req, res) => new Promise((resolve, reject) => {
+  limiter(req, res, error => error ? reject(error) : resolve());
+});
 
 const normalizeCatalogIds = (values = []) => [...new Set(
   values.map(value => Number(value)).filter(Number.isInteger)
 )];
-
-const assertCatalogOwnership = async (db, adminId, categoryId, ingredientIds = []) => {
-  if (categoryId !== null && categoryId !== undefined) {
-    const category = await db.category.findFirst({
-      where: { id: Number(categoryId), admin_id: adminId },
-      select: { id: true }
-    });
-    if (!category) throw Object.assign(new Error('Invalid category'), { status: 400 });
-  }
-
-  if (ingredientIds.length) {
-    const ownedCount = await db.ingredient.count({
-      where: { id: { in: ingredientIds }, admin_id: adminId }
-    });
-    if (ownedCount !== ingredientIds.length) {
-      throw Object.assign(new Error('One or more ingredients are invalid'), { status: 400 });
-    }
-  }
-};
 
 const roundMoney = value => Number((Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2));
 
@@ -767,6 +685,7 @@ app.post('/api/menus', authenticate, async (req, res) => {
     const menu = await prisma.menu.create({
       data: {
         name_en, name_ar, price, category_id: categoryId, image_url, available, user_id,
+        organization_id: req.auth.organizationId,
         menu_ingredients: {
           create: ingredientIds.map(id => ({ ingredient_id: id }))
         }
@@ -942,7 +861,10 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
 
     await prisma.$transaction(async (tx) => {
       const currentLinks = await tx.menuModifierGroup.findMany({
-        where: { menu_id: menuId },
+        where: {
+          menu_id: menuId,
+          modifier_group: { organization_id: req.auth.organizationId },
+        },
         select: { group_id: true }
       });
       const editableGroupIds = new Set(currentLinks.map(link => link.group_id));
@@ -964,7 +886,9 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
           }
           await tx.modifierGroup.update({ where: { id: gid }, data });
         } else {
-          const newG = await tx.modifierGroup.create({ data });
+          const newG = await tx.modifierGroup.create({
+            data: { ...data, organization_id: req.auth.organizationId }
+          });
           gid = newG.id;
         }
         groupIds.push(gid);
@@ -1117,7 +1041,12 @@ app.post('/api/categories', authenticate, async (req, res) => {
   if (!name_en) return res.status(400).json({ error: 'English category name is required' });
   try {
     const category = await prisma.category.create({
-      data: { admin_id: req.user.id, name_en, name_ar }
+      data: {
+        admin_id: req.user.id,
+        organization_id: req.auth.organizationId,
+        name_en,
+        name_ar,
+      }
     });
     res.status(201).json(category);
   } catch (err) {
@@ -1140,7 +1069,12 @@ app.post('/api/ingredients', authenticate, async (req, res) => {
   if (!name_en) return res.status(400).json({ error: 'English ingredient name is required' });
   try {
     const ingredient = await prisma.ingredient.create({
-      data: { admin_id: req.user.id, name_en, name_ar }
+      data: {
+        admin_id: req.user.id,
+        organization_id: req.auth.organizationId,
+        name_en,
+        name_ar,
+      }
     });
     res.status(201).json(ingredient);
   } catch (err) {
@@ -1229,28 +1163,50 @@ app.get('/api/orders', authenticate, async (req, res) => {
 });
 
 app.post('/api/orders', orderRateLimit, async (req, res) => {
-  const { tableCode, items, adminId, type, promotionCode, tipPercent } = req.body;
+  const { items, type, promotionCode, tipPercent } = req.body;
 
-  if (!adminId) return res.status(400).json({ error: 'Restaurant ID required' });
-  if (!Array.isArray(items) || items.length === 0 || items.length > 100) {
-    return res.status(400).json({ error: 'Order must contain between 1 and 100 items' });
+  if (!Array.isArray(items) || items.length === 0 || items.length > 50) {
+    return res.status(400).json({ error: 'Order must contain between 1 and 50 items' });
   }
   if (!['dine_in', 'take_away'].includes(type)) {
     return res.status(400).json({ error: 'Invalid order type' });
   }
-  if (type === 'dine_in' && !tableCode) {
-    return res.status(400).json({ error: 'Table code required for dine-in orders' });
+  if (type === 'take_away') {
+    return res.status(403).json({
+      error: 'Takeaway ordering is disabled for Release 1',
+      code: ERROR_CODES.ORDER_TYPE_DISABLED,
+    });
   }
   if (!Number.isFinite(Number(tipPercent ?? 0)) || Number(tipPercent ?? 0) < 0 || Number(tipPercent ?? 0) > 100) {
     return res.status(400).json({ error: 'Invalid tip percentage' });
   }
 
   try {
+    const authorization = String(req.headers.authorization || '');
+    const tableToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    if (!tableToken) {
+      throw Object.assign(new Error('Table session required for dine-in orders'), {
+        status: 401,
+        code: ERROR_CODES.TABLE_SESSION_REQUIRED,
+      });
+    }
+
+    req.tableSession = await tableCapabilities.resolveSession(tableToken);
+    await enforceRateLimit(tableSessionOrderRateLimit, req, res);
+    await enforceRateLimit(organizationOrderRateLimit, req, res);
+
     const result = await prisma.$transaction(async (tx) => {
+      const tableSession = await tableCapabilities.resolveSession(tableToken, {
+        database: tx,
+        lock: true,
+      });
+      const adminId = tableSession.adminId;
+      const table = tableSession.table;
       const targetAdmin = await tx.admin.findUnique({
         where: { id: adminId },
         select: {
           id: true,
+          organization_id: true,
           subscription_status: true,
           billing_settings: true,
           pricing_prefs: true
@@ -1258,19 +1214,6 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       });
       if (!targetAdmin || !['ACTIVE', 'TRIAL'].includes(targetAdmin.subscription_status)) {
         throw Object.assign(new Error('Restaurant is not accepting orders'), { status: 403 });
-      }
-
-      let table = null;
-      if (tableCode) {
-        table = await tx.table.findFirst({
-          where: {
-            admin_id: adminId,
-            code: { equals: String(tableCode), mode: 'insensitive' }
-          }
-        });
-      }
-      if (!table && type === 'dine_in') {
-        throw Object.assign(new Error('Table not found'), { status: 404 });
       }
 
       const normalizedItems = items.map(item => {
@@ -1507,8 +1450,10 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
         promotion_code: promotion?.code || null,
         status: 'pending',
         type,
-        admin: { connect: { id: adminId } }
+        admin: { connect: { id: adminId } },
+        organization: { connect: { id: tableSession.organizationId } },
       };
+      if (table.branch_id) orderData.branch = { connect: { id: table.branch_id } };
       if (table) orderData.table = { connect: { id: table.id } };
       if (promotion) orderData.promotion = { connect: { id: promotion.id } };
 
@@ -1563,8 +1508,8 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     }, JWT_SECRET);
     res.status(201).json({ ...fullOrder, tracking_token: trackingToken });
   } catch (err) {
-    console.error("Error creating order:", err);
-    res.status(err.status || 500).json({ error: err.message });
+    if (!err.status || err.status >= 500) console.error('Error creating order:', logSafeError(err));
+    sendError(res, req, err);
   }
 });
 
@@ -1677,7 +1622,12 @@ app.post('/api/tables', authenticate, async (req, res) => {
     }
 
     const table = await prisma.table.create({
-      data: { code: tableCode, capacity: Number(capacity), admin_id }
+      data: {
+        code: tableCode,
+        capacity: Number(capacity),
+        admin_id,
+        organization_id: req.auth.organizationId,
+      }
     });
     res.json(table);
   } catch (err) {
@@ -1723,6 +1673,45 @@ app.delete('/api/tables/:id', authenticate, async (req, res) => {
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+app.post('/api/tables/:id/capability/rotate', authenticate, async (req, res) => {
+  try {
+    const result = await tableCapabilities.rotate({
+      tableId: req.params.id,
+      adminId: req.user.id,
+      organizationId: req.auth.organizationId,
+    });
+    res.json(result);
+  } catch (error) {
+    sendError(res, req, error);
+  }
+});
+
+app.delete('/api/tables/:id/capability', authenticate, async (req, res) => {
+  try {
+    const result = await tableCapabilities.revoke({
+      tableId: req.params.id,
+      adminId: req.user.id,
+      organizationId: req.auth.organizationId,
+    });
+    res.json(result);
+  } catch (error) {
+    sendError(res, req, error);
+  }
+});
+
+app.post(
+  '/api/public/table-session',
+  tableExchangeIpRateLimit,
+  tableExchangeCapabilityRateLimit,
+  async (req, res) => {
+    try {
+      res.json(await tableCapabilities.exchange(req.body?.capability));
+    } catch (error) {
+      sendError(res, req, error);
+    }
+  },
+);
 
 // Public endpoint for QR code access (No auth required)
 app.get('/api/tables/public/:code', async (req, res) => {
@@ -2195,7 +2184,11 @@ app.post('/api/promotions', authenticate, async (req, res) => {
       });
     } else {
       promo = await prisma.promotion.create({
-        data: { ...data, admin_id: req.user.id }
+        data: {
+          ...data,
+          admin_id: req.user.id,
+          organization_id: req.auth.organizationId,
+        }
       });
     }
     res.json(promo);
@@ -2458,7 +2451,9 @@ app.use((err, req, res, next) => {
   if (err?.message === 'Origin not allowed by CORS') {
     return sendError(res, req, Object.assign(err, { status: 403 }));
   }
-  console.error('Unhandled request error:', logSafeError(err));
+  if (!err?.status || err.status >= 500) {
+    console.error('Unhandled request error:', logSafeError(err));
+  }
   return sendError(res, req, err);
 });
 
@@ -2467,4 +2462,13 @@ if (process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }
 
-export { app, server, authRateLimit, orderRateLimit };
+export {
+  app,
+  server,
+  authRateLimit,
+  orderRateLimit,
+  tableExchangeIpRateLimit,
+  tableExchangeCapabilityRateLimit,
+  tableSessionOrderRateLimit,
+  organizationOrderRateLimit,
+};
