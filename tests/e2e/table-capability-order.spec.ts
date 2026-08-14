@@ -90,11 +90,16 @@ test.describe('QR capability -> table-session -> dine-in order', () => {
       })
     );
 
-    let orderRequest: { authorization: string | undefined; body: Record<string, unknown> } | null = null;
+    let orderRequest: {
+      authorization: string | undefined;
+      idempotencyKey: string | undefined;
+      body: Record<string, unknown>;
+    } | null = null;
     await page.route('**/api/orders', async (route) => {
       const request = route.request();
       orderRequest = {
         authorization: request.headers()['authorization'],
+        idempotencyKey: request.headers()['idempotency-key'],
         body: request.postDataJSON(),
       };
       await json(route, 200, { id: 501, status: 'pending', order_number: 12, total: 10, tracking_token: 'track-1' });
@@ -119,6 +124,9 @@ test.describe('QR capability -> table-session -> dine-in order', () => {
 
     expect(orderRequest).not.toBeNull();
     expect(orderRequest!.authorization).toBe(`Bearer ${SESSION_TOKEN}`);
+    // Best-effort default pending Yazan's idempotency contract (see
+    // orderService.ts) - a stable per-attempt key travels with the request.
+    expect(orderRequest!.idempotencyKey).toMatch(/.+/);
     // Dine-in authorization comes entirely from the bearer token; the body
     // must not carry tableCode/adminId as a substitute proof of presence.
     expect(orderRequest!.body).not.toHaveProperty('tableCode');

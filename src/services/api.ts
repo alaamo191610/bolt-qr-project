@@ -158,12 +158,18 @@ export const api = {
   // For short-lived bearer tokens that aren't a stored namespace session,
   // e.g. the 30-minute table-session token from a QR capability exchange.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async postWithToken<T = any>(endpoint: string, body: unknown, token: string): Promise<T> {
+  async postWithToken<T = any>(
+    endpoint: string,
+    body: unknown,
+    token: string,
+    extraHeaders?: Record<string, string>
+  ): Promise<T> {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
+        ...extraHeaders,
       },
       body: JSON.stringify(body),
     });

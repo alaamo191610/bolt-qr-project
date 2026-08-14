@@ -127,6 +127,13 @@ export const orderService = {
      * docs/contracts/table-capability.md — the server derives restaurant/
      * table identity from this token and ignores table_code/admin_id. */
     table_session_token?: string
+    /** Client-generated key so a retried checkout (e.g. timeout-after-commit)
+     * returns the original order instead of creating a duplicate. ADR 0007
+     * commits to this policy but the wire format isn't published yet — sent
+     * as an `Idempotency-Key` header (Stripe/GitHub convention) as a
+     * best-effort default. Confirm the real field name with Yazan; the
+     * server ignores unknown headers, so this is harmless until then. */
+    idempotency_key?: string
   }) {
     try {
       // Build function payload items
@@ -161,6 +168,10 @@ export const orderService = {
         tipPercent: orderData.tip_percent ?? 0,
       };
 
+      const idempotencyHeaders = orderData.idempotency_key
+        ? { 'Idempotency-Key': orderData.idempotency_key }
+        : undefined;
+
       if (orderData.type === 'dine_in') {
         if (!orderData.table_session_token) {
           throw new ApiError({
@@ -171,7 +182,7 @@ export const orderService = {
         }
         // Dine-in identity comes from the table-session bearer token, not
         // from body tableCode/adminId — the server ignores the latter.
-        return await api.postWithToken('/orders', body, orderData.table_session_token);
+        return await api.postWithToken('/orders', body, orderData.table_session_token, idempotencyHeaders);
       }
 
       // Call Backend API instead of Edge Function

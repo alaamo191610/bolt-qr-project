@@ -151,6 +151,27 @@ const isSameVariant = (a: Partial<MenuItem>, b: Partial<MenuItem>) =>
 const unit = (item: CartItem) => (item.price || 0) + (item.price_delta || 0);
 const line = (item: CartItem) => unit(item) * (item.quantity || 0);
 
+// Fingerprints exactly what a checkout submits (lines + promo + tip) so the
+// same idempotency key is only reused for a retry of the identical attempt;
+// any real change to the order gets a fresh key, matching ADR 0007's
+// same-key-same-payload policy.
+const checkoutFingerprint = (
+  cart: CartItem[],
+  checkout: { promotionCode?: string; tipPercent: number }
+) =>
+  JSON.stringify({
+    lines: cart.map((item) => `${variantKey(item)}|${item.quantity}|${item.notes || ""}`),
+    promotionCode: checkout.promotionCode || null,
+    tipPercent: checkout.tipPercent,
+  });
+
+const generateIdempotencyKey = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
   const { prefs, restaurantName, logoUrl, loading: moneyLoading } = useAdminMonetary(); // 🆕 Get branding
@@ -189,6 +210,9 @@ const CustomerMenu: React.FC = () => {
   // order creation requires this; see docs/contracts/table-capability.md.
   const [tableSession, setTableSession] = useState<TableSessionState>({ status: 'missing' });
   const tableSessionRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Reused across a retry of the exact same checkout attempt; regenerated
+  // whenever the cart/promo/tip actually changes, or after a successful order.
+  const idempotencyKeyRef = useRef<{ key: string; fingerprint: string } | null>(null);
   // NEW: Store the full active order, not just a boolean
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(restoreActiveOrderFromUrl);
 
@@ -719,6 +743,16 @@ const CustomerMenu: React.FC = () => {
     // Track order started
     trackMenuEvents.orderStarted(tableNumber, totalItems, totalPrice);
 
+    // Reuse the key from a previous failed attempt only if nothing about
+    // the order actually changed since then - otherwise this is a
+    // different order and needs a fresh key.
+    const fingerprint = checkoutFingerprint(cart, checkout);
+    const idempotencyKey =
+      idempotencyKeyRef.current?.fingerprint === fingerprint
+        ? idempotencyKeyRef.current.key
+        : generateIdempotencyKey();
+    idempotencyKeyRef.current = { key: idempotencyKey, fingerprint };
+
     try {
       const orderItems = cart.map((item) => ({
         menu_item_id: item.id,
@@ -738,6 +772,7 @@ const CustomerMenu: React.FC = () => {
         promotion_code: checkout.promotionCode,
         tip_percent: checkout.tipPercent,
         table_session_token: tableSession.token,
+        idempotency_key: idempotencyKey,
       });
 
       // Track successful order
@@ -748,6 +783,7 @@ const CustomerMenu: React.FC = () => {
       setShowCart(false);
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber, adminId || getTrackingContextFromUrl().adminId)); // clear persisted cart
+      idempotencyKeyRef.current = null; // next order starts a fresh attempt
     } catch (err) {
       // Stay on the cart/checkout view so the customer can retry without
       // losing their place - a failed checkout is recoverable, unlike a
