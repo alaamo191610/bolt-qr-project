@@ -321,6 +321,31 @@ Next M2 point: durable PostgreSQL idempotency for order creation. After that, im
 three-open-order cap and pause/closed/overload controls with safe rejection telemetry. Production
 horizontal scaling still requires the M3 shared limiter.
 
+## Tracking update — 14 August 2026 (Alaa QR/session merge review — not accepted)
+
+Reviewed the clean, fetched `main` at `4701771` against the published table-capability contract.
+General frontend health passes (ESLint, TypeScript, 38 frontend tests, and production build), but the
+QR/session handoff is not present and therefore does not meet M2 security requirements:
+
+- Generated, copied, downloaded, and table-card QR URLs still contain only predictable
+  `table`/`restaurant` query values; no authenticated capability rotation result is embedded.
+- The frontend has no client methods for capability rotation/revocation or
+  `POST /api/public/table-session` exchange.
+- `orderService.createOrder` still posts body `tableCode` and `adminId` through the restaurant-token
+  transport and cannot send a table-session bearer token.
+- `CustomerMenu` does not exchange the QR capability, retain the 30-minute token for the active
+  flow, or route `TABLE_SESSION_REQUIRED`/`TABLE_SESSION_INVALID` to a re-scan/expired-QR state.
+- There is no QR → exchange → order E2E test, nor invalid/expired/rotated/revoked recovery coverage.
+
+Result: Alaa handoff/sign-off remains pending and the current customer checkout receives
+`401 TABLE_SESSION_REQUIRED` from the secured backend. Do not mark the QR/table capability row
+jointly complete or release dine-in ordering yet. Acceptance requires all five items above plus
+mobile/RTL coverage and a warning that QR rotation invalidates earlier printed/displayed codes.
+
+The next Yazan point, durable PostgreSQL idempotency, remains ready but was not started in this
+review because the user's instruction made progression conditional on the merged QR/session work
+meeting the contract.
+
 ## Fair-split agreement
 
 Ownership is not a measure of effort. Each milestone is planned as an approximately equal
@@ -396,7 +421,7 @@ documentation, fixture, or regression task instead of waiting.
 
 | Task | Backend scope | Required test / Alaa handoff |
 |---|---|---|
-| QR/table capability | **Backend complete 14 Aug:** hash-only 256-bit revocable capability, composite tenant binding, 30-minute database-revalidated session, and body identity ignored. Alaa handoff/sign-off pending. | Invalid, rotated, revoked, cross-tenant/organization, missing-session, and body-substitution tests pass. |
+| QR/table capability | **Backend complete 14 Aug; frontend review rejected at main `4701771`:** hash-only 256-bit revocable capability, composite tenant binding, and 30-minute database-revalidated session are available, but QR generation/exchange/checkout integration is absent. Alaa handoff/sign-off pending. | Backend negatives pass; frontend must add capability QR, exchange, table bearer token, recovery states, and golden E2E. |
 | Idempotency | Client key scoped to tenant/session; durable PostgreSQL record/constraint; same payload returns original result, changed payload returns `409 IDEMPOTENCY_CONFLICT`. | Delayed-response retry proves one order and one promotion increment. |
 | Abuse controls | Limits by IP, capability/session, table, organization, route; active-order cap; pause/overload state; safe rejection telemetry. | Deterministic integration tests and documented status/error codes. |
 | Order/realtime integrity | Transactional totals/promotions; authorized/versioned socket rooms/events; tracking credentials are minimal and scoped. | Socket/transition/cross-tenant tests; document authoritative refetch endpoint. |

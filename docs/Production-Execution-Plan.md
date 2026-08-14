@@ -243,6 +243,22 @@ This closes the backend QR/table-capability row, not M2. Durable idempotency, th
 cap, ordering pause/closed/overload behavior, rejection telemetry, shared production limiting, and
 Alaa's QR/checkout E2E remain release gates.
 
+## Implementation tracking — 14 August 2026 (merged QR/session review failed)
+
+Fetched and reviewed `main` at `4701771`. ESLint, TypeScript, all 38 current frontend tests, and the
+production build pass, but those gates do not exercise the required QR/table-session journey.
+
+The merged frontend still generates predictable `?table=...&restaurant=...` QR URLs, has no
+capability rotation/exchange client, sends `adminId`/`tableCode` in order bodies without a
+table-session bearer token, has no invalid/expired/rotated QR recovery state, and has no golden QR
+E2E. Against the secured backend, dine-in checkout therefore fails with
+`401 TABLE_SESSION_REQUIRED` before mutation.
+
+Decision: QR/session frontend handoff is **not accepted**; M2 remains No-Go. Alaa must implement the
+published contract and tests, or the work must be explicitly reassigned. Durable PostgreSQL
+idempotency remains the next Yazan task but was not started because progression was conditional on
+this review passing.
+
 ## Outcome and planning rule
 
 Release a secure, observable, recoverable multi-tenant restaurant QR platform without
@@ -381,7 +397,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Foundation implemented | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, and cross-tenant negatives pass; staging verify/enforce remain. | — | 14 Aug 2026 |
-| M2 bounded order cycle | Capability slice implemented | — | Takeaway disabled; hash-only capability, 30-minute session, transaction revalidation, identity derivation, and accepted local limits pass. Idempotency/capacity/pause/shared limiting/Alaa E2E remain. | Yazan | 14 Aug 2026 |
+| M2 bounded order cycle | Backend capability implemented; frontend handoff rejected | — | Backend capability controls pass. Main `4701771` lacks capability QR/exchange/bearer/recovery/E2E, so checkout returns `TABLE_SESSION_REQUIRED`; idempotency/capacity/pause/shared limiting also remain. | Yazan review; Alaa action | 14 Aug 2026 |
 | M3 production infrastructure | Not started | — | — | — | — |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |
