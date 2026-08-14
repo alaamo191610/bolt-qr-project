@@ -5,6 +5,73 @@
 **Working rule:** Keep each PR limited to one domain and publish its API contract before Alaa
 depends on it. Do not change frontend-owned files except for a jointly agreed API contract.
 
+## Tracking update — 14 August 2026
+
+The first implementation slice is complete. This file and `Production-Execution-Plan.md` are
+updated after each implementation slice so progress, evidence, and blockers remain visible.
+
+### Completed in the current slice
+
+- M0 install reproducibility: `npm ci`, Prisma Client generation, lint, typecheck, unit tests,
+  frontend tests, Prisma validation, production build, and Playwright smoke validation passed.
+  CI uses Node 22; the current local Node 24 runtime emits the expected package-engine warning
+  and should be aligned to Node 20–22 before release work.
+- M0 HTTP harness: `server/index.js` is importable without binding a process port, and
+  `tests/serverFoundation.test.js` exercises an isolated ephemeral HTTP server.
+- M1 request context/error contract: request IDs, structured request lines, stable error codes,
+  `Retry-After`, and 5xx diagnostic redaction are implemented and tested.
+- M1 local limiter: expiry cleanup, hard entry cap, deterministic reset, bounded eviction, and
+  retry metadata are implemented and tested. It remains a local M1 control, not the M3 shared
+  production limiter.
+- M1 session hardening: restaurant, SuperAdmin, and order-tracking token classes enforce
+  explicit issuer, audience, purpose, subject where applicable, and expiry.
+- M0 contract/ADR handoff: `docs/contracts/http-api-baseline.md` and ADRs 0001–0003 are
+  published as proposed/implemented foundation decisions pending joint sign-off where marked.
+- CI baseline: `.github/workflows/ci.yml` runs install, Prisma generate/validate, lint,
+  typecheck, unit/frontend tests, and production build.
+
+### Still pending in M0/M1
+
+- Disposable PostgreSQL test database, deterministic fixtures, migration rehearsal, and a
+  database-backed authentication characterization test.
+- Joint approval of the open D1 decisions; the ADRs deliberately do not silently decide
+  takeaway policy, RLS, session storage, providers, RPO/RTO, or SuperAdmin MFA.
+- Incremental auth/tenant extraction and phase-2 direct tenant ownership constraints.
+
+### Next implementation point
+
+Add the disposable PostgreSQL test/fixture harness, then characterize tenant-scoped reads and
+writes before changing aggregate-root ownership or migrations.
+
+## Tracking update — 14 August 2026 (next point complete)
+
+The disposable PostgreSQL and tenant characterization point is complete.
+
+### Completed
+
+- Added `tests/helpers/testDatabase.js`, which creates a uniquely named `bolt_qr_test_*`
+  database when `TEST_DATABASE_URL` is not supplied, applies the full Prisma migration chain,
+  truncates only application tables between tests, and drops only databases created by the
+  harness. Unsafe database names are rejected.
+- Added deterministic Alpha/Beta tenant fixtures with organizations, branches, admin profiles,
+  login identities, memberships, categories, and menu items.
+- Added database-backed HTTP characterization tests for active-tenant authentication, denial of
+  cross-tenant organization selection, tenant-scoped menu/category reads, and cross-tenant menu
+  update denial with database verification that the other tenant was unchanged.
+- Added `npm run test:integration` with automatic Prisma generation and a PostgreSQL 16 service
+  in CI. The local ephemeral database was removed successfully after the passing run; no
+  `bolt_qr_test_*` databases remain.
+
+### Evidence
+
+`npm run test:integration` passed 2 tests. The complete validation sequence also passed 12 unit
+tests, 5 frontend tests, ESLint, TypeScript, Prisma validation, and the production build.
+
+### Next implementation point
+
+Run the production-shaped migration rehearsal and document the expand → backfill → verify →
+enforce plan for direct tenant ownership before adding tenant aggregate-root columns.
+
 ## Fair-split agreement
 
 Ownership is not a measure of effort. Each milestone is planned as an approximately equal
@@ -55,26 +122,26 @@ documentation, fixture, or regression task instead of waiting.
 
 ## Work sequence
 
-### Y0 — M0 foundation (Week 1)
+### Y0 — M0 foundation (Week 1) — In progress
 
 | Task | Deliverable / handoff | Evidence |
 |---|---|---|
-| Repair reproducible local/CI install | Pair with Alaa: Yazan owns server/CI commands; Alaa verifies frontend/E2E commands. | `npm test`, lint, Prisma validate, build pass. |
-| Test database and HTTP harness | Isolated database URL convention, fixture factory, cleanup strategy, first authentication characterization test. | One HTTP integration test runs without shared mutable data. |
-| ADRs | Tenant model, POS Park, token/capability classes, idempotency storage, RLS decision, recovery objectives. | ADRs approved by both. |
-| API contract baseline | Versioned contract for errors, request ID, auth/session, organization context, table capability, and idempotency. | Alaa can implement types/mocks without waiting for backend completion. |
-| CI baseline | Pair with Alaa: Yazan wires server/migration/security jobs; Alaa owns E2E job and browser artifacts. | Required checks block a failing PR. |
+| Repair reproducible local/CI install | **Complete 14 Aug:** CI pins Node 22; local `npm ci` succeeds after Prisma generation. | Unit, lint, Prisma validate, typecheck, frontend tests, build, and E2E smoke pass. |
+| Test database and HTTP harness | **Complete 14 Aug:** disposable PostgreSQL database, migration setup, deterministic fixtures, safe cleanup, HTTP harness, and database-backed authentication/tenant characterization. | `npm run test:integration` passes 2 tests; created ephemeral database is removed after the run. |
+| ADRs | **Foundation ADRs published 14 Aug:** errors/request context, release gates, and token classes. Joint sign-off and remaining tenant/POS/RLS/recovery decisions remain pending. | ADRs 0001–0003 published; approval record pending. |
+| API contract baseline | **Foundation contract complete 14 Aug** for request IDs, errors, limiter responses, and token classes. Organization switching, table capability, and idempotency contracts remain pending. | Frontend can consume stable error/correlation fields; remaining contracts pending. |
+| CI baseline | **Complete 14 Aug:** `.github/workflows/ci.yml` added for install, Prisma, lint, typecheck, tests, and build. | Workflow authored; hosted CI execution evidence pending. |
 
 ### Y1 — M1 tenant, errors, and observability (Weeks 2–3)
 
 | Task | Backend scope | Required test / Alaa handoff |
 |---|---|---|
-| Request context | Generate `X-Request-Id`; structured request line with route/status/duration/tenant/user IDs. | Integration test returns request ID; document header for `ApiError`. |
-| Safe error contract | Typed server errors: stable `code`, client-safe `message`, `requestId`, optional `retryAfter`; centralized redaction. | Internal fault never exposes Prisma detail; provide error-code catalogue. |
-| Bounded local limiter | Expiry sweep, hard entry cap, trusted-proxy configuration, deterministic reset and `Retry-After`. | Unit + HTTP tests; publish rate-limit response contract. |
+| Request context | **Complete 14 Aug:** generate/return `X-Request-Id`; structured request line includes route/status/duration/tenant/user IDs. | HTTP test and contract documentation pass. |
+| Safe error contract | **Complete 14 Aug:** stable `code`, safe `message`, `requestId`, optional `retryAfter`, centralized 5xx redaction. | Internal diagnostic and stack redaction tests pass. |
+| Bounded local limiter | **Complete 14 Aug:** expiry sweep, hard entry cap, bounded eviction, deterministic reset, trusted-proxy setting, and `Retry-After`. | Unit tests and contract documentation pass. |
 | Incremental extraction | Characterization tests first, then extract auth/tenant domain only. No semantic changes in extraction PR. | Existing HTTP suite passes before/after. |
 | Tenant phase 2 | Add direct `organization_id` to aggregate roots; `ModifierGroup` is tenant-owned, children inherit; constraints stop cross-tenant links. Expand → backfill → verify → enforce; no premature contract deletion. | Fresh-db + production-shaped migration rehearsal; read/write/link/delete cross-tenant tests. |
-| Session hardening | Explicit issuer/audience/purpose/expiry; separate Restaurant/SuperAdmin/order/table/socket credentials; membership-change behaviour. | Contract and negative tests; Alaa receives expiry/403/re-auth states. |
+| Session hardening | **Foundation complete 14 Aug:** explicit issuer/audience/purpose/expiry for Restaurant, SuperAdmin, and order-tracking credentials; table/socket credentials and membership-change behavior remain pending. | Token unit/negative tests pass; expiry/re-auth contract still needs joint D1 approval. |
 
 ### Y2 — M2 trustworthy order cycle (Weeks 4–5)
 

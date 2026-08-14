@@ -7,7 +7,6 @@ import multer from 'multer';
 import path from 'path';
 import prisma from './db.js';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { readFile, unlink } from 'fs/promises';
 import { ORDER_STATUSES, canTransitionOrder } from './orderTransitions.js';
@@ -19,6 +18,15 @@ import {
   getIdentityIdFromClaims,
   tenantUserResponse,
 } from './tenantAccess.js';
+import { createRateLimiter } from './rateLimit.js';
+import { sendError, logSafeError } from './errors.js';
+import { createRequestContextMiddleware } from './requestContext.js';
+import {
+  TOKEN_TYPES,
+  issueToken,
+  verifyAuthToken,
+  verifyToken,
+} from './tokenPolicy.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -100,10 +108,11 @@ const resolveTenantClaims = claims => resolveTenantSession({
   organizationId: claims.organizationId,
 });
 
-const issueTenantToken = session => jwt.sign(
+const issueTenantToken = session => issueToken(
+  TOKEN_TYPES.RESTAURANT_SESSION,
   buildTenantClaims(session),
   JWT_SECRET,
-  { subject: session.user.id, expiresIn: '24h' },
+  { subject: session.user.id },
 );
 
 const tenantResponse = (session, token) => ({
@@ -113,6 +122,10 @@ const tenantResponse = (session, token) => ({
 
 const app = express();
 const server = createServer(app);
+const trustedProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS || '', 10);
+if (Number.isInteger(trustedProxyHops) && trustedProxyHops >= 0) {
+  app.set('trust proxy', trustedProxyHops);
+}
 const io = new Server(server, {
   cors: corsOptions
 });
@@ -127,7 +140,7 @@ io.on('connection', (socket) => {
     if (!adminId || !token) return;
 
     try {
-      const claims = jwt.verify(token, JWT_SECRET);
+      const claims = verifyToken(TOKEN_TYPES.RESTAURANT_SESSION, token, JWT_SECRET);
       if (claims.role !== 'RESTAURANT_ADMIN') return;
       const session = await resolveTenantClaims(claims);
       if (!session || session.admin.id !== adminId) return;
@@ -159,8 +172,8 @@ io.on('connection', (socket) => {
     const trackingToken = payload?.trackingToken;
     if (!Number.isInteger(orderId) || !trackingToken) return;
     try {
-      const claims = jwt.verify(trackingToken, JWT_SECRET);
-      if (claims.purpose !== 'order-tracking' || Number(claims.orderId) !== orderId) return;
+      const claims = verifyToken(TOKEN_TYPES.ORDER_TRACKING, trackingToken, JWT_SECRET);
+      if (Number(claims.orderId) !== orderId) return;
       socket.join(`order_${orderId}`);
       console.log(`Socket ${socket.id} joined order_${orderId}`);
     } catch {
@@ -195,6 +208,7 @@ const hasImageSignature = (buffer, mimetype) => {
 };
 
 app.disable('x-powered-by');
+app.use(createRequestContextMiddleware());
 app.use((req, res, next) => {
   const requestHost = req.get('x-forwarded-host') || req.get('host');
   cors({
@@ -237,26 +251,6 @@ app.use((req, res, next) => {
 });
 app.use('/uploads', express.static('uploads'));
 
-const rateLimitBuckets = new Map();
-const createRateLimiter = ({ windowMs, max }) => (req, res, next) => {
-  const now = Date.now();
-  const key = `${req.ip}:${req.path}`;
-  const current = rateLimitBuckets.get(key);
-
-  if (!current || current.resetAt <= now) {
-    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
-    return next();
-  }
-
-  if (current.count >= max) {
-    res.setHeader('Retry-After', Math.ceil((current.resetAt - now) / 1000));
-    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
-  }
-
-  current.count += 1;
-  next();
-};
-
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
 const orderRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
 
@@ -268,7 +262,7 @@ const authenticate = async (req, res, next) => {
 
   try {
     const token = authHeader.slice('Bearer '.length).trim();
-    const claims = jwt.verify(token, JWT_SECRET);
+    const claims = verifyAuthToken(token, JWT_SECRET);
     if (!claims?.id && !claims?.sub) return res.status(403).json({ error: 'Invalid token' });
 
     if (claims.role === 'SUPER_ADMIN') {
@@ -1563,11 +1557,10 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       }
     }
 
-    const trackingToken = jwt.sign({
-      purpose: 'order-tracking',
+    const trackingToken = issueToken(TOKEN_TYPES.ORDER_TRACKING, {
       orderId: fullOrder.id,
       adminId: fullOrder.admin_id,
-    }, JWT_SECRET, { expiresIn: '24h' });
+    }, JWT_SECRET);
     res.status(201).json({ ...fullOrder, tracking_token: trackingToken });
   } catch (err) {
     console.error("Error creating order:", err);
@@ -1584,8 +1577,8 @@ app.get('/api/public/orders/:id/status', async (req, res) => {
   }
 
   try {
-    const claims = jwt.verify(trackingToken, JWT_SECRET);
-    if (claims.purpose !== 'order-tracking' || Number(claims.orderId) !== orderId) {
+    const claims = verifyToken(TOKEN_TYPES.ORDER_TRACKING, trackingToken, JWT_SECRET);
+    if (Number(claims.orderId) !== orderId) {
       return res.status(403).json({ error: 'Invalid order tracking credentials' });
     }
     const order = await prisma.order.findFirst({
@@ -2316,10 +2309,10 @@ app.post('/api/super-admin/login', authRateLimit, async (req, res) => {
       data: { last_login: new Date() }
     });
 
-    const token = jwt.sign(
+    const token = issueToken(
+      TOKEN_TYPES.SUPER_ADMIN_SESSION,
       { id: superAdmin.id, email: superAdmin.email, role: 'SUPER_ADMIN' },
       JWT_SECRET,
-      { expiresIn: '24h' }
     );
 
     res.json({
@@ -2454,17 +2447,24 @@ if (isProduction) {
   });
 }
 
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError || err?.message?.startsWith('Only JPEG')) {
-    return res.status(400).json({ error: err.message });
-  }
-  if (err?.message === 'Origin not allowed by CORS') {
-    return res.status(403).json({ error: err.message });
-  }
-  console.error('Unhandled request error:', err);
-  return res.status(500).json({ error: 'Internal server error' });
+app.use((req, res) => {
+  res.status(404).json({ error: 'Request failed' });
 });
 
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError || err?.message?.startsWith('Only JPEG')) {
+    return sendError(res, req, Object.assign(err, { status: 400 }));
+  }
+  if (err?.message === 'Origin not allowed by CORS') {
+    return sendError(res, req, Object.assign(err, { status: 403 }));
+  }
+  console.error('Unhandled request error:', logSafeError(err));
+  return sendError(res, req, err);
+});
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`)); // 6. Start server
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+export { app, server, authRateLimit, orderRateLimit };
