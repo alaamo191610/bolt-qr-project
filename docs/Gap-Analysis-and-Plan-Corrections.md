@@ -46,8 +46,9 @@ optional, it is marked as such.
 | G6 | No frontend error boundary | Missing work | P1 | [G6](#g6) |
 | G7 | API client discards HTTP status codes | Missing work | P1 | [G7](#g7) |
 | G8 | No log redaction helper | Missing work | P2 | [G8](#g8) |
-| G9 | Two parallel SuperAdmin auth paths | Missing work | P2 | [G9](#g9) |
+| G9 | Two parallel SuperAdmin auth paths | Missing work — **Done, pending Yazan review** | P2 | [G9](#g9) |
 | G10 | No pagination on any list endpoint | Missing work | P2 | [G10](#g10) |
+| G11 | `ApiError` shipped but unconsumed: false logout on network/5xx errors | Missing work — found and fixed during A0 journey inventory | P1 | [Part 6](#part-6--execution-runbook-and-completion-evidence) |
 | S1 | Backend modularization scheduled after the P0 edits | Sequencing | High | [S1](#s1) |
 | S2 | Observability scheduled at M3, after the risky work | Sequencing | High | [S2](#s2) |
 | S3 | Ten-week estimate is not defensible for M3+M4 | Sequencing | Medium | [S3](#s3) |
@@ -512,6 +513,21 @@ the M4 security test pass rather than after.
 **Owner:** Alaa, reviewed by Yazan. **Milestone:** M2 or M3. Optional if capacity is tight —
 flag it as accepted risk rather than silently skipping.
 
+**Status: Done, pending Yazan's review.** `codex/api-response-typing` @ `828c46c`.
+`superAdminService.ts` no longer hand-rolls `fetch`/URL-resolution/error-parsing; it calls
+`api.get`/`api.put` from `src/services/api.ts` with a new `TokenNamespace`
+(`'restaurant' | 'superAdmin'`) parameter backed by a `tokenStore.get/set/clear`
+abstraction. Only the transport (fetch, error normalization, retry semantics) is shared —
+restaurant admin and SuperAdmin keep separate storage keys, separate expiry, and separate
+logout paths, exactly as this finding's "what to implement" specifies. All ~54 existing
+restaurant-admin call sites default to the `'restaurant'` namespace and needed no changes.
+Net deletion of 49 lines of duplicated logic in `superAdminService.ts`. New tests in
+`api.test.ts` and `superAdminService.test.ts` prove namespace isolation: a SuperAdmin token
+is never attached to a default request and vice versa, and login sends no `Authorization`
+header (no session exists yet at that point). Still needs Yazan's review before merging to
+`main`, per the plan's own PR checklist ("Yazan reviewed contract/security/session
+changes").
+
 ---
 
 ### <a name="g10"></a>G10. No pagination on any list endpoint — P2
@@ -728,16 +744,37 @@ prepared; no implementation item below is marked Done.
 
 | Order | Work item | Owner | Status | Completion test/evidence |
 |---|---|---|---|---|
-| 0 | Record the four D1 decisions: tracking expiry, takeaway entry point, POS disposition, and log retention. | Yazan + Alaa | **Blocked — decision required** | Signed decision log / ADR; takeaway decision is required before G1 can ship. |
-| 1 | Establish test infrastructure: isolated test DB, fixture/seeding helper, HTTP harness, and E2E runner. | Both | Not started | `npm test` includes unit and integration suites; one smoke E2E test runs in CI. |
+| 0 | Record the four D1 decisions: tracking expiry, takeaway entry point, POS disposition, and log retention. | Yazan + Alaa | **Drafted, pending Yazan sign-off** | Decisions recorded in `D1-Decision-Log.md`: 6h tracking token/no refresh; takeaway disabled for Release 1 (dine-in only); QR code stays permanent, only the scan-time session token expires; POS schema parked; operational logs retained 30 days and redacted, kept as a separate, long-lived business/product analytics dataset for market/expansion use. Awaiting Yazan's signature to flip to Done. |
+| 1 | Establish test infrastructure: isolated test DB, fixture/seeding helper, HTTP harness, and E2E runner. | Both | **Frontend half done** | Vitest + Testing Library + jsdom + MSW installed and passing (`npm run test:frontend`); Playwright + axe installed with a smoke spec (`npm run test:e2e`). Backend half (test DB, fixtures, HTTP harness for Express) not started. |
 | 2 | Extract route modules mechanically, with no behaviour change. | Yazan | Not started | Existing unit tests plus endpoint smoke tests pass before and after extraction; review confirms no logic change. |
 | 3 | Add request ID, structured request logging, centralized safe error responses, and redaction. | Yazan | Not started | Unit tests for redaction/error normalization; integration tests verify `X-Request-Id`, safe 500 response, and no raw Prisma message. |
 | 4 | Add expired-bucket eviction (or bounded LRU) to the in-memory limiter. | Yazan | Not started | Unit test proves expired keys are removed; integration test confirms 429 and `Retry-After` behaviour. |
 | 5 | Add tenant ownership columns and migration for modifier/combo records, then scope every query. | Yazan | Not started | Fresh-DB migration test; tenant-A-to-tenant-B read/write integration tests return 404/403 as appropriate. |
-| 6 | Add frontend `ApiError` status/request-ID propagation and separate customer/admin error boundaries. | Alaa | Not started | Unit tests for `ApiError`; component tests for fallback/retry UI; manual browser smoke on customer menu and admin workspace. |
-| 7 | Delete stale schema and unused authentication-hook files. | Alaa | Not started | Typecheck/build succeeds; repository search confirms the stale files are absent. |
+| 6 | Add frontend `ApiError` status/request-ID propagation and separate customer/admin error boundaries. | Alaa | **Done** | `ApiError` class with `status`/`code`/`requestId`/`retryAfter`, unit-tested in `src/services/api.test.ts`; `ErrorBoundary` wraps customer and admin routes separately in `App.tsx`, unit-tested in `ErrorBoundary.test.tsx`. `codex/tenant-transition` @ `cd03ed9`. |
+| 7 | Delete stale schema and unused authentication-hook files. | Alaa | **Done** | `useAuthhhhh.tsx`, `schema.sql`, `schema.prisma.bak` deleted; typecheck and build confirmed clean after removal. `codex/api-response-typing` @ `de31099`. |
 | 8 | Implement bounded public order creation using the signed table-session design selected in step 0. | Yazan | **Blocked — takeaway decision required** | Integration: no token returns 401; valid table token creates only for its bound restaurant/table; cross-tenant token attempt is denied. |
 | 9 | Run regression, migration rehearsal, performance checks, and pilot readiness review. | Both | Not started | M4 and Go/No-Go evidence attached; no unresolved P0/P1 issues. |
+
+**Known gap introduced by step 6's implementation:** the typed `api.get<T>()`/`post<T>()`/etc.
+generics currently default `T` to `any` (not `unknown`) to avoid a 54-call-site breaking
+change across the codebase in one PR. This preserves today's typecheck-passing behaviour but
+means most call sites are not yet getting real compile-time response typing — only the
+`ApiError` contract and status/code discrimination are real today. Typing the remaining call
+sites is tracked as follow-up work, not yet in this table as its own row.
+
+**New finding from the A0 journey/state inventory (G11): typed `ApiError` existed but nothing
+consumed it, causing false logouts on transient failures — P1, fixed same pass.**
+`AuthProvider.initAuth` and `SuperAdminDashboard.loadData` both cleared the user's session
+token and forced a re-login on *any* failure from their session/data-load calls, including a
+network blip or a backend 500 — not just a genuine 401. Root cause was two-fold: (1) nothing
+in the codebase branched on `ApiError.code`/`status` even though step 6 added it, and (2)
+`superAdminService.ts` duplicated `api.ts`'s fetch/error-parsing logic and threw plain `Error`
+instead of `ApiError`, which would have silently defeated a fix in `SuperAdminDashboard` alone.
+Fixed by adding `isUnauthenticatedError()` to `src/services/api.ts`, branching on it in both
+call sites, and switching `superAdminService.ts` to reuse the shared `handleResponse()`. Unit
+tests added in `src/services/api.test.ts` and `src/services/superAdminService.test.ts`.
+`codex/api-response-typing`. This does not change G9's status (the two auth paths are still
+separate) — it only stops the shared `ApiError` type from being silently ignored.
 
 ### Minimum test suite to add
 
@@ -755,15 +792,22 @@ command and review; a merged code change without test evidence remains **In prog
 
 | Item | Status | PR / commit | Test command and result | Verified by | Date |
 |---|---|---|---|---|---|
-| D1 decisions | Blocked | — | — | — | — |
-| Test infrastructure (E3) | Not started | — | — | — | — |
+| D1 decisions | Drafted, pending Yazan sign-off | `codex/api-response-typing` @ `6100b48` | `docs/D1-Decision-Log.md` | Alaa | 14 Aug 2026 |
+| Test infrastructure (E3) | Frontend done, backend not started | `codex/tenant-transition` @ `cd03ed9` | `npm run test:frontend` (5/5 pass), `npm run test:e2e` (2/2 pass) | Claude | 13 Aug 2026 |
 | Route extraction (S1) | Not started | — | — | — | — |
 | Error handler + redaction (G4, G8) | Not started | — | — | — | — |
 | Request IDs + structured logs (G5) | Not started | — | — | — | — |
 | Rate-limiter eviction (G2) | Not started | — | — | — | — |
 | Modifier/combo tenant migration (G3) | Not started | — | — | — | — |
-| API errors + error boundaries (G6, G7) | Not started | — | — | — | — |
-| Stale-file cleanup (E1) | Not started | — | — | — | — |
+| API errors + error boundaries (G6, G7) | **Done** | `codex/tenant-transition` @ `cd03ed9` | `npm run test:frontend` (`api.test.ts`, `ErrorBoundary.test.tsx`) | Claude | 13 Aug 2026 |
+| Stale-file cleanup (E1) | **Done** | `codex/api-response-typing` @ `de31099` | `npm run typecheck` + `npm run build` clean after removal | Claude | 13 Aug 2026 |
+| False-logout on network/5xx errors (G11, new finding) | **Done** | `codex/api-response-typing` @ `1b02db1` | `npm run test:frontend` (`isUnauthenticatedError` cases, `superAdminService.test.ts`) | Claude | 13 Aug 2026 |
+| OrderManagement optimistic-update rollback (backlog item 1) | **Done** | `codex/api-response-typing` @ `a3ec619` | `npm run test:frontend` (`OrderManagement.test.tsx`, 2/2) | Claude | 14 Aug 2026 |
+| UserManagement loading/empty/error states (backlog item 2) | **Done** | `codex/api-response-typing` @ `52f1d0e` | `npm run test:frontend` (`UserManagement.test.tsx`, 4/4) | Claude | 14 Aug 2026 |
+| `getErrorMessage` branches on `ApiError.code` (backlog item 3) | **Done** | `codex/api-response-typing` @ `45c2643` | `npm run test:frontend` (`errors.test.ts`, 5/5) | Claude | 14 Aug 2026 |
+| TableManagement/admin socket reconnect rejoin (backlog item 4) | **Done** | `codex/api-response-typing` @ `e095f82` | Not unit-tested (real socket.io-client instance, unexported component) — verified by direct comparison to `CustomerMenu`'s proven pattern, dev server, and build | Claude | 14 Aug 2026 |
+| SuperAdmin auth consolidation (G9, backlog item 5) | **Done, pending Yazan review** | `codex/api-response-typing` @ `828c46c` | `npm run test:frontend` (`api.test.ts` 9/9, `superAdminService.test.ts` 4/4) | Claude | 14 Aug 2026 |
+| Expired order-tracking link UI (D1.1 frontend half) | **Done** — backend expiry change (24h → 6h) not started | `codex/api-response-typing` @ `2f88908` | `npm run test:frontend` (`OrderConfirmation.test.tsx`, 3/3) | Claude | 14 Aug 2026 |
 | Bounded public order creation (G1) | Blocked | — | — | — | — |
 
 ### Definition of done for this correction set

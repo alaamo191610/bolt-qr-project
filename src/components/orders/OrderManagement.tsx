@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { getErrorMessage } from '../../utils/errors';
 
 // --- Types ---
 interface CustomizationDetails {
@@ -46,7 +47,7 @@ export interface Order {
 interface OrderManagementProps {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
-  onStatusChange?: (orderId: number, newStatus: Order['status']) => void;
+  onStatusChange?: (orderId: number, newStatus: Order['status']) => void | Promise<void>;
 }
 
 // --- Components ---
@@ -62,6 +63,8 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
   const [actionType, setActionType] = useState<'status_change' | 'cancel' | null>(null);
   const [targetStatus, setTargetStatus] = useState<Order['status'] | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<Order['status'] | 'all'>('all');
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const [failedOrderIds, setFailedOrderIds] = useState<Set<number>>(new Set());
 
   // --- Filtering Logic ---
   const baseFilteredOrders = useMemo(() => {
@@ -125,21 +128,42 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
     setShowConfirmModal(true);
   };
 
-  const confirmAction = () => {
-    if (selectedOrder && targetStatus) {
-      // Optimistic update
+  const confirmAction = async () => {
+    if (!selectedOrder || !targetStatus) return;
+
+    const { id: orderId } = selectedOrder;
+    const previousStatus = selectedOrder.status;
+
+    // Optimistic update
+    setOrders(prev =>
+      prev.map(o => (o.id === orderId ? { ...o, status: targetStatus } : o))
+    );
+    setFailedOrderIds(prev => {
+      const next = new Set(prev);
+      next.delete(orderId);
+      return next;
+    });
+
+    setShowConfirmModal(false);
+    setSelectedOrder(null);
+    setTargetStatus(null);
+    setActionType(null);
+
+    if (!onStatusChange) return;
+
+    setIsSavingStatus(true);
+    try {
+      await onStatusChange(orderId, targetStatus);
+    } catch (error) {
+      console.error('Failed to update order status:', getErrorMessage(error));
+      // Revert the optimistic update; the caller is responsible for its own
+      // user-facing error message (e.g. a toast), this just undoes the guess.
       setOrders(prev =>
-        prev.map(o => (o.id === selectedOrder.id ? { ...o, status: targetStatus } : o))
+        prev.map(o => (o.id === orderId ? { ...o, status: previousStatus } : o))
       );
-
-      if (onStatusChange) {
-        onStatusChange(selectedOrder.id, targetStatus);
-      }
-
-      setShowConfirmModal(false);
-      setSelectedOrder(null);
-      setTargetStatus(null);
-      setActionType(null);
+      setFailedOrderIds(prev => new Set(prev).add(orderId));
+    } finally {
+      setIsSavingStatus(false);
     }
   };
 
@@ -295,6 +319,8 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
                 setSelectedOrder(order);
                 setShowDetailsModal(true);
               }}
+              isSaving={isSavingStatus && selectedOrder?.id === order.id}
+              updateFailed={failedOrderIds.has(order.id)}
             />
           ))
         ) : (
@@ -478,12 +504,14 @@ const StatCard = ({ label, count, value, color, icon, onClick, isActive }: {
   );
 };
 
-const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatPrice }: {
+const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatPrice, isSaving, updateFailed }: {
   order: Order;
   onStatusClick: (order: Order, status: Order['status']) => void;
   onCancelClick: (order: Order) => void;
   onViewDetails: () => void;
   formatPrice: (amount: number, useSymbol?: boolean) => string;
+  isSaving?: boolean;
+  updateFailed?: boolean;
 }) => {
   const getNextStatus = (s: Order['status']): Order['status'] =>
     s === 'pending' ? 'preparing' :
@@ -497,8 +525,17 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
   const hasNotes = (order.items || []).some(item => item.note?.trim());
 
   return (
-    <div className="group relative bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-700 p-1 overflow-visible hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+    <div className={`group relative bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border p-1 overflow-visible hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${updateFailed
+      ? 'border-rose-300 dark:border-rose-700 ring-2 ring-rose-500/20'
+      : 'border-slate-200 dark:border-slate-700'
+      }`}>
       <div className="p-5 flex flex-col h-full bg-white dark:bg-slate-800 rounded-[1.8rem]">
+        {updateFailed && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-900/20 px-3 py-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300" role="alert">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span className="flex-1">Status update failed. Order was not changed, please try again.</span>
+          </div>
+        )}
         <div className="flex justify-between items-start gap-4 mb-5">
           <div className="flex items-start gap-4">
             <div className="flex flex-col items-center">
@@ -579,10 +616,17 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
             {canAdvance && (
               <button
                 onClick={() => onStatusClick(order, nextStatus)}
-                className="flex-[2] py-3 px-4 rounded-xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 group/btn"
+                disabled={isSaving}
+                className="flex-[2] py-3 px-4 rounded-xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 group/btn disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-lg"
               >
-                <span>Mark {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}</span>
-                <ArrowRight className="w-4 h-4 transform group-hover/btn:translate-x-1 transition-transform" />
+                {isSaving ? (
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Mark {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}</span>
+                    <ArrowRight className="w-4 h-4 transform group-hover/btn:translate-x-1 transition-transform" />
+                  </>
+                )}
               </button>
             )}
           </div>

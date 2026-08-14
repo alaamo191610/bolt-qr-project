@@ -30,6 +30,7 @@ import { useAdminMonetary } from "../hooks/useAdminMonetary";
 import { formatPrice } from "../pricing/usePrice";
 import { socket, joinMenuRoom } from "../services/socket";
 import { LandingPage } from '../components/ui/LandingPage';
+import { getErrorMessage } from "../utils/errors";
 
 interface Ingredient {
   id: string;
@@ -650,8 +651,11 @@ const CustomerMenu: React.FC = () => {
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber, adminId || getTrackingContextFromUrl().adminId)); // clear persisted cart
     } catch (err) {
-      setError({ code: "status.failedToPlaceOrder" });
+      // Stay on the cart/checkout view so the customer can retry without
+      // losing their place - a failed checkout is recoverable, unlike a
+      // failed menu load, so it must not trigger the full-page error state.
       console.error("Error placing order:", err);
+      toast.error(getErrorMessage(err, t("status.failedToPlaceOrder")));
     } finally {
       setIsOrdering(false);
     }
@@ -823,19 +827,19 @@ const CustomerMenu: React.FC = () => {
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             {/* left: logo + title & meta */}
-            <div className="animate-fade-in">
-              <div className="flex items-center gap-3 mb-1">
+            <div className="animate-fade-in min-w-0 flex-1">
+              <div className="flex items-center gap-3 mb-1 min-w-0">
                 {/* Restaurant Logo or Icon */}
                 {logoUrl ? (
                   <img
                     src={logoUrl}
                     alt={restaurantName || "Restaurant"}
-                    className="h-12 w-12 object-cover rounded-lg shadow-md"
+                    className="h-12 w-12 object-cover rounded-lg shadow-md shrink-0"
                   />
                 ) : (
-                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md">
+                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md shrink-0">
                     <span className="text-2xl font-bold text-white">
                       {restaurantName?.charAt(0)?.toUpperCase() || "Q"}
                     </span>
@@ -843,7 +847,7 @@ const CustomerMenu: React.FC = () => {
                 )}
 
                 {/* Restaurant Name */}
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate min-w-0">
                   {restaurantName || t("restaurant.name")}
                 </h1>
               </div>
@@ -861,7 +865,7 @@ const CustomerMenu: React.FC = () => {
               </div>
             </div>
             {/* right: language toggle + cart — cart last, even in Arabic */}
-            <div className="flex items-center gap-3" dir="ltr">
+            <div className="flex items-center gap-3 shrink-0" dir="ltr">
               <LanguageToggle variant="button" />
               <button
                 ref={triggerRef}

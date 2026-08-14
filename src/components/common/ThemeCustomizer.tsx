@@ -4,6 +4,8 @@ import { Palette, Sun, Moon, RotateCcw, Check, X, Copy, ChevronDown, Type } from
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { updateAdminTheme } from "../../services/adminService";
+import { getErrorMessage } from "../../utils/errors";
+import toast from "react-hot-toast";
 
 const normalizeHex = (v: string) => {
   let s = v.trim().replace(/^#/, "");
@@ -212,6 +214,10 @@ const ThemeCustomizer: React.FC<SheetProps> = ({
       await updateAdminTheme({ theme: fixed, font_family: tempFont });
     } catch (e) {
       console.error("Failed to save theme", e);
+      // The local preview already applied above, but it was never
+      // persisted - warn instead of closing as if it saved, since it will
+      // silently revert to the old theme on the next page load otherwise.
+      toast.error(getErrorMessage(e, "Theme changes could not be saved. They may not persist."));
     }
     const exact = findPresetNameFor(fixed);
     if (exact) {
@@ -247,13 +253,19 @@ const ThemeCustomizer: React.FC<SheetProps> = ({
         textArea.style.left = '-999999px';
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
+        let copiedOk: boolean;
+        try {
+          copiedOk = document.execCommand('copy');
+        } finally {
+          document.body.removeChild(textArea);
+        }
+        if (!copiedOk) throw new Error('execCommand copy returned false');
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
-    } catch {
-      // Clipboard access can be denied by the browser; the UI simply remains unchanged.
+    } catch (e) {
+      console.error("Failed to copy CSS variables", e);
+      toast.error("Could not copy. Please copy the values manually.");
     }
   };
 

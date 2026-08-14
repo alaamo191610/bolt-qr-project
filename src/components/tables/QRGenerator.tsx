@@ -9,6 +9,7 @@ import QRCodeStyling, {
   CornerDotType
 } from 'qr-code-styling';
 import type { Options } from 'qr-code-styling';
+import toast from 'react-hot-toast';
 import {
   QrCode,
   Download,
@@ -209,20 +210,20 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
         textArea.focus();
         textArea.select();
 
+        let copied: boolean;
         try {
-          document.execCommand('copy');
+          copied = document.execCommand('copy');
         } finally {
           document.body.removeChild(textArea);
         }
+        if (!copied) throw new Error('execCommand copy returned false');
       }
 
       setCopiedTable(table.number);
       setTimeout(() => setCopiedTable(''), 2000);
     } catch (err) {
       console.error('Failed to copy URL:', err);
-      // Still show success message as the fallback might have worked
-      setCopiedTable(table.number);
-      setTimeout(() => setCopiedTable(''), 2000);
+      toast.error('Could not copy the link. Please copy it manually.');
     }
   };
 

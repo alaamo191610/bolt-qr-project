@@ -44,8 +44,32 @@ export class ApiError extends Error {
   }
 }
 
-const getHeaders = () => {
-  const token = localStorage.getItem('auth_token');
+// Restaurant-admin and SuperAdmin are deliberately separate session
+// lifecycles (separate storage key, separate expiry/logout), not a shared
+// login. This namespace only lets both reuse the same fetch/error/retry
+// transport mechanics - it must never be widened into a single shared
+// token. See docs/Gap-Analysis-and-Plan-Corrections.md G9.
+export type TokenNamespace = 'restaurant' | 'superAdmin';
+
+const TOKEN_STORAGE_KEYS: Record<TokenNamespace, string> = {
+  restaurant: 'auth_token',
+  superAdmin: 'superAdminToken',
+};
+
+export const tokenStore = {
+  get(namespace: TokenNamespace): string | null {
+    return localStorage.getItem(TOKEN_STORAGE_KEYS[namespace]);
+  },
+  set(namespace: TokenNamespace, token: string): void {
+    localStorage.setItem(TOKEN_STORAGE_KEYS[namespace], token);
+  },
+  clear(namespace: TokenNamespace): void {
+    localStorage.removeItem(TOKEN_STORAGE_KEYS[namespace]);
+  },
+};
+
+const getHeaders = (namespace: TokenNamespace = 'restaurant') => {
+  const token = tokenStore.get(namespace);
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -67,6 +91,9 @@ const parseRetryAfter = (value: string | null) => {
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 };
+
+export const isUnauthenticatedError = (error: unknown): boolean =>
+  error instanceof ApiError && (error.code === 'AUTHENTICATION_REQUIRED' || error.status === 401);
 
 export const handleResponse = async <T>(res: Response): Promise<T> => {
   if (!res.ok) {
@@ -112,10 +139,10 @@ const request = async <T>(input: RequestInfo | URL, init?: RequestInit): Promise
 
 export const api = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async get<T = any>(endpoint: string, params?: Record<string, string>): Promise<T> {
+  async get<T = any>(endpoint: string, params?: Record<string, string>, namespace: TokenNamespace = 'restaurant'): Promise<T> {
     const url = new URL(`${API_URL}${endpoint}`);
     if (params) Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-    return request<T>(url.toString(), { headers: getHeaders() });
+    return request<T>(url.toString(), { headers: getHeaders(namespace) });
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,28 +156,38 @@ export const api = {
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async post<T = any>(endpoint: string, body: unknown): Promise<T> {
+  async post<T = any>(endpoint: string, body: unknown, namespace: TokenNamespace = 'restaurant'): Promise<T> {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(namespace),
+      body: JSON.stringify(body),
+    });
+  },
+
+  // No token exists yet at login/signup - deliberately no Authorization header.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async postPublic<T = any>(endpoint: string, body: unknown): Promise<T> {
+    return request<T>(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async put<T = any>(endpoint: string, body: unknown): Promise<T> {
+  async put<T = any>(endpoint: string, body: unknown, namespace: TokenNamespace = 'restaurant'): Promise<T> {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'PUT',
-      headers: getHeaders(),
+      headers: getHeaders(namespace),
       body: JSON.stringify(body),
     });
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async delete<T = any>(endpoint: string): Promise<T> {
+  async delete<T = any>(endpoint: string, namespace: TokenNamespace = 'restaurant'): Promise<T> {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'DELETE',
-      headers: getHeaders(),
+      headers: getHeaders(namespace),
     });
   },
 

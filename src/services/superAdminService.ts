@@ -1,11 +1,6 @@
 // Super Admin Service for API calls
 
-const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const fallbackProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-const fallbackApiUrl = import.meta.env.PROD
-    ? `${fallbackProtocol}//${hostname}/api`
-    : `${fallbackProtocol}//${hostname}:3000/api`;
-const API_URL = (import.meta.env.VITE_API_URL || fallbackApiUrl).replace(/\/$/, '');
+import { api } from './api';
 
 export interface SuperAdminStats {
     totalRestaurants: number;
@@ -37,59 +32,23 @@ export interface Restaurant {
 
 export const superAdminService = {
     async login(email: string, password: string) {
-        const response = await fetch(`${API_URL}/super-admin/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Login failed');
-        }
-
-        return response.json();
+        return api.postPublic<{ token: string; user: { name?: string } }>('/super-admin/login', { email, password });
     },
 
-    async getRestaurants(token: string): Promise<Restaurant[]> {
-        const response = await fetch(`${API_URL}/super-admin/restaurants`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch restaurants');
-        return response.json();
+    async getRestaurants(): Promise<Restaurant[]> {
+        return api.get<Restaurant[]>('/super-admin/restaurants', undefined, 'superAdmin');
     },
 
-    async getStats(token: string): Promise<SuperAdminStats> {
-        const response = await fetch(`${API_URL}/super-admin/stats`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch stats');
-        return response.json();
+    async getStats(): Promise<SuperAdminStats> {
+        return api.get<SuperAdminStats>('/super-admin/stats', undefined, 'superAdmin');
     },
 
     async updateRestaurantPlan(
-        token: string,
         restaurantId: string,
         plan: string,
         status?: string,
         subscription_end?: string
     ) {
-        const response = await fetch(`${API_URL}/super-admin/restaurants/${restaurantId}/plan`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ plan, status, subscription_end }),
-        });
-
-        if (!response.ok) throw new Error('Failed to update plan');
-        return response.json();
+        return api.put(`/super-admin/restaurants/${restaurantId}/plan`, { plan, status, subscription_end }, 'superAdmin');
     },
 };

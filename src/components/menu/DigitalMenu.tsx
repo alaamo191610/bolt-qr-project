@@ -394,8 +394,9 @@ const ImageUploadField = ({
 
       onChange(imageUrl);
     } catch (err) {
-      console.error("Upload failed:", getErrorMessage(err));
-      setUploadError("Upload failed. Please try again.");
+      const message = getErrorMessage(err, "Upload failed. Please try again.");
+      console.error("Upload failed:", message);
+      setUploadError(message);
     } finally {
       setUploading(false);
     }
@@ -550,6 +551,7 @@ const DigitalMenu: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -600,6 +602,7 @@ const DigitalMenu: React.FC = () => {
 
     try {
       setLoading(true);
+      setLoadError(null);
 
       // Always fetch fresh data when explicitly called
       // Only use cache on initial component mount
@@ -654,7 +657,9 @@ const DigitalMenu: React.FC = () => {
       }
     } catch (error) {
       console.error("Error fetching items:", error);
-      return [];
+      // Distinct from a genuinely empty menu - the "add your first item"
+      // empty state must not show when the load itself failed.
+      setLoadError(getErrorMessage(error, "Failed to load your menu"));
     } finally {
       setLoading(false);
     }
@@ -720,6 +725,7 @@ const DigitalMenu: React.FC = () => {
       setCategoryFormOpen(false);
     } catch (error) {
       console.error("Error adding category:", error);
+      toast.error(getErrorMessage(error, "Failed to add category"));
     } finally {
       setCategoryLoading(false);
     }
@@ -738,6 +744,7 @@ const DigitalMenu: React.FC = () => {
       setIngredientFormOpen(false);
     } catch (error) {
       console.error("Error adding ingredient:", error);
+      toast.error(getErrorMessage(error, "Failed to add ingredient"));
     } finally {
       setIngredientLoading(false);
     }
@@ -964,6 +971,23 @@ const DigitalMenu: React.FC = () => {
 
   if (loading && user) {
     return <LoadingSpinner />;
+  }
+
+  if (loadError) {
+    return (
+      <EmptyState
+        title={t("common.loadErrorTitle") || "Couldn't load your menu"}
+        description={loadError}
+        action={
+          <button
+            onClick={() => fetchItems()}
+            className="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 rounded-xl font-bold flex items-center space-x-2 mx-auto transition-all shadow-lg hover:shadow-xl hover:-translate-y-1"
+          >
+            <span>{t("status.tryAgain") || "Try again"}</span>
+          </button>
+        }
+      />
+    );
   }
 
   return (

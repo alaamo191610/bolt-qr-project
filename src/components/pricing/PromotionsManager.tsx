@@ -26,14 +26,19 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
   const [form, setForm] = useState<Promotion>({ ...EMPTY, admin_id: adminId });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async()=>{
     setLoading(true);
+    setLoadError(null);
     try {
       const list = await adminService.listPromotions(adminId);
       setItems(list);
     } catch (e) {
       console.error(e);
+      // Distinct from a genuinely empty list - "No promotions yet" must not
+      // show when the load itself failed.
+      setLoadError(getErrorMessage(e, 'Failed to load promotions'));
     } finally {
       setLoading(false);
     }
@@ -238,7 +243,18 @@ export default function PromotionsManager({ adminId }:{ adminId: string }){
                 </td>
               </tr>
             ))}
-            {items.length===0 && (
+            {loadError && (
+              <tr>
+                <td className="p-3 text-center" colSpan={9} role="alert">
+                  <span className="text-red-700">{loadError}</span>
+                  {' '}
+                  <button onClick={load} className="underline text-slate-700 hover:text-slate-900">
+                    {t('status.tryAgain') || 'Try again'}
+                  </button>
+                </td>
+              </tr>
+            )}
+            {!loadError && items.length===0 && (
               <tr>
                 <td className="p-3 text-center text-slate-500" colSpan={9}>
                   {t('promos.table.empty') || 'No promotions yet'}

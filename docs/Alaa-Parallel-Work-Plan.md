@@ -53,9 +53,131 @@ documentation, fixture, or regression task instead of waiting.
 |---|---|---|
 | Repair/test local frontend path | Pair with Yazan: Alaa verifies frontend/E2E commands; Yazan owns server/CI commands. | Build/lint/test commands captured in plan. |
 | E2E skeleton | Configure runner and create smoke flows for login/admin shell and QR/menu page using isolated fixtures or mocks; pair with Yazan on deterministic backend fixtures. | Smoke suite runs locally and in CI/staging. |
-| Journey/state inventory | Map customer, admin, team, and SuperAdmin success/loading/empty/validation/permission/offline/failure states. | Prioritized UI backlog shared with Yazan. |
-| Typed API design | Define `ApiError` and request/response typing approach from Yazan’s draft contract. | Types/mocks compile independently of final server implementation. |
-| Cleanup | Delete stale schema/hook files and confirm the client build stays clean. | Build and repository search evidence. |
+| Journey/state inventory | Map customer, admin, team, and SuperAdmin success/loading/empty/validation/permission/offline/failure states. | **Done** — see backlog below. |
+| Typed API design | Define `ApiError` and request/response typing approach from Yazan’s draft contract. | `ApiError` shipped (`src/services/api.ts`) with unit tests. Response-body typing still defaults to `any`; see `codex/api-response-typing`. |
+| Cleanup | Delete stale schema/hook files and confirm the client build stays clean. | **Done** — `useAuthhhhh.tsx`, `schema.sql`, `schema.prisma.bak` removed; typecheck/build clean. |
+
+## Journey/state inventory — 13 August 2026
+
+Read every render path for the screens below (not just grep) and recorded which of the
+seven states each one actually handles: loading, empty, validation, 401/403, offline/network
+failure, and reconnect recovery. This is the backlog A0 calls for.
+
+| Screen | Loading | Empty | Validation | 401/403 | Offline/network | Notes |
+|---|---|---|---|---|---|---|
+| CustomerMenu | Yes (spinner) | Yes, but conflates "no menu" with an error state | N/A | No — generic catch, own ad hoc error-code enum, not `ApiError` | No — network vs server error not distinguished | `placeOrder` failure has no retry affordance beyond reopening the cart |
+| DigitalMenu (admin) | Yes (spinner + 10s timeout hack) | Yes, dedicated `EmptyState` | Yes, inline field errors | No — generic catches throughout | No | Best-covered admin screen; still no `ApiError` branching |
+| OrderManagement (admin) | **No** — no own fetch/loading state | Yes | N/A | N/A | N/A | Status changes are optimistic with no rollback/error UI if the update fails |
+| TableManagement | **No** — no own fetch/loading state | No explicit empty state | No inline validation | No | No | Socket `table-updated` is not rejoined on reconnect, unlike CustomerMenu |
+| QRGenerator | N/A | N/A | N/A | N/A | N/A | `copyToClipboard` reports success even when the copy call fails |
+| AdminPanel | Yes (plain text) | N/A | No inline errors | No | No | Toast-only error surfacing |
+| UserManagement | **No** | **No** | No inline errors | No — catch discards the real error entirely | No | Weakest screen: no loading, no empty state, error is fully swallowed |
+| SuperAdminLogin | Yes | N/A | Client-side only | No | No | Fixed this pass: missing `<main>` landmark (axe violation) |
+| SuperAdminDashboard | Yes | Yes, search-aware | N/A | **Fixed this pass** — was force-logging-out on any error, including network/5xx | **Fixed this pass** | See "Resolved this pass" below |
+| AuthProvider | Yes (`loading` gates app root) | N/A | N/A | **Fixed this pass** — same false-logout bug as SuperAdminDashboard | **Fixed this pass** | `signIn`/`signUp` still rethrow raw errors for callers |
+| AuthForm | Yes | N/A | Client `required` only | No | No | String-only server error display, no code branching |
+
+**Resolved this pass:** `AuthProvider.initAuth` and `SuperAdminDashboard.loadData` both
+treated *any* error from their session/data-load calls — network blip, 500, or a real 401 —
+as "session expired," clearing the token and forcing a re-login. Fixed by adding
+`isUnauthenticatedError()` to `src/services/api.ts` (checks `ApiError.code ===
+'AUTHENTICATION_REQUIRED'` or `status === 401`) and branching on it in both call sites.
+Also found and fixed: `superAdminService.ts` had its own hand-rolled `fetch`/error-parsing
+duplicate of `api.ts` that threw plain `Error` instead of `ApiError`, which would have made
+the `SuperAdminDashboard` fix a silent no-op. It now reuses the shared `handleResponse()`.
+Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the new
+`src/services/superAdminService.test.ts`.
+
+**Prioritized backlog (highest risk first):**
+1. ~~Give `OrderManagement`'s optimistic status-change a rollback/error path~~ — **Done**
+   (`codex/api-response-typing` @ `a3ec619`). `confirmAction` now awaits `onStatusChange`,
+   reverts the optimistic update on failure, and shows an inline "update failed, try again"
+   banner on the affected order card plus a saving spinner while in flight. Covered by
+   `src/components/orders/OrderManagement.test.tsx` (rollback and success paths).
+2. ~~Add loading and empty states to `UserManagement`~~ — **Done**
+   (`codex/api-response-typing` @ `52f1d0e`). Skeleton loading grid, dedicated empty state
+   with an add-user action, and a real error state with retry that surfaces the actual
+   `ApiError` message instead of a bare catch discarding it. Covered by
+   `src/components/admin/UserManagement.test.tsx`.
+3. ~~Make error messaging branch on `ApiError.code` across admin screens~~ — **Done**
+   (`codex/api-response-typing` @ `45c2643`). `getErrorMessage` now returns distinct
+   "check your connection" / "try again in a moment" copy for `NETWORK_ERROR` /
+   `SERVER_ERROR`; every other code still passes the real message through unchanged. Fixed
+   centrally so all 17 existing call sites benefit without individual edits. Covered by
+   `src/utils/errors.test.ts`.
+4. ~~Add socket-reconnect rejoin to `TableManagement`~~ — **Done**
+   (`codex/api-response-typing` @ `e095f82`). Fixed at the source in `App.tsx`'s
+   `AdminDashboard` (where `joinAdminRoom` is actually called), mirroring `CustomerMenu`'s
+   proven `socket.on('connect', ...)` pattern. Covers both `TableManagement`'s
+   `table-updated` listener and the new-order handler in the same room. Not unit-tested
+   (real `socket.io-client` instance, unexported inner component) — verified by direct
+   comparison to `CustomerMenu` and a dev-server/build check.
+5. ~~Consolidate the SuperAdmin/session boundary per G9~~ — **Done**
+   (`codex/api-response-typing` @ `828c46c`). `superAdminService.ts` no longer duplicates
+   `api.ts`'s fetch/error logic by hand; it now calls `api.get`/`api.put` with a
+   `TokenNamespace` (`'restaurant' | 'superAdmin'`) backed by a `tokenStore` abstraction.
+   Restaurant admin and SuperAdmin still use separate storage keys, expiry, and logout paths
+   — only the transport mechanics are shared, per the constraint above. All ~54 existing
+   restaurant-admin call sites default to the `'restaurant'` namespace and are unaffected.
+   Covered by new tests in `src/services/api.test.ts` and
+   `src/services/superAdminService.test.ts` proving token isolation (a SuperAdmin token is
+   never sent on a default request and vice versa). Needs Yazan's review before merge to
+   main, per the plan's session/security PR checklist item, even though it's built and
+   tested.
+
+**Found and fixed after the original five (still highest-risk-first):**
+
+6. ~~`OrderConfirmation` freezes forever on an expired tracking link~~ — **Done**
+   (`codex/api-response-typing` @ `2f88908`). The backend already returns 401 "Order
+   tracking session expired" once the tracking JWT expires; the frontend never handled it.
+   Now shows a dedicated expired-link screen (EN/AR) instead of silently freezing on the
+   last known status. This is the UI D1.1 requires and works independent of Yazan's pending
+   24h→6h expiry change. Covered by `src/components/ui/OrderConfirmation.test.tsx`.
+7. ~~Checkout failure bounced the customer out of the cart~~ — **Done**
+   (`codex/api-response-typing` @ `47a194d`). `placeOrder`'s catch block triggered the same
+   full-page error takeover used for "menu never loaded," with a "reload page" button —
+   the wrong response to a recoverable checkout failure. Now shows a toast with the real
+   (network/server-aware) error message and leaves the customer on the cart to retry. Not
+   unit-tested (1346-line component, disproportionate mocking for this fix) — verified by
+   direct review, typecheck, and build.
+8. ~~Admin menu screen showed the wrong empty state on a failed load~~ — **Done**
+   (`codex/api-response-typing` @ `36aa958`). `DigitalMenu.tsx`'s `fetchItems` caught every
+   error and left `items` as `[]`, which rendered the exact same "No items yet, add your
+   first item" onboarding empty state as a genuinely empty menu — a network/server error
+   could mislead an admin into thinking their menu was wiped. Now a distinct `loadError`
+   state shows the real message with a retry button. Same pass also fixed two silent
+   failures in the same file: `handleAddCategory`/`handleAddIngredient` logged to console
+   and gave zero user feedback on failure (form just sat there); both now toast the real
+   error. Also stopped the image-upload handler from computing `getErrorMessage(err)` and
+   then discarding it in favor of a hardcoded string. Not unit-tested (1500+ line
+   component) — verified by direct review, typecheck, lint, and build.
+9. ~~`FeesTaxSettings`/`KDSSettings`/`OrderWorkflowRules` silently fell back to defaults on a
+   load failure~~ — **Done** (`codex/api-response-typing` @ `3cc6848`, `ae81c19`). Same
+   copy-pasted bug in all three settings panels: a failed `getAdminSettings`/
+   `getAdminMonetarySettings` call was caught and silently replaced with
+   `DEFAULT_BILLING`/`DEFAULT_KDS`/`DEFAULT_FLOW`, with the save form left fully usable. If
+   the admin saved while the failure was masked, it would overwrite their real billing/KDS/
+   workflow settings with defaults — a destructive-write risk, not just a UX gap. Also fixed
+   the same class of bug in `PromotionsManager.tsx` (lower severity — an empty list, not a
+   destructive default). All four now show a distinct error state with retry and block the
+   save form until the real settings load. Covered by `FeesTaxSettings.test.tsx`,
+   `KDSSettings.test.tsx`, `OrderWorkflowRules.test.tsx`, `PromotionsManager.test.tsx`.
+10. ~~Copy-link button claimed success when the copy actually failed~~ — **Done**
+    (`codex/api-response-typing` @ `b84d0e0`). `QRGenerator.copyToClipboard`'s catch block
+    explicitly showed the success checkmark regardless of outcome ("Still show success
+    message as the fallback might have worked"). `document.execCommand('copy')`'s boolean
+    return value was being discarded; a genuine failure (deprecated API, permission denied)
+    looked identical to success, so an admin could share a QR link and paste nothing. Now
+    checks the return value and shows an error toast on real failure. Not unit-tested
+    (canvas-based QR rendering library not implemented in jsdom) — verified by direct review.
+11. ~~Theme customizer silently pretended a failed save succeeded~~ — **Done**
+    (`codex/api-response-typing` @ `56f6eb0`). `ThemeCustomizer.applyChanges` applied the new
+    theme locally, then on a failed `updateAdminTheme` call just logged to console and closed
+    the panel exactly as if it had saved — the admin believes their theme is saved and it
+    silently reverts on next page load. Now toasts a warning instead of closing silently.
+    Also fixed `copyCssVars`'s copy-to-clipboard fallback, same missing-return-value-check bug
+    as item 10 but with total silence on failure instead of a false positive. Not
+    unit-tested (625-line component, context-heavy) — verified by direct review.
 
 ### A1 — M1 frontend safety and tenant UX (Weeks 2–3)
 
