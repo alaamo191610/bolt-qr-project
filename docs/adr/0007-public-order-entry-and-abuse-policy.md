@@ -1,14 +1,20 @@
 # ADR 0007: Public order entry and abuse policy
 
 Status: Option A and dine-in defaults selected by Yazan; capability slice implemented 14 August
-2026 — Alaa sign-off and remaining M2 controls pending
+2026; Alaa sign-off recorded 14 August 2026 — remaining M2 controls pending
 
 ## Recorded decision
 
 Yazan selected **Option A: disable takeaway for Release 1** and subsequently accepted all mandatory
 dine-in session, rate-limit, line-item, and open-order defaults in this ADR. The server now rejects
 takeaway before opening the order transaction with `403 ORDER_TYPE_DISABLED`; integration evidence
-verifies no order is created. Alaa's sign-off remains tracked by the joint execution plan.
+verifies no order is created.
+
+Alaa recorded `Takeaway: A — disabled for Release 1; abuse defaults accepted` on 14 August 2026,
+agreeing with Yazan's selection and the mandatory dine-in controls below. This closes the joint
+decision for ADR 0007; idempotency, open-order capacity, pause/overload behavior, rejection
+telemetry, and the production shared limiter remain the separate M2/M3 work items already listed
+under "Implementation evidence" below.
 
 ## Current risk
 
