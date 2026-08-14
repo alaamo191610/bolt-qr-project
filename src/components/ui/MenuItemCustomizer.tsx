@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Minus } from "lucide-react";
 import { menuService } from "../../services/menuService";
 import { getErrorMessage } from "../../utils/errors";
@@ -279,6 +279,23 @@ export default function MenuItemCustomizer({
     setQty(defaultQuantity);
   }, [defaultQuantity]);
 
+  // Required modifier groups (e.g. "Cooking Level") can render far below
+  // the fold, past the photo and ingredient list. Without this, a customer
+  // sees a greyed-out "Add to Order" button with no visible reason why -
+  // the group refs let the sticky warning banner scroll them straight to it.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollToFirstRequiredGroup = () => {
+    for (const g of groups) {
+      if (!g.required) continue;
+      const el = groupRefs.current[g.id];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+    }
+  };
+
   // constraints & pricing
   const optionErrors = useMemo(() => {
     const errs: string[] = [];
@@ -504,6 +521,7 @@ export default function MenuItemCustomizer({
 
       {/* Only the content below the cover scrolls */}
       <div
+        ref={scrollContainerRef}
         className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain"
         style={{ scrollPaddingTop: '3.5rem', WebkitOverflowScrolling: 'touch' }}
       >
@@ -566,7 +584,7 @@ export default function MenuItemCustomizer({
                   const isSatisfied = (!g.required) || (currentSelectionCount >= (g.min_select || 0));
 
                   return (
-                    <div key={g.id}>
+                    <div key={g.id} ref={(el) => { groupRefs.current[g.id] = el; }}>
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h3 className="text-lg font-bold text-slate-900 dark:text-white">{g.name_en || "Options"}</h3>
@@ -763,6 +781,16 @@ export default function MenuItemCustomizer({
 
       {/* Sticky Footer */}
       <div className="z-20 shrink-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+        {optionErrors.length > 0 && (
+          <button
+            type="button"
+            onClick={scrollToFirstRequiredGroup}
+            className="mb-3 flex w-full items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-left text-sm font-medium text-amber-700 dark:text-amber-300"
+          >
+            <span>⚠️ {optionErrors[0]}</span>
+            <span className="ml-auto shrink-0 underline">Jump to it</span>
+          </button>
+        )}
         <div className="flex items-center gap-4 max-w-lg mx-auto w-full">
           {/* Quantity Stepper */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-full p-1">
@@ -790,6 +818,7 @@ export default function MenuItemCustomizer({
                   import("react-hot-toast").then((mod) => {
                     mod.default.error(optionErrors[0]);
                   });
+                  scrollToFirstRequiredGroup();
                 }
                 return;
               }
