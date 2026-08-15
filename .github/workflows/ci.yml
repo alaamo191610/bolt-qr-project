@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restaurant_db
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bolt_qr_test
       JWT_SECRET: ci-only-test-secret
     services:
       postgres:
