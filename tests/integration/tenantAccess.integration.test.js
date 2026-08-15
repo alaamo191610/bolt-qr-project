@@ -2,6 +2,7 @@ import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { io as createSocketClient } from 'socket.io-client';
 import { createTestDatabase } from '../helpers/testDatabase.js';
 import { runTenantOwnershipVerification } from '../../server/prisma/verification/runTenantOwnershipVerification.js';
@@ -14,6 +15,7 @@ let tenantA;
 let tenantB;
 let rateLimiters;
 let rejectionTelemetry;
+let orderRealtime;
 
 const postJson = async (path, body) => fetch(`${baseUrl}${path}`, {
   method: 'POST',
@@ -29,6 +31,16 @@ const authenticatedRequest = (token, path, init = {}) => fetch(`${baseUrl}${path
     ...(init.headers || {}),
   },
 });
+
+const authenticatedUpload = (token, path, bytes, type = 'image/png') => {
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type }), 'fixture.png');
+  return fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+};
 
 const connectSocket = socket => new Promise((resolve, reject) => {
   const timeout = setTimeout(() => reject(new Error('Socket connection timed out')), 3000);
@@ -209,6 +221,7 @@ before(async () => {
   const application = await import(`../../server/index.js?integration=${Date.now()}`);
   ({ server: httpServer } = application);
   rejectionTelemetry = application.publicOrderRejectionTelemetry;
+  orderRealtime = application.orderRealtime;
   rateLimiters = [
     application.authRateLimit,
     application.orderRateLimit,
@@ -257,6 +270,100 @@ test('authentication resolves the active tenant and rejects cross-tenant organiz
   assert.equal(crossTenantLogin.status, 403);
   assert.equal(crossTenantBody.code, 'ACCESS_DENIED');
   assert.equal(crossTenantBody.requestId, crossTenantLogin.headers.get('x-request-id'));
+});
+
+test('organization membership lifecycle is tenant-scoped and revokes active admin sockets', async () => {
+  const ownerLogin = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token: ownerToken } = await ownerLogin.json();
+
+  const organizations = await authenticatedRequest(ownerToken, '/api/auth/organizations');
+  const organizationBody = await organizations.json();
+  assert.equal(organizations.status, 200);
+  assert.deepEqual(organizationBody.map(item => item.id), [tenantA.organization.id]);
+
+  const memberEmail = `staff-${randomUUID()}@example.com`;
+  const createdMemberResponse = await authenticatedRequest(ownerToken, '/api/organization/members', {
+    method: 'POST',
+    body: JSON.stringify({ email: memberEmail, name: 'Staff Member', password: 'Staff-password-1!', role: 'STAFF' }),
+  });
+  const createdMember = await createdMemberResponse.json();
+  assert.equal(createdMemberResponse.status, 201);
+  assert.equal(createdMember.role, 'STAFF');
+
+  const members = await authenticatedRequest(ownerToken, '/api/organization/members');
+  const memberBody = await members.json();
+  assert.equal(members.status, 200);
+  assert.ok(memberBody.some(member => member.userId === createdMember.userId));
+
+  const memberLogin = await postJson('/api/auth/login', {
+    email: memberEmail,
+    password: 'Staff-password-1!',
+  });
+  const { token: memberToken } = await memberLogin.json();
+  const memberSocket = createSocketClient(baseUrl, { autoConnect: false });
+  await connectSocket(memberSocket);
+  assert.deepEqual(await emitWithAck(memberSocket, 'join-admin', { token: memberToken }), {
+    ok: true,
+    protocolVersion: 1,
+  });
+
+  const disconnected = new Promise(resolve => memberSocket.once('disconnect', resolve));
+  const suspended = await authenticatedRequest(ownerToken, `/api/organization/members/${createdMember.userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'SUSPENDED' }),
+  });
+  assert.equal(suspended.status, 200);
+  await disconnected;
+
+  const suspendedSession = await authenticatedRequest(memberToken, '/api/auth/session');
+  assert.equal(suspendedSession.status, 403);
+
+  const crossTenantUpdate = await authenticatedRequest(ownerToken, `/api/organization/members/${tenantB.user.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role: 'MANAGER' }),
+  });
+  assert.equal(crossTenantUpdate.status, 404);
+  memberSocket.close();
+});
+
+test('uploads are recorded under the tenant and only the owner tenant can delete them', async () => {
+  const alphaLogin = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const betaLogin = await postJson('/api/auth/login', {
+    email: tenantB.user.email,
+    password: tenantB.password,
+  });
+  const { token: alphaToken } = await alphaLogin.json();
+  const { token: betaToken } = await betaLogin.json();
+  const upload = await authenticatedUpload(alphaToken, '/api/upload', Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]));
+  const uploadBody = await upload.json();
+  assert.equal(upload.status, 201);
+  assert.ok(uploadBody.filename);
+  assert.equal(await database.prisma.upload.count({ where: { organization_id: tenantA.organization.id } }), 1);
+
+  const crossTenantDelete = await authenticatedRequest(betaToken, `/api/upload/${uploadBody.filename}`, {
+    method: 'DELETE',
+  });
+  assert.equal(crossTenantDelete.status, 404);
+  assert.equal(await database.prisma.upload.count({ where: { filename: uploadBody.filename } }), 1);
+
+  const deleteUpload = await authenticatedRequest(alphaToken, `/api/upload/${uploadBody.filename}`, {
+    method: 'DELETE',
+  });
+  assert.equal(deleteUpload.status, 200);
+  assert.equal(await database.prisma.upload.count({ where: { filename: uploadBody.filename } }), 0);
+});
+
+test('legacy predictable public QR lookup is removed', async () => {
+  const response = await fetch(`${baseUrl}/api/tables/public/${tenantA.table.code}`);
+  assert.equal(response.status, 404);
 });
 
 test('tenant-scoped reads and writes fail closed for another tenant', async () => {
@@ -478,6 +585,36 @@ test('table capability exchange authorizes dine-in identity and ignores body ten
   assert.equal(created.organization_id, tenantA.organization.id);
   assert.equal(created.branch_id, tenantA.branchId);
   assert.equal(created.table_id, tenantA.table.id);
+});
+
+test('tracking credentials expire after six hours and can be revoked', async () => {
+  const { session } = await createTableSession(tenantA);
+  const response = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': randomUUID() },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+  const body = await response.json();
+  assert.equal(response.status, 201);
+  const claims = jwt.decode(body.tracking_token);
+  assert.equal(claims.exp - claims.iat, 6 * 60 * 60);
+
+  const beforeRevoke = await fetch(`${baseUrl}/api/public/orders/${body.id}/status`, {
+    headers: { Authorization: `Bearer ${body.tracking_token}` },
+  });
+  assert.equal(beforeRevoke.status, 200);
+  assert.equal(await orderRealtime.revokeTrackingToken({
+    jti: claims.jti,
+    organizationId: tenantA.organization.id,
+  }), 1);
+
+  const afterRevoke = await fetch(`${baseUrl}/api/public/orders/${body.id}/status`, {
+    headers: { Authorization: `Bearer ${body.tracking_token}` },
+  });
+  assert.equal(afterRevoke.status, 401);
 });
 
 test('dine-in order idempotency requires a bounded key before mutation', async () => {

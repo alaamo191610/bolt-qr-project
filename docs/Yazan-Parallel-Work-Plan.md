@@ -504,8 +504,8 @@ This slice derives private socket rooms from verified credentials, database-reva
 scope, adds safe join acknowledgements and versioned event envelopes, makes status/table changes
 one transaction, and treats sockets as hints over authoritative REST state. Customer and admin
 clients must rejoin and refetch after reconnect/resume; persisted `Order.version` rejects stale
-events. The existing 24-hour tracking lifetime remains unchanged pending the separate joint D1
-expiry/recovery decision.
+events. Tracking credentials now expire after six hours, are persisted by `jti`, and support
+server-side revocation; the separate expired-link recovery UI remains the client contract.
 
 ## Tracking update — 15 August 2026 (order/realtime implementation complete)
 
@@ -536,6 +536,59 @@ QR removal/admin controls/client handoff and real-backend golden customer E2E, p
 tracking-expiry/recovery decision. The next unblocked Yazan implementation area is M3 production
 infrastructure; provider choices and RPO/RTO are required before durable storage, shared limiting,
 hosted monitoring, and restore work can be finalized.
+
+## Tracking update — 15 August 2026 (Phase 1 pilot infrastructure selected)
+
+Yazan selected the low-complexity M3 pilot path recorded in
+[ADR 0008](adr/0008-single-vps-pilot-infrastructure.md): one VPS, one `systemd`-managed Node
+process, localhost PostgreSQL, local uploads, the bounded in-memory limiter, nginx, Sentry, and
+external uptime monitoring. Managed storage, Redis, managed PostgreSQL, horizontal scaling, and
+high availability are deferred until documented business/capacity triggers occur.
+
+This is explicitly a pilot-only single failure domain with accepted maintenance downtime. Required
+hardening includes least-privilege services, localhost-only PostgreSQL, firewall/TLS/SSH controls,
+protected secrets/uploads, log rotation, disk alerts, versioned rollback, and migration checks.
+No-backup/manual-only operation is acceptable for disposable demos only. A real M5 restaurant
+pilot remains blocked until an automated encrypted off-VPS database/upload backup and successful
+restore rehearsal exist. Proposed minimum: daily backup, seven-day retention, RPO 24 hours, RTO 4
+hours; Yazan must accept or replace those recovery targets.
+
+## Tracking update — 15 August 2026 (M3 single-VPS runtime baseline started)
+
+Yazan accepted ADR 0008's RPO 24 hours and RTO 4 hours. M3 implementation starts with the hardened
+runtime baseline: production binds Node to loopback behind nginx, `systemd` runs one unprivileged
+process with restart/sandbox controls, uploads move to a configurable persistent path outside
+release directories, health exposes a non-secret release identifier, and SIGTERM performs graceful
+socket/HTTP/database shutdown. Versioned deployment and rollback artifacts plus automated
+configuration tests are included in this point. Backup/restore and Sentry are the next separately
+tested M3 points.
+
+## Tracking update — 15 August 2026 (M3 single-VPS runtime baseline implemented)
+
+Implemented `server/runtimeConfig.js` and production runtime controls: loopback is the default
+production bind, `UPLOAD_DIR` must be an absolute dedicated persistent path, release IDs are
+validated and exposed by health probes, and SIGTERM/SIGINT close Socket.IO and Prisma within the
+systemd deadline. Local development retains explicit safe defaults.
+
+Added hardened nginx and systemd templates, a secrets-free production environment template,
+versioned release deployment and application-only rollback scripts, and the
+[single-VPS pilot runbook](operations/single-vps-pilot-runbook.md). Deployments exclude `.env`,
+uploads, Git metadata, dependencies, and prior builds; apply backward-compatible migrations before
+an atomic symlink switch; and verify readiness after restart. Focused runtime/configuration tests,
+shell syntax, ESLint, TypeScript, diff checks, and a production-mode PostgreSQL health/graceful-
+shutdown smoke test pass. Full application regression is in progress.
+
+## Tracking update — 15 August 2026 (M3 single-VPS runtime baseline complete)
+
+Final verification passes 44 backend unit/configuration tests, 26 disposable-PostgreSQL integration
+tests, 45 frontend tests, 8 desktop/mobile browser E2E tests, ESLint, TypeScript, Prisma validation,
+production build, shell syntax checks, and a production-mode startup/readiness/SIGTERM smoke test.
+No temporary test databases remain. The existing large frontend chunk warning is unchanged.
+
+The first M3 point is complete in code and documentation; real VPS installation/TLS verification
+remains environment evidence, not local code work. The next M3 point is automated encrypted
+off-VPS PostgreSQL/upload backup with daily scheduling, seven-day retention, failure monitoring,
+and a timed isolated restore proving the accepted RPO 24 hours/RTO 4 hours.
 
 ## Fair-split agreement
 
@@ -583,7 +636,8 @@ documentation, fixture, or regression task instead of waiting.
 | Session-storage threat model and token classes | M1 auth/session | Both | Day 3 |
 | RLS versus documented compensating controls — Yazan selected ADR 0006 B; Alaa/staging pending | M1 tenant integrity | Both | Sign-off/staging required |
 | POS disposition: **Park** | Schema/migration scope | Both | Day 3 |
-| RPO/RTO, providers, retention, ordering pause/capacity | M3 operations and M2 abuse controls | Both | Day 5 |
+| Phase 1 hosting/providers — single VPS/nginx/systemd/local PostgreSQL/uploads/in-memory limiter/Sentry/uptime selected in ADR 0008 | M3 pilot operations | Yazan | Architecture selected; implementation pending |
+| Backup method, RPO/RTO, and retention — automated off-VPS required; RPO 24h/RTO 4h accepted | M3 recovery and M5 gate | Yazan | Targets accepted 15 Aug; implementation/rehearsal pending |
 
 ## Work sequence
 
@@ -619,18 +673,20 @@ documentation, fixture, or regression task instead of waiting.
 
 ### Y3 — M3 production infrastructure (Weeks 6–8)
 
-- Durable object storage with signed upload policy, verification, ownership-safe deletion, and
-  lifecycle/retention.
-- Redis/equivalent shared limiter; PostgreSQL remains the durable source for committed-order
-  idempotency.
-- Separate staging/production data, secrets, storage, and deployment credentials.
-- Hosted error tracking, metrics, dashboards, release version, alert rules, and operational
-  runbooks.
-- Pagination/bounded analytics filters, query plans/indexes, approved RPO/RTO, PITR and
-  timed restore rehearsal.
+- **Selected Phase 1 topology:** one hardened VPS with nginx, one `systemd` Node process,
+  localhost PostgreSQL, protected local uploads, bounded in-memory limiting, Sentry, and external
+  uptime monitoring.
+- Add deployment scripts/configuration, TLS renewal, firewall/SSH/service hardening, secret
+  permissions, release rollback, log rotation, disk/database/process alerts, and runbooks.
+- Keep pagination/bounded analytics filters and query-plan/load evidence before pilot.
+- Add automated encrypted off-VPS PostgreSQL/upload backup, retention monitoring, and timed restore
+  rehearsal before real restaurant data; manual-only remains a blocker.
+- Defer managed object storage, Redis/shared limiting, managed PostgreSQL, and high availability to
+  ADR 0008 growth triggers.
 
-**Exit evidence:** secure-upload tests, synthetic alert, staging isolation proof, restore
-within RPO/RTO, measured API p95/error rate.
+**Pilot exit evidence:** secure local-upload tests, TLS/systemd/nginx hardening checks, synthetic
+Sentry/uptime alert, clean-server rebuild, off-VPS restore within approved RPO/RTO, and measured API
+p95/error rate/capacity on the selected VPS.
 
 ### Y4 — M4 through launch (Weeks 9–12)
 

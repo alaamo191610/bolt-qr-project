@@ -387,7 +387,7 @@ const CustomerMenu: React.FC = () => {
   }, [compareIds.length, prefersReducedMotion]);
   // fetch menu
   const loadMenuItems = async (tableCode: string, restaurantId?: string | null) => {
-    if (!tableCode) {
+    if (!tableCode || !restaurantId) {
       setError({ code: "status.tableNotFound" });
       return;
     }
@@ -395,18 +395,12 @@ const CustomerMenu: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const table = await tableService.getTableByCode(tableCode, restaurantId);
-      if (!table) {
-        setError({
-          code: "status.tableNotFound",
-          params: { table: tableCode },
-        });
-        return;
-      }
+      // Current QR URLs carry the compatibility restaurant ID and a separate
+      // high-entropy capability. Do not resolve a predictable table code as
+      // public identity; the capability exchange authorizes ordering.
+      setAdminId(restaurantId);
 
-      setAdminId(table.admin_id);
-
-      const items = await menuService.getMenuItems(table.admin_id) as unknown as Array<MenuItem & {
+      const items = await menuService.getMenuItems(restaurantId) as unknown as Array<MenuItem & {
         ingredients_details?: { ingredient: Ingredient }[];
         categories?: Category | null;
         has_modifiers?: boolean;

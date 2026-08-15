@@ -26,7 +26,7 @@ test('live health endpoint is available through the HTTP harness', async () => {
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.deepEqual(body, { status: 'ok' });
+  assert.deepEqual(body, { status: 'ok', release: 'development' });
   assert.equal(response.headers.get('x-request-id'), 'http-harness-1');
 });
 

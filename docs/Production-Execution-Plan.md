@@ -410,6 +410,59 @@ until Alaa's legacy QR/admin-control/client handoff and real-backend golden E2E 
 tracking expiry/recovery decision is approved, and staging evidence exists. Yazan's next unblocked
 implementation area is M3, gated where applicable by provider and RPO/RTO decisions.
 
+## Implementation tracking — 15 August 2026 (single-VPS pilot architecture selected)
+
+Yazan selected ADR 0008 for the easy Phase 1 pilot: one VPS, one Node process under `systemd`,
+localhost PostgreSQL, local uploads, bounded in-memory limiting, nginx, Sentry, and external uptime
+monitoring. Managed object storage, Redis, managed PostgreSQL, horizontal scaling, and HA are
+deferred to explicit business/capacity triggers. The environment accepts a single failure domain
+and maintenance downtime; it must not be represented as highly available.
+
+Minimum VPS security, deployment rollback, migration verification, log/disk/process/database
+monitoring, and load evidence remain required. No-backup/manual-only operation is allowed only for
+disposable demos. M5 with real restaurant data is blocked until automated encrypted off-VPS
+database/upload backup and a restore rehearsal pass. Proposed minimum recovery targets are daily
+backup, seven-day retention, RPO 24 hours, and RTO 4 hours, pending explicit acceptance or
+replacement.
+
+## Implementation tracking — 15 August 2026 (M3 single-VPS runtime baseline started)
+
+Yazan accepted RPO 24 hours and RTO 4 hours in ADR 0008. The first M3 implementation point covers
+the deployable VPS runtime boundary: nginx/TLS/WebSocket proxy configuration, one hardened
+unprivileged `systemd` Node service, loopback-only application binding, persistent configurable
+uploads outside releases, release-aware health responses, graceful shutdown, and versioned
+deploy/rollback operations. Automated configuration tests will accompany it. Encrypted off-VPS
+backup/restore and Sentry follow as separate evidence-bearing points.
+
+## Implementation tracking — 15 August 2026 (M3 single-VPS runtime baseline implemented)
+
+The first M3 runtime point is implemented. Production now defaults to loopback, requires a
+validated absolute persistent upload directory outside releases, exposes a validated release ID
+through health probes, and shuts down HTTP/Socket.IO/Prisma cleanly under SIGTERM. nginx and
+systemd templates enforce TLS/WebSocket proxying, least privilege, filesystem sandboxing, restart
+and stop deadlines. Versioned deploy/rollback scripts preserve mutable state and health-check every
+switch; database migrations remain forward/backward-compatible across the rollback window.
+
+The operations runbook and production environment template are published. Focused tests validate
+runtime fail-closed rules, systemd/nginx controls, deployment exclusions/atomic switching, shell
+syntax, and production-mode startup/readiness/graceful shutdown against PostgreSQL. ESLint and
+TypeScript pass. Full regression evidence is in progress; backup/restore and Sentry remain the next
+M3 implementation points.
+
+## Implementation tracking — 15 August 2026 (M3 single-VPS runtime baseline complete)
+
+Final evidence passes 44 backend unit/configuration tests, 26 disposable-PostgreSQL integration
+tests, 45 frontend tests, 8 desktop/mobile browser E2E tests, ESLint, TypeScript, Prisma validation,
+production build, deployment-script syntax checks, and a production-mode PostgreSQL
+startup/readiness/graceful-shutdown smoke. No temporary test databases remain. The existing large
+frontend chunk warning is unchanged.
+
+The runtime baseline is locally complete. External evidence still requires installing the supplied
+nginx/systemd/configuration on the selected VPS and validating real TLS/firewall/service behavior.
+The next M3 implementation point is automated encrypted off-VPS database/upload backup, daily
+scheduling, seven-day retention, failure visibility, and a timed isolated restore against RPO 24
+hours/RTO 4 hours.
+
 ## Outcome and planning rule
 
 Release a secure, observable, recoverable multi-tenant restaurant QR platform without
@@ -431,10 +484,10 @@ related work from being correctly implemented.
 | POS schema disposition: **Park** | Both | Day 3 | Record the recommended non-destructive disposition and controls for dormant tables. |
 | Log retention, contents, and access control | Both | Day 3 | Required before structured production logs contain user/organization IDs. |
 | 12-week schedule and pilot/launch dates | Both | Day 1 | Establishes the release commitment and scope-control baseline. |
-| Production providers: storage, error tracking, mail, shared rate limit | Both | Day 5 | Required for M3 implementation and environment work. |
+| Phase 1 infrastructure: **single VPS/local storage/local PostgreSQL/in-memory limiter/nginx/systemd/Sentry/uptime selected in ADR 0008** | Yazan | Selected 15 Aug | Fixes the pilot deployment topology; managed providers defer to growth triggers. |
 | Browser session-storage strategy and threat model | Both | Day 3 | Sets the security controls for restaurant and SuperAdmin sessions. |
 | PostgreSQL RLS adoption or compensating controls **(Yazan selected ADR 0006 B)** | Both | Alaa/staging sign-off pending | Release 1 uses constraints/controls; RLS follows safe runtime-role work. |
-| RPO/RTO and infrastructure budget | Both | Day 5 | Makes backup, restore, and pilot gates measurable. |
+| Backup/RPO/RTO: automated encrypted off-VPS backup required; **RPO 24h/RTO 4h accepted** | Yazan | Accepted 15 Aug | Implementation and timed restore rehearsal remain before M5. |
 | Restaurant ordering pause and capacity behaviour | Both | Day 5 | Defines safe operation during overload or kitchen closure. |
 | SuperAdmin MFA/re-authentication and session duration | Both | Day 5 | Sets the platform-admin security bar before external production use. |
 
@@ -464,7 +517,7 @@ PostgreSQL/fixture/authentication harness and production-shaped migration rehear
 | M0 — Decisions and test foundation | Week 1 — In progress | Decisions, CI, HTTP harness, disposable PostgreSQL test DB, fixtures, authentication characterization, and migration rehearsal are recorded; staging baseline remains. | Yazan: CI/HTTP/database/contract/session/error foundation and rehearsal complete; staging evidence next. Alaa: golden E2E smoke exists; remaining browser fixtures/UI inventory parallel. | Build, lint, Prisma validation, unit/frontend/integration tests, and local E2E smoke pass. CI/staging evidence remains. |
 | M1 — Tenant and safety baseline | Weeks 2–3 — Foundation implemented | Request context, safe errors, limiter, token foundation, expand/backfill/local verification, and auth/tenant access extraction are implemented; enforcement remains. | Yazan: local M1 implementation complete except blocked enforcement/staging evidence. Alaa: typed error/session UX can consume the published baseline. | Unit/characterization/tenant verification pass; staging zero-issue report and RLS/control decision are required before enforcement. |
 | M2 — Trustworthy customer order cycle | Weeks 4–5 | Public ordering is capability-scoped and abuse-resistant; duplicate/retry/reconnect behaviour is correct. | Yazan: high-entropy table capability, ordering controls/idempotency, socket/order security. Alaa: retry-safe checkout, recovery states, EN/AR/mobile UX. | Replay creates one order; capability cannot cross tenant/table; authoritative state survives refresh, mobile resume, reconnect, and server restart. |
-| M3 — Production infrastructure | Weeks 6–8 | Durable uploads, shared rate limiting, hosted monitoring, alerts, backups, data lifecycle, and production/staging separation. | Yazan: storage, shared limiter, monitoring, RPO/RTO restore, retention/runbooks. Alaa: frontend telemetry, resilient uploads/pagination, performance/accessibility fixes. | Secure upload tests, alert from synthetic failure, restore meets approved RPO/RTO, stable isolated staging. |
+| M3 — Phase 1 pilot infrastructure | Weeks 6–8 | Hardened single VPS, nginx/TLS, one systemd Node process, localhost PostgreSQL, protected local uploads, bounded local limiter, Sentry/uptime, rollback and backup/restore operations. | Yazan: VPS/deployment/database/security/monitoring/recovery. Alaa: frontend telemetry, resilient upload/pagination, performance/accessibility fixes. | Hardening checks, secure local-upload tests, synthetic alert, measured capacity, clean rebuild, and automated off-VPS restore within approved RPO/RTO. |
 | M4 — Quality hardening | Weeks 9–10 | Full regression, migration rehearsal, performance/security checks, and P0/P1 closure. | Yazan: API/integration/security/performance. Alaa: E2E/browser/device/accessibility and UX defects. | No P0/P1; migration rehearsal succeeds; SLO evidence is measured and accepted. |
 | M5 — Controlled pilot | Week 11 | One to three restaurants operate under monitored support. | Both. | Seven stable days; support, rollback, and incident runbooks proven. |
 | M6 — Production launch | Week 12 | Approved production release with staffed monitoring and rollback window. | Both. | Written Go decision, healthy metrics, backup confirmation, and rollback window closed. |
@@ -519,12 +572,29 @@ PostgreSQL/fixture/authentication harness and production-shaped migration rehear
 
 ### M3/M4: make production supportable and prove it
 
-- Move uploads to managed object storage with signed rules and ownership-safe deletion.
-- Add a shared production rate-limit store, hosted errors, dashboards, alert rules, and
-  retention controls.
+- For the ADR 0008 Phase 1 pilot, harden local uploads and the bounded in-memory limiter on one VPS;
+  defer managed object storage and shared limiting until its growth triggers occur.
+- Add Sentry, external uptime monitoring, release IDs, actionable alerts, and retention controls.
 - Implement pagination and bounded analytics queries before load testing.
-- Define and meet the approved RPO/RTO; rehearse restore, migration, failed-deploy,
-  socket-reconnect, secret-rotation, and rollback paths.
+- Define and meet the approved RPO/RTO; automate an encrypted off-VPS database/upload backup and
+  rehearse clean-server restore, migration, failed-deploy, socket-reconnect, secret-rotation, and
+  rollback paths. Manual-only backup cannot satisfy the real-pilot gate.
+
+## Implementation tracking — 15 August 2026 (secure uploads, revocation, and QR cleanup)
+
+- Uploads now have durable organization/uploader ownership records. Upload validation persists
+  only verified image files, and deletion is limited to the uploader or an OWNER/MANAGER in the
+  same organization. Cross-tenant filenames fail closed.
+- Order-tracking credentials now expire after six hours, carry a persisted `jti`, and are
+  rejected after token-row revocation. Admin Socket.IO sessions retain the resolved membership
+  identity and are disconnected when that membership changes or is suspended.
+- The predictable `GET /api/tables/public/:code` route and unused client wrapper were removed;
+  current QR clients use the capability exchange endpoint only.
+- Added organization/membership, upload isolation, tracking revocation, and socket-revocation
+  integration coverage. Disposable PostgreSQL integration now passes 29 tests.
+- Added a fail-closed tenant enforcement migration. It is intentionally not being deployed to
+  staging or production from this change: the ADR 0006 zero-issue staging report remains the
+  required gate before migration application.
 
 ## Required test evidence
 
@@ -547,9 +617,9 @@ recorded in the completion register. “Code is written” is not a completion s
 |---|---|---|---|---|---|
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
-| M1 safety baseline | Foundation implemented | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, and cross-tenant negatives pass; staging verify/enforce remain. | — | 14 Aug 2026 |
-| M2 bounded order cycle | Yazan local backend complete; joint/frontend/staging closure remains | — | QR/session, idempotency, capacity, availability, telemetry, atomic transitions, authorized/versioned realtime, and authoritative recovery pass with 37 unit, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests. Legacy QR/admin UI, tracking-expiry decision, real-backend golden E2E, Alaa handoff, and staging evidence remain. | Yazan + Alaa | 15 Aug 2026 |
-| M3 production infrastructure | Not started | — | — | — | — |
+| M1 safety baseline | Foundation implemented; final enforcement gated | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, upload ownership, and cross-tenant negatives pass; staging zero-issue verify/enforce remains. | — | 15 Aug 2026 |
+| M2 bounded order cycle | Yazan local backend complete; joint/frontend/staging closure remains | — | QR/session, idempotency, capacity, availability, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, and authoritative recovery pass with 37 unit, 29 PostgreSQL integration, 45 frontend, and 8 browser E2E tests. Real-backend golden E2E, Alaa handoff, and staging evidence remain. | Yazan + Alaa | 15 Aug 2026 |
+| M3 Phase 1 pilot infrastructure | In progress — runtime baseline locally complete | ADR 0008 | 44 unit/config, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests plus production runtime smoke pass. Backup/restore, Sentry, real VPS/TLS execution, and capacity evidence remain. | Yazan | 15 Aug 2026 |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |
 | M6 launch | Not started | — | — | — | — |

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { TOKEN_TYPES, verifyToken } from './tokenPolicy.js';
+import { TOKEN_TYPES, issueToken, verifyToken } from './tokenPolicy.js';
 
 export const REALTIME_PROTOCOL_VERSION = 1;
 export const SOCKET_AUTHORIZATION_FAILED = 'SOCKET_AUTHORIZATION_FAILED';
+export const ORDER_TRACKING_TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 
 const positiveInteger = value => {
   const parsed = Number(value);
@@ -60,6 +61,9 @@ export const createOrderRealtimeService = ({
     throw new Error('Realtime tenant claim resolver is required');
   }
 
+  const trackingTokenStore = db.orderTrackingToken;
+  const activeSockets = new Map();
+
   const authorizeAdmin = async payload => {
     const token = typeof payload?.token === 'string' ? payload.token : '';
     if (!token) throw new OrderTrackingAuthorizationError('INVALID_CREDENTIAL');
@@ -82,12 +86,72 @@ export const createOrderRealtimeService = ({
     return {
       organizationId: session.organization.id,
       adminId: session.admin.id,
+      userId: session.user?.id,
       room: adminRealtimeRoom({
         organizationId: session.organization.id,
         adminId: session.admin.id,
       }),
       legacyRoom: `admin_${session.admin.id}`,
     };
+  };
+
+  const getOrCreateTrackingToken = async order => {
+    if (!trackingTokenStore) {
+      return issueToken(TOKEN_TYPES.ORDER_TRACKING, {
+        orderId: order.id,
+        organizationId: order.organization_id,
+        adminId: order.admin_id,
+      }, tokenSecret, { subject: String(order.id) });
+    }
+
+    const existing = await trackingTokenStore.findUnique({ where: { order_id: order.id } });
+    if (existing && !existing.revoked_at && existing.expires_at > new Date()) {
+      return issueToken(TOKEN_TYPES.ORDER_TRACKING, {
+        orderId: order.id,
+        organizationId: order.organization_id,
+        adminId: order.admin_id,
+        jti: existing.jti,
+      }, tokenSecret, { subject: String(order.id) });
+    }
+
+    const jti = randomUUID();
+    const expiresAt = new Date(Date.now() + ORDER_TRACKING_TOKEN_TTL_MS);
+    try {
+      await trackingTokenStore.upsert({
+        where: { order_id: order.id },
+        create: {
+          order_id: order.id,
+          organization_id: order.organization_id,
+          admin_id: order.admin_id,
+          jti,
+          expires_at: expiresAt,
+        },
+        update: {
+          jti,
+          expires_at: expiresAt,
+          revoked_at: null,
+          organization_id: order.organization_id,
+          admin_id: order.admin_id,
+        },
+      });
+    } catch (error) {
+      if (error?.code !== 'P2002') throw error;
+      const concurrent = await trackingTokenStore.findUnique({ where: { order_id: order.id } });
+      if (!concurrent) throw error;
+      return issueToken(TOKEN_TYPES.ORDER_TRACKING, {
+        orderId: order.id,
+        organizationId: order.organization_id,
+        adminId: order.admin_id,
+        jti: concurrent.jti,
+      }, tokenSecret, { subject: String(order.id) });
+    }
+
+    return issueToken(TOKEN_TYPES.ORDER_TRACKING, {
+      orderId: order.id,
+      organizationId: order.organization_id,
+      adminId: order.admin_id,
+      jti,
+    }, tokenSecret, { subject: String(order.id) });
   };
 
   const resolveTrackingOrder = async ({ orderId: requestedOrderId, trackingToken }) => {
@@ -107,8 +171,24 @@ export const createOrderRealtimeService = ({
       positiveInteger(claims.orderId) !== orderId
       || typeof claims.organizationId !== 'string'
       || typeof claims.adminId !== 'string'
+      || typeof claims.jti !== 'string'
     ) {
       throw new OrderTrackingAuthorizationError('NOT_FOUND');
+    }
+
+    if (trackingTokenStore) {
+      const tokenRecord = await trackingTokenStore.findFirst({
+        where: {
+          order_id: orderId,
+          organization_id: claims.organizationId,
+          admin_id: claims.adminId,
+          jti: claims.jti,
+          revoked_at: null,
+          expires_at: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (!tokenRecord) throw new OrderTrackingAuthorizationError('INVALID_CREDENTIAL');
     }
 
     const order = await db.order.findFirst({
@@ -144,9 +224,15 @@ export const createOrderRealtimeService = ({
 
   const register = io => {
     io.on('connection', socket => {
+      const socketKey = socket.id || socket;
+      activeSockets.set(socketKey, socket);
+      socket.on('disconnect', () => activeSockets.delete(socketKey));
       socket.on('join-admin', async (payload, acknowledge) => {
         try {
           const authorization = await authorizeAdmin(payload);
+          socket.data = socket.data || {};
+          socket.data.adminAuthorization = authorization;
+          activeSockets.set(socketKey, socket);
           await socket.join([authorization.room, authorization.legacyRoom]);
           if (typeof acknowledge === 'function') {
             acknowledge({ ok: true, protocolVersion: REALTIME_PROTOCOL_VERSION });
@@ -182,6 +268,24 @@ export const createOrderRealtimeService = ({
     });
   };
 
+  const revokeMembership = ({ organizationId, userId }) => {
+    for (const [socketKey, socket] of activeSockets) {
+      const authorization = socket.data?.adminAuthorization;
+      if (authorization?.organizationId !== organizationId || authorization.userId !== userId) continue;
+      activeSockets.delete(socketKey);
+      socket.disconnect?.(true);
+    }
+  };
+
+  const revokeTrackingToken = async ({ jti, organizationId } = {}) => {
+    if (!trackingTokenStore || typeof jti !== 'string') return 0;
+    const result = await trackingTokenStore.updateMany({
+      where: { jti, ...(organizationId ? { organization_id: organizationId } : {}) },
+      data: { revoked_at: new Date() },
+    });
+    return result.count;
+  };
+
   const emitCreated = (io, order, orderRepresentation) => {
     const envelope = createOrderEventEnvelope(order, { orderRepresentation });
     io.to(adminRealtimeRoom({
@@ -210,6 +314,9 @@ export const createOrderRealtimeService = ({
     authorizeAdmin,
     authorizeOrder,
     resolveTrackingOrder,
+    getOrCreateTrackingToken,
+    revokeMembership,
+    revokeTrackingToken,
     register,
     emitCreated,
     emitStatus,

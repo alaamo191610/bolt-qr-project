@@ -8,6 +8,7 @@ import path from 'path';
 import prisma from './db.js';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
+import { mkdirSync } from 'node:fs';
 import { readFile, unlink } from 'fs/promises';
 import { ORDER_STATUSES, canTransitionOrder } from './orderTransitions.js';
 import {
@@ -47,13 +48,17 @@ import {
   OrderTrackingAuthorizationError,
   createOrderRealtimeService,
 } from './orderRealtime.js';
+import { resolveRuntimeConfig } from './runtimeConfig.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
+const runtimeConfig = resolveRuntimeConfig();
 
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is required in production');
 }
+
+mkdirSync(runtimeConfig.uploadDirectory, { recursive: true, mode: 0o750 });
 
 const configuredOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -142,7 +147,7 @@ io.on('connection', (socket) => {
 });
 
 const upload = multer({
-  dest: 'uploads/',
+  dest: runtimeConfig.uploadDirectory,
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter(req, file, callback) {
     const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -204,7 +209,12 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(runtimeConfig.uploadDirectory, {
+  dotfiles: 'deny',
+  index: false,
+  maxAge: isProduction ? '1y' : 0,
+  immutable: isProduction,
+}));
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
 const orderRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
@@ -338,13 +348,13 @@ const publicAdminSelect = {
 };
 
 app.get('/api/health/live', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', release: runtimeConfig.releaseVersion });
 });
 
 app.get('/api/health/ready', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: 'ready', database: 'ok' });
+    res.json({ status: 'ready', database: 'ok', release: runtimeConfig.releaseVersion });
   } catch (err) {
     console.error('Readiness check failed:', err);
     res.status(503).json({ status: 'not_ready', database: 'unavailable' });
@@ -355,7 +365,7 @@ app.get('/api/health/ready', async (_req, res) => {
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: 'ok', database: 'ok' });
+    res.json({ status: 'ok', database: 'ok', release: runtimeConfig.releaseVersion });
   } catch (err) {
     console.error('Health check failed:', err);
     res.status(503).json({ status: 'not_ready' });
@@ -603,6 +613,10 @@ app.patch(
         role: updated.role,
         status: updated.status,
         defaultBranch: updated.default_branch,
+      });
+      orderRealtime.revokeMembership({
+        organizationId: req.auth.organizationId,
+        userId: updated.user_id,
       });
     } catch (err) {
       if (err.status) return res.status(err.status).json({ error: err.message });
@@ -1555,11 +1569,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       }
     }
 
-    const trackingToken = issueToken(TOKEN_TYPES.ORDER_TRACKING, {
-      orderId: fullOrder.id,
-      adminId: fullOrder.admin_id,
-      organizationId: fullOrder.organization_id,
-    }, JWT_SECRET, { subject: String(fullOrder.id) });
+    const trackingToken = await orderRealtime.getOrCreateTrackingToken(fullOrder);
     res.setHeader('Idempotency-Replayed', String(replayed));
     res.status(replayed ? 200 : 201).json({ ...presentedOrder, tracking_token: trackingToken });
   } catch (err) {
@@ -1900,28 +1910,6 @@ app.post(
     }
   },
 );
-
-// Public endpoint for QR code access (No auth required)
-app.get('/api/tables/public/:code', async (req, res) => {
-  try {
-    const tables = await prisma.table.findMany({
-      where: {
-        ...(req.query.adminId ? { admin_id: req.query.adminId } : {}),
-        code: {
-          equals: req.params.code,
-          mode: 'insensitive'
-        }
-      },
-      take: 2
-    });
-    if (tables.length > 1) {
-      return res.status(409).json({ error: 'Ambiguous table code. Please scan a current QR code.' });
-    }
-    const table = tables[0];
-    if (!table) return res.status(404).json({ error: 'Table not found' });
-    res.json(table);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 // 🆕 Public endpoint for customer pricing settings (No auth required)
 // Customers access this via table code from QR code URL
@@ -2443,31 +2431,57 @@ app.put('/api/admin/theme', authenticate, async (req, res) => {
 });
 
 // --- Uploads ---
-app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
+app.post('/api/upload', authenticate, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  readFile(req.file.path).then(buffer => {
+  try {
+    const buffer = await readFile(req.file.path);
     if (!hasImageSignature(buffer, req.file.mimetype)) {
-      return unlink(req.file.path)
-        .catch(() => {})
-        .then(() => res.status(400).json({ error: 'Uploaded file content does not match its image type' }));
+      await unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Uploaded file content does not match its image type' });
     }
-    // In prod, upload to S3 here. For now, return local path.
+
+    await prisma.upload.create({
+      data: {
+        organization_id: req.auth.organizationId,
+        uploaded_by_user_id: req.auth.userId,
+        filename: req.file.filename,
+        original_name: req.file.originalname,
+        mime_type: req.file.mimetype,
+        size_bytes: req.file.size,
+      },
+    });
+
+    // In prod, upload to S3 here. For now, return the tenant-owned local asset path.
     const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    return res.json({ url: fileUrl });
-  }).catch(() => res.status(400).json({ error: 'Unable to inspect uploaded file' }));
+    return res.status(201).json({ url: fileUrl, filename: req.file.filename });
+  } catch {
+    await unlink(req.file.path).catch(() => {});
+    return res.status(400).json({ error: 'Unable to store uploaded file' });
+  }
 });
 
 app.delete('/api/upload/:filename', authenticate, async (req, res) => {
   const filename = path.basename(req.params.filename);
   if (filename !== req.params.filename) return res.status(400).json({ error: 'Invalid filename' });
-  const filepath = path.join('uploads', filename);
   try {
-    await unlink(filepath);
+    const asset = await prisma.upload.findFirst({
+      where: { filename, organization_id: req.auth.organizationId, deleted_at: null },
+      select: { id: true, uploaded_by_user_id: true },
+    });
+    if (!asset) return res.status(404).json({ error: 'Upload not found' });
+    if (asset.uploaded_by_user_id !== req.auth.userId
+      && !['OWNER', 'MANAGER'].includes(req.auth.membershipRole)) {
+      return res.status(403).json({ error: 'You do not have permission to delete this upload' });
+    }
+
+    const filepath = path.join(runtimeConfig.uploadDirectory, filename);
+    await unlink(filepath).catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+    await prisma.upload.delete({ where: { id: asset.id } });
     res.json({ success: true });
   } catch (err) {
-    // If file doesn't exist, just return success
-    if (err.code === 'ENOENT') return res.json({ success: true });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Unable to delete upload' });
   }
 });
 
@@ -2645,9 +2659,41 @@ app.use((err, req, res, next) => {
   return sendError(res, req, err);
 });
 
-const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
-  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  server.listen(runtimeConfig.port, runtimeConfig.host, () => {
+    console.log(JSON.stringify({
+      event: 'server_started',
+      host: runtimeConfig.host,
+      port: runtimeConfig.port,
+      release: runtimeConfig.releaseVersion,
+    }));
+  });
+
+  let shuttingDown = false;
+  const shutdown = signal => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.info(JSON.stringify({ event: 'server_shutdown_started', signal }));
+    const forceExit = setTimeout(() => {
+      console.error(JSON.stringify({ event: 'server_shutdown_forced', signal }));
+      process.exit(1);
+    }, runtimeConfig.shutdownTimeoutMs);
+    forceExit.unref();
+
+    io.close(async () => {
+      try {
+        await prisma.$disconnect();
+        clearTimeout(forceExit);
+        console.info(JSON.stringify({ event: 'server_shutdown_complete', signal }));
+        process.exit(0);
+      } catch (error) {
+        console.error('Server shutdown failed:', logSafeError(error));
+        process.exit(1);
+      }
+    });
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
 }
 
 export {
@@ -2660,4 +2706,6 @@ export {
   tableSessionOrderRateLimit,
   organizationOrderRateLimit,
   publicOrderRejectionTelemetry,
+  orderRealtime,
+  runtimeConfig,
 };

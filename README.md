@@ -30,6 +30,9 @@
 
 Open [the super-admin login](http://localhost:5175/super-admin/login?lang=en).
 
+For the Phase 1 VPS topology, deployment, security boundaries, and rollback procedure, see the
+[single-VPS pilot runbook](docs/operations/single-vps-pilot-runbook.md).
+
 The API runs at `http://localhost:3000/api`. For local development, `.env` should include:
 
 ```dotenv

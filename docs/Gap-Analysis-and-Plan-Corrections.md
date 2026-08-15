@@ -660,7 +660,7 @@ cheaper. The net is still short of four weeks.
 The six existing decisions are the right ones. Four are missing:
 
 **1. Order tracking token lifetime and expiry behaviour.**
-Currently 24 hours (`server/index.js:1570`) with no refresh path. A customer who orders at
+Now 6 hours (`server/tokenPolicy.js`) with no refresh path. A customer who orders at
 8pm and reopens the tab the next evening gets a dead link with no recovery. This is a product
 decision, and §8's "Customer order" journey acceptance depends on it. Options: extend the
 lifetime, add a refresh endpoint, or accept expiry with a clear expired-link UI state.

@@ -58,16 +58,6 @@ export const tableService = {
     }
   },
 
-  // Get table by code
-  async getTableByCode(code: string, adminId?: string | null) {
-    try {
-      return await api.get(`/tables/public/${encodeURIComponent(code)}`, adminId ? { adminId } : undefined);
-    } catch (error) {
-      console.error('Error fetching table by code:', error)
-      throw error
-    }
-  },
-
   // Rotate (create or replace) a table's QR capability. Returns the raw
   // secret once — it is never retrievable again after this call returns.
   async rotateCapability(tableId: number | string): Promise<TableCapabilityRotation> {

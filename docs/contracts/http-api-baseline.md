@@ -87,3 +87,11 @@ Authorized/versioned order realtime and authoritative reconnect/resume refetch a
 documented in `order-realtime-integrity.md`. The remaining M2 launch work is the joint tracking
 expiry/recovery decision, legacy QR/admin UI and client handoff, real-backend golden E2E, and
 staging evidence.
+
+The legacy `GET /api/tables/public/:code` predictable table lookup has been removed. QR clients
+must use the capability embedded in the current QR and `POST /api/public/table-session`; no
+public endpoint accepts a table code as proof of table identity.
+
+Authenticated uploads are tenant-owned records. Deletion requires the current organization and
+either the uploading identity or an OWNER/MANAGER membership; cross-tenant filenames return a
+not-found response.

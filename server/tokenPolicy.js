@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 
 export const TOKEN_TYPES = Object.freeze({
   RESTAURANT_SESSION: 'restaurant-session',
@@ -18,7 +19,7 @@ const tokenDefinitions = Object.freeze({
   },
   [TOKEN_TYPES.ORDER_TRACKING]: {
     audience: 'order-tracking',
-    expiresIn: '24h',
+    expiresIn: '6h',
   },
   [TOKEN_TYPES.TABLE_SESSION]: {
     audience: 'table-ordering',
@@ -32,7 +33,7 @@ export const issueToken = (type, payload, secret, { subject } = {}) => {
   const definition = tokenDefinitions[type];
   if (!definition) throw new Error(`Unknown token type: ${type}`);
   return jwt.sign(
-    { ...payload, purpose: type },
+    { ...payload, purpose: type, jti: payload?.jti || randomUUID() },
     secret,
     {
       issuer: issuer(),

@@ -16,8 +16,8 @@ expected class and rejects tokens issued for another class. The token purpose is
 from a request body or URL. Restaurant session subjects are the login identity; the legacy
 restaurant profile ID remains a compatibility claim until the tenant migration is complete.
 
-The current expiry remains 24 hours to avoid silently changing the pending tracking-recovery
-decision. Before M2, both owners must approve shorter tracking/table-session lifetimes and
+Tracking credentials expire after 6 hours with no refresh endpoint. Before M2, both owners must
+approve shorter tracking/table-session lifetimes and
 the expired-token recovery UX.
 
 New order-tracking credentials bind the order, organization, compatibility restaurant profile,

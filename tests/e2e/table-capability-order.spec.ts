@@ -21,16 +21,6 @@ const json = (route: Route, status: number, body: unknown) =>
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function mockMenuAndTable(page: Page) {
-  await page.route('**/api/tables/public/**', (route) =>
-    json(route, 200, {
-      id: TABLE_ID,
-      admin_id: ADMIN_ID,
-      code: TABLE_CODE,
-      capacity: 4,
-      status: 'available',
-    })
-  );
-
   await page.route('**/api/public/menus**', (route) =>
     json(route, 200, [
       {

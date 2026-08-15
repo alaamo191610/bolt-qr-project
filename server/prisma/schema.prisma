@@ -115,6 +115,7 @@ model User {
   updated_at    DateTime  @default(now()) @updatedAt @db.Timestamptz
 
   memberships OrganizationUser[]
+  uploads     Upload[]
 
   @@index([active])
   @@map("users")
@@ -173,15 +174,16 @@ model Admin {
   max_menu_items     Int @default(50)
   max_staff_accounts Int @default(1)
 
-  organization   Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
-  default_branch Branch?       @relation("AdminDefaultBranch", fields: [default_branch_id], references: [id], onDelete: SetNull)
-  menus          Menu[]
-  tables         Table[]
-  orders         Order[]
-  promotions     Promotion[]
-  categories     Category[]
-  ingredients    Ingredient[]
-  audit_events   AuditEvent[]
+  organization          Organization?        @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  default_branch        Branch?              @relation("AdminDefaultBranch", fields: [default_branch_id], references: [id], onDelete: SetNull)
+  menus                 Menu[]
+  tables                Table[]
+  orders                Order[]
+  promotions            Promotion[]
+  categories            Category[]
+  ingredients           Ingredient[]
+  audit_events          AuditEvent[]
+  order_tracking_tokens OrderTrackingToken[]
 
   @@index([organization_id])
   @@index([default_branch_id])
@@ -442,6 +444,7 @@ model Order {
   order_items        OrderItem[]
   promotion          Promotion?              @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
   public_idempotency PublicOrderIdempotency?
+  tracking_token     OrderTrackingToken?
 
   @@unique([id, table_id, organization_id])
   @@index([admin_id])
@@ -536,6 +539,8 @@ model Organization {
   employees                Employee[]
   pos_roles                PosRole[]
   audit_events             AuditEvent[]
+  uploads                  Upload[]
+  order_tracking_tokens    OrderTrackingToken[]
 
   @@index([active])
   @@map("organizations")
@@ -577,6 +582,43 @@ model Branch {
   @@index([organization_id, active])
   @@index([organization_id, ordering_state, active])
   @@map("branches")
+}
+
+model OrderTrackingToken {
+  id              String    @id @default(uuid()) @db.Uuid
+  order_id        Int       @unique
+  organization_id String    @db.Uuid
+  admin_id        String    @db.Uuid
+  jti             String    @unique @db.Uuid
+  expires_at      DateTime  @db.Timestamptz
+  revoked_at      DateTime? @db.Timestamptz
+  created_at      DateTime  @default(now()) @db.Timestamptz
+
+  order        Order        @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  admin        Admin        @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id, admin_id, order_id, expires_at])
+  @@map("order_tracking_tokens")
+}
+
+model Upload {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organization_id     String    @db.Uuid
+  uploaded_by_user_id String    @db.Uuid
+  filename            String    @unique
+  original_name       String?
+  mime_type           String
+  size_bytes          Int
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  deleted_at          DateTime? @db.Timestamptz
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  uploaded_by  User         @relation(fields: [uploaded_by_user_id], references: [id], onDelete: Restrict)
+
+  @@index([organization_id, created_at])
+  @@index([uploaded_by_user_id, created_at])
+  @@map("uploads")
 }
 
 model Employee {

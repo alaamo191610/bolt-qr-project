@@ -26,8 +26,9 @@ wrong token classes, and expired credentials fail closed.
 
 The client emits `join-order` with `{ orderId, trackingToken }`. The server verifies the
 `order-tracking` issuer, audience, purpose, expiry, order, organization, and restaurant scope,
-then confirms that the order still exists in that scope before joining the private room. A valid
-credential for another order or tenant cannot join. Join acknowledgement is one of:
+then confirms that the order still exists in that scope and that its persisted tracking-token
+record is active before joining the private room. A valid credential for another order, tenant,
+or revoked token cannot join. Join acknowledgement is one of:
 
 ```json
 { "ok": true, "protocolVersion": 1 }
@@ -37,9 +38,8 @@ credential for another order or tenant cannot join. Join acknowledgement is one 
 { "ok": false, "protocolVersion": 1, "code": "SOCKET_AUTHORIZATION_FAILED" }
 ```
 
-The failure acknowledgement deliberately does not reveal whether a token, tenant, or order was
-wrong. The current tracking-token lifetime remains 24 hours pending the separate D1
-expiry/recovery decision.
+The failure acknowledgement deliberately does not reveal whether a token, tenant, order, or
+revocation record was wrong. Tracking tokens expire after six hours and have no refresh endpoint.
 
 ## Versioned events
 
@@ -80,9 +80,9 @@ All `.v1` order events use this envelope:
 }
 ```
 
-The response is `Cache-Control: no-store`. Invalid/expired credentials return a safe `401`; an
-order/scope mismatch is indistinguishable from a missing order. Database failures remain `5xx`
-and are not mislabeled as token expiry.
+The response is `Cache-Control: no-store`. Invalid, expired, or revoked credentials return a safe
+`401`; an order/scope mismatch is indistinguishable from a missing order. Database failures
+remain `5xx` and are not mislabeled as token expiry.
 
 Customers rejoin and refetch on socket connect/reconnect, visible-page resume, and browser
 `pageshow`. Restaurant clients rejoin and refetch `GET /api/orders` on socket reconnect. This
@@ -98,7 +98,7 @@ recovers authoritative state after sleep, packet loss, process restart, or horiz
 
 ## Completion evidence — 15 August 2026
 
-The contract is implemented with 37 backend unit tests, 26 disposable-PostgreSQL integration
+The contract is implemented with 37 backend unit tests, 29 disposable-PostgreSQL integration
 tests, 45 frontend tests, and 8 desktop/mobile browser E2E tests passing. The integration suite
 uses the real application Socket.IO server and proves authorized acknowledgements, cross-order
 denial, post-commit protocol-v1 delivery, no-op suppression, disconnected-event recovery through
