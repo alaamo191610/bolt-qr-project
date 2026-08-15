@@ -15,3 +15,18 @@ if (!globalThis.matchMedia) {
     }),
   });
 }
+
+// jsdom has no layout engine, so it never implements ResizeObserver - only
+// @headlessui/react's floating-position hooks need it to exist, not to
+// report real sizes.
+if (!globalThis.ResizeObserver) {
+  class NoopResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    writable: true,
+    value: NoopResizeObserver,
+  });
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LogOut, Menu, Search, X } from "lucide-react";
+import { Building2, Check, LogOut, Menu, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -7,6 +7,7 @@ import { useAdminMonetary } from "../../hooks/useAdminMonetary";
 import LanguageToggle from "./LanguageToggle";
 import { Menu as DropdownMenu, Transition } from "@headlessui/react";
 import { Fragment } from "react";
+import type { OrganizationMembership } from "../../providers/AuthProvider";
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -23,6 +24,10 @@ interface ResponsiveLayoutProps {
     email: string;
   };
   onSignOut?: () => void;
+  /** Only rendered when there are 2+ memberships - nothing to switch between otherwise. */
+  organizations?: OrganizationMembership[];
+  onSwitchOrganization?: (organizationId: string) => void;
+  switchingOrganizationId?: string | null;
 }
 
 const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
@@ -32,6 +37,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   setActiveTab,
   userInfo,
   onSignOut,
+  organizations,
+  onSwitchOrganization,
+  switchingOrganizationId,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
@@ -335,6 +343,44 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                           {userInfo.email}
                         </p>
                       </div>
+
+                      {organizations && organizations.length > 1 && (
+                        <div className="p-2">
+                          <p className="px-4 pt-2 pb-1 text-xs font-bold uppercase tracking-widest text-slate-400">
+                            {t("auth.organizations") || "Organizations"}
+                          </p>
+                          {organizations.map((org) => {
+                            const isSwitching = switchingOrganizationId === org.id;
+                            return (
+                              <DropdownMenu.Item key={org.id} disabled={org.current || isSwitching}>
+                                {({ active }) => (
+                                  <button
+                                    type="button"
+                                    onClick={() => !org.current && onSwitchOrganization?.(org.id)}
+                                    disabled={org.current || isSwitching}
+                                    className={`${active && !org.current
+                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                      : "text-slate-600 dark:text-slate-400"
+                                      } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 disabled:cursor-default`}
+                                  >
+                                    <Building2 className="w-4 h-4 shrink-0" />
+                                    <span className="flex-1 min-w-0 text-left rtl:text-right truncate">
+                                      {org.name}
+                                      <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                                        {org.role}
+                                      </span>
+                                    </span>
+                                    {org.current && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                                    {isSwitching && (
+                                      <span className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-slate-300 border-t-emerald-600 animate-spin" />
+                                    )}
+                                  </button>
+                                )}
+                              </DropdownMenu.Item>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       <div className="p-2">
                         {/* Wrappers for consistent item sizing */}

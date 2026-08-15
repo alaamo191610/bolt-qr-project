@@ -22,6 +22,7 @@ import ResponsiveLayout from "./components/common/ResponsiveLayout";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { Toaster, toast } from "react-hot-toast";
 import { socket, joinAdminRoom } from "./services/socket";
+import { getErrorMessage } from "./utils/errors";
 import {
   isOrderRealtimeEvent,
   type OrderRealtimeEvent,
@@ -224,7 +225,7 @@ function App() {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, organizations, switchOrganization } = useAuth();
   const { t, isLoaded } = useLanguage();
 
   const [activeTab, setActiveTab] = useState("qr-generator");
@@ -233,6 +234,22 @@ const AdminDashboard: React.FC = () => {
   const [, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [switchingOrganizationId, setSwitchingOrganizationId] = useState<string | null>(null);
+
+  const handleSwitchOrganization = useCallback(async (organizationId: string) => {
+    setSwitchingOrganizationId(organizationId);
+    try {
+      await switchOrganization(organizationId);
+      // The rest of this dashboard's data (tables/orders/menu) is fetched
+      // once per mount, not re-keyed off the active organization - a full
+      // reload is the simplest way to guarantee everything reloads scoped
+      // to the newly active organization instead of showing stale data.
+      window.location.reload();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to switch organization"));
+      setSwitchingOrganizationId(null);
+    }
+  }, [switchOrganization]);
 
   // Individual fetch functions
   const fetchProfile = useCallback(async () => {
@@ -502,6 +519,9 @@ const AdminDashboard: React.FC = () => {
           email: user?.email || "",
         }}
         onSignOut={() => user && signOut()}
+        organizations={organizations}
+        onSwitchOrganization={handleSwitchOrganization}
+        switchingOrganizationId={switchingOrganizationId}
       >
         {renderContent()}
       </ResponsiveLayout>

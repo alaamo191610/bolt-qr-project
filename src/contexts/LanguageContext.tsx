@@ -230,6 +230,7 @@ const translations: Record<Language, TranslationTree> = {
     },
     auth: {
       signedInAs: "Signed in as",
+      organizations: "Organizations",
       welcome: "Welcome Back",
       createAccount: "Create Account",
       signIn: "Sign In",
@@ -867,6 +868,7 @@ const translations: Record<Language, TranslationTree> = {
     },
     auth: {
       signedInAs: "مسجّل الدخول كـ",
+      organizations: "المنظمات",
       welcome: "أهلًا برجعتك",
       createAccount: "إنشاء حساب جديد",
       signIn: "تسجيل الدخول",
