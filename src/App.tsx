@@ -473,6 +473,7 @@ const AdminDashboard: React.FC = () => {
             tables={tables}
             setTables={setTables}
             onDataChange={fetchTables}
+            onOpenQrStudio={() => handleTabChange("qr-generator")}
           />
         );
       case "analytics":

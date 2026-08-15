@@ -591,10 +591,18 @@ PostgreSQL/fixture/authentication harness and production-shaped migration rehear
 - The predictable `GET /api/tables/public/:code` route and unused client wrapper were removed;
   current QR clients use the capability exchange endpoint only.
 - Added organization/membership, upload isolation, tracking revocation, and socket-revocation
-  integration coverage. Disposable PostgreSQL integration now passes 29 tests.
+  integration coverage. Disposable PostgreSQL integration now passes 31 tests.
 - Added a fail-closed tenant enforcement migration. It is intentionally not being deployed to
   staging or production from this change: the ADR 0006 zero-issue staging report remains the
-  required gate before migration application.
+  required gate before migration application. The local production-shaped rehearsal now proves
+  both corruption blocking and clean application of the final constraints on a disposable
+  PostgreSQL database.
+- Added a real-backend Playwright golden flow that provisions disposable PostgreSQL, starts the
+  actual Express/Socket.IO server, exchanges a real QR capability, creates and tracks an order,
+  and proves the old table session is rejected after capability rotation. The browser suite now
+  passes 9 tests with the mobile real-backend variant intentionally covered by the existing mocked
+  mobile flow. The capability-less `TableManagement` QR image was removed; the table card now
+  routes operators to QR Studio for capability-backed generation.
 
 ## Required test evidence
 
@@ -617,8 +625,8 @@ recorded in the completion register. “Code is written” is not a completion s
 |---|---|---|---|---|---|
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
-| M1 safety baseline | Foundation implemented; final enforcement gated | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, upload ownership, and cross-tenant negatives pass; staging zero-issue verify/enforce remains. | — | 15 Aug 2026 |
-| M2 bounded order cycle | Yazan local backend complete; joint/frontend/staging closure remains | — | QR/session, idempotency, capacity, availability, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, and authoritative recovery pass with 37 unit, 29 PostgreSQL integration, 45 frontend, and 8 browser E2E tests. Real-backend golden E2E, Alaa handoff, and staging evidence remain. | Yazan + Alaa | 15 Aug 2026 |
+| M1 safety baseline | Foundation implemented; final enforcement gated | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, upload ownership, cross-tenant negatives, and local final-enforcement rehearsal pass; staging zero-issue verify/enforce remains. | — | 15 Aug 2026 |
+| M2 bounded order cycle | Yazan local backend complete; joint/frontend/staging closure remains | — | QR/session, idempotency, capacity, availability, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, authoritative recovery, secure TableManagement QR routing, and real-backend golden E2E pass. Alaa handoff and staging evidence remain. | Yazan + Alaa | 15 Aug 2026 |
 | M3 Phase 1 pilot infrastructure | In progress — runtime baseline locally complete | ADR 0008 | 44 unit/config, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests plus production runtime smoke pass. Backup/restore, Sentry, real VPS/TLS execution, and capacity evidence remain. | Yazan | 15 Aug 2026 |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |

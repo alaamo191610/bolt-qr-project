@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, Plus, Trash2 } from "lucide-react";
+import { Users, Plus, Trash2, QrCode } from "lucide-react";
 import { tableService } from "../../services/tableService";
 import toast from "react-hot-toast";
 import { socket } from "../../services/socket";
@@ -18,6 +18,7 @@ interface TableManagementProps {
   tables: Table[];
   setTables: React.Dispatch<React.SetStateAction<Table[]>>;
   onDataChange: () => void;
+  onOpenQrStudio: () => void;
 }
 
 interface TableStatusUpdate {
@@ -28,6 +29,7 @@ interface TableStatusUpdate {
 const TableManagement: React.FC<TableManagementProps> = ({
   tables,
   setTables,
+  onOpenQrStudio,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTable, setNewTable] = useState({ code: "", capacity: 4 });
@@ -241,14 +243,18 @@ const TableManagement: React.FC<TableManagementProps> = ({
                 </div>
 
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between group/qr">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Digital Menu</span>
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                      `${window.location.origin}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`
-                    )}&color=64748b`}
-                    alt={`QR ${table.number}`}
-                    className="w-10 h-10 rounded-lg opacity-50 grayscale group-hover/qr:grayscale-0 group-hover/qr:opacity-100 transition-all duration-300"
-                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Secure QR</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage in QR Studio</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onOpenQrStudio}
+                    aria-label={`Open QR Studio for table ${table.number}`}
+                    className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                  >
+                    <QrCode className="w-5 h-5" aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             </div>
