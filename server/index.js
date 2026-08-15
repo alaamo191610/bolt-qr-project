@@ -32,6 +32,12 @@ import {
   verifyToken,
 } from './tokenPolicy.js';
 import { createTableCapabilityService, hashTableCapability } from './tableCapability.js';
+import {
+  createPublicOrderIdempotencyService,
+  isPublicOrderIdempotencyUniqueConflict,
+  publicOrderRequestHash,
+  requireIdempotencyKey,
+} from './orderIdempotency.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -72,6 +78,7 @@ const corsOptions = {
     return callback(new Error('Origin not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  exposedHeaders: ['X-Request-Id', 'Idempotency-Replayed'],
 };
 
 const {
@@ -88,6 +95,7 @@ const authenticate = createAuthenticate({
 });
 
 const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
+const publicOrderIdempotency = createPublicOrderIdempotencyService();
 
 const app = express();
 const server = createServer(app);
@@ -1162,6 +1170,16 @@ app.get('/api/orders', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+const publicOrderInclude = {
+  table: true,
+  order_items: { include: { menu: true } },
+};
+
+const findPublicOrder = (db, orderId) => db.order.findUnique({
+  where: { id: orderId },
+  include: publicOrderInclude,
+});
+
 app.post('/api/orders', orderRateLimit, async (req, res) => {
   const { items, type, promotionCode, tipPercent } = req.body;
 
@@ -1195,14 +1213,45 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     await enforceRateLimit(tableSessionOrderRateLimit, req, res);
     await enforceRateLimit(organizationOrderRateLimit, req, res);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const tableSession = await tableCapabilities.resolveSession(tableToken, {
-        database: tx,
-        lock: true,
-      });
-      const adminId = tableSession.adminId;
-      const table = tableSession.table;
-      const targetAdmin = await tx.admin.findUnique({
+    const idempotencyKey = requireIdempotencyKey(req.get('Idempotency-Key'));
+    const requestHash = publicOrderRequestHash({
+      items,
+      type,
+      promotionCode: promotionCode || null,
+      tipPercent: Number(tipPercent || 0),
+    });
+    const idempotencyScope = {
+      organizationId: req.tableSession.organizationId,
+      tableId: req.tableSession.table.id,
+      capabilityId: req.tableSession.capabilityId,
+      capabilityVersion: req.tableSession.capabilityVersion,
+      key: idempotencyKey,
+      requestHash,
+    };
+
+    let transactionResult;
+    try {
+      transactionResult = await prisma.$transaction(async (tx) => {
+        const tableSession = await tableCapabilities.resolveSession(tableToken, {
+          database: tx,
+          lock: true,
+        });
+        const adminId = tableSession.adminId;
+        const table = tableSession.table;
+        const idempotency = await publicOrderIdempotency.begin(tx, {
+          ...idempotencyScope,
+          organizationId: tableSession.organizationId,
+          tableId: table.id,
+          capabilityId: tableSession.capabilityId,
+          capabilityVersion: tableSession.capabilityVersion,
+        });
+        if (idempotency.replayed) {
+          const replayedOrder = await findPublicOrder(tx, idempotency.orderId);
+          if (!replayedOrder) throw new Error('Idempotent order record is unavailable');
+          return { order: replayedOrder, replayed: true };
+        }
+
+        const targetAdmin = await tx.admin.findUnique({
         where: { id: adminId },
         select: {
           id: true,
@@ -1477,25 +1526,32 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
           throw Object.assign(new Error('Promotion usage limit reached'), { status: 400 });
         }
       }
-      if (table && table.status !== 'occupied') {
-        await tx.table.update({ where: { id: table.id }, data: { status: 'occupied' } });
-      }
-      return order;
-    });
-
-    // Emit real-time update to the admin and return the complete order.
-    let fullOrder = result;
-    if (result && result.admin_id) {
-      fullOrder = await prisma.order.findUnique({
-        where: { id: result.id },
-        include: {
-          table: true,
-          order_items: { include: { menu: true } }
+        if (table && table.status !== 'occupied') {
+          await tx.table.update({ where: { id: table.id }, data: { status: 'occupied' } });
         }
+        await publicOrderIdempotency.complete(tx, {
+          idempotencyId: idempotency.idempotencyId,
+          orderId: order.id,
+        });
+        const createdOrder = await findPublicOrder(tx, order.id);
+        if (!createdOrder) throw new Error('Created order is unavailable');
+        return { order: createdOrder, replayed: false };
       });
-      io.to(`admin_${result.admin_id}`).emit('new-order', fullOrder);
+    } catch (transactionError) {
+      if (!isPublicOrderIdempotencyUniqueConflict(transactionError)) throw transactionError;
+      const replay = await publicOrderIdempotency.replayAfterUniqueConflict(prisma, idempotencyScope);
+      const replayedOrder = await findPublicOrder(prisma, replay.orderId);
+      if (!replayedOrder) throw new Error('Idempotent order record is unavailable');
+      transactionResult = { order: replayedOrder, replayed: true };
+    }
+
+    // Emit only for the transaction that created the order. Replays return
+    // the same order without duplicating socket events or table mutations.
+    const { order: fullOrder, replayed } = transactionResult;
+    if (!replayed && fullOrder?.admin_id) {
+      io.to(`admin_${fullOrder.admin_id}`).emit('new-order', fullOrder);
       if (fullOrder?.table) {
-        io.to(`admin_${result.admin_id}`).emit('table-updated', {
+        io.to(`admin_${fullOrder.admin_id}`).emit('table-updated', {
           ...fullOrder.table,
           status: 'occupied'
         });
@@ -1506,7 +1562,8 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       orderId: fullOrder.id,
       adminId: fullOrder.admin_id,
     }, JWT_SECRET);
-    res.status(201).json({ ...fullOrder, tracking_token: trackingToken });
+    res.setHeader('Idempotency-Replayed', String(replayed));
+    res.status(replayed ? 200 : 201).json({ ...fullOrder, tracking_token: trackingToken });
   } catch (err) {
     if (!err.status || err.status >= 500) console.error('Error creating order:', logSafeError(err));
     sendError(res, req, err);
@@ -1775,7 +1832,7 @@ app.get('/api/public/pricing', async (req, res) => {
       select: {
         id: true,
         restaurant_name: true,  // 🆕 For customer menu header
-        logo_url: true,          // 🆕 For customer menu header  
+        logo_url: true,          // 🆕 For customer menu header
         pricing_prefs: true,
         billing_settings: true
       }

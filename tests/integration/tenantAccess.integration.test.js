@@ -156,6 +156,24 @@ const createTenantFixture = async (label) => {
   };
 };
 
+const createTableSession = async tenant => {
+  const login = await postJson('/api/auth/login', {
+    email: tenant.user.email,
+    password: tenant.password,
+  });
+  const { token: adminToken } = await login.json();
+  const rotation = await authenticatedRequest(
+    adminToken,
+    `/api/tables/${tenant.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const { capability } = await rotation.json();
+  const exchange = await postJson('/api/public/table-session', { capability });
+  const session = await exchange.json();
+  assert.equal(exchange.status, 200);
+  return { adminToken, capability, session };
+};
+
 before(async () => {
   database = await createTestDatabase();
   process.env.DATABASE_URL = database.databaseUrl;
@@ -414,6 +432,7 @@ test('table capability exchange authorizes dine-in identity and ignores body ten
 
   const order = await authenticatedRequest(session.token, '/api/orders', {
     method: 'POST',
+    headers: { 'Idempotency-Key': randomUUID() },
     body: JSON.stringify({
       type: 'dine_in',
       adminId: tenantB.admin.id,
@@ -428,6 +447,222 @@ test('table capability exchange authorizes dine-in identity and ignores body ten
   assert.equal(created.organization_id, tenantA.organization.id);
   assert.equal(created.branch_id, tenantA.branchId);
   assert.equal(created.table_id, tenantA.table.id);
+});
+
+test('dine-in order idempotency requires a bounded key before mutation', async () => {
+  const { session } = await createTableSession(tenantA);
+  const beforeCount = await database.prisma.order.count();
+  const requestBody = JSON.stringify({
+    type: 'dine_in',
+    items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+  });
+
+  const missing = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    body: requestBody,
+  });
+  const missingBody = await missing.json();
+  assert.equal(missing.status, 400);
+  assert.equal(missingBody.code, 'IDEMPOTENCY_KEY_REQUIRED');
+
+  const malformed = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': 'not safe' },
+    body: requestBody,
+  });
+  const malformedBody = await malformed.json();
+  assert.equal(malformed.status, 400);
+  assert.equal(malformedBody.code, 'VALIDATION_ERROR');
+  assert.equal(await database.prisma.order.count(), beforeCount);
+});
+
+test('same idempotency key and payload replays one order and one promotion increment', async () => {
+  const { session } = await createTableSession(tenantA);
+  const key = randomUUID();
+  const beforeCount = await database.prisma.order.count();
+  const request = {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      promotionCode: tenantA.promotion.code,
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  };
+
+  const first = await authenticatedRequest(session.token, '/api/orders', request);
+  const firstBody = await first.json();
+  const replay = await authenticatedRequest(session.token, '/api/orders', request);
+  const replayBody = await replay.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(first.headers.get('idempotency-replayed'), 'false');
+  assert.equal(replay.status, 200);
+  assert.equal(replay.headers.get('idempotency-replayed'), 'true');
+  assert.equal(replayBody.id, firstBody.id);
+  assert.equal(await database.prisma.order.count(), beforeCount + 1);
+  const promotion = await database.prisma.promotion.findUnique({ where: { id: tenantA.promotion.id } });
+  assert.equal(promotion.times_used, 1);
+  const record = await database.prisma.publicOrderIdempotency.findFirst({ where: { key } });
+  assert.equal(record.order_id, firstBody.id);
+  assert.ok(record.expires_at.getTime() - record.created_at.getTime() >= 24 * 60 * 60 * 1000 - 1000);
+});
+
+test('same idempotency key with a changed payload returns a stable conflict without mutation', async () => {
+  const { session } = await createTableSession(tenantA);
+  const key = randomUUID();
+  const first = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+  const firstBody = await first.json();
+
+  const changed = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 2 }],
+    }),
+  });
+  const changedBody = await changed.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(changed.status, 409);
+  assert.equal(changedBody.code, 'IDEMPOTENCY_CONFLICT');
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key } }), 1);
+  assert.equal((await database.prisma.publicOrderIdempotency.findFirst({ where: { key } })).order_id, firstBody.id);
+});
+
+test('failed order mutation rolls back its idempotency reservation so the key remains usable', async () => {
+  const { session } = await createTableSession(tenantA);
+  const key = randomUUID();
+  const beforeCount = await database.prisma.order.count();
+  const submit = menuId => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId, quantity: 1 }],
+    }),
+  });
+
+  const rejected = await submit(2_147_483_647);
+  assert.equal(rejected.status, 400);
+  assert.equal(await database.prisma.order.count(), beforeCount);
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key } }), 0);
+
+  const accepted = await submit(tenantA.menu.id);
+  assert.equal(accepted.status, 201);
+  assert.equal(await database.prisma.order.count(), beforeCount + 1);
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key } }), 1);
+});
+
+test('concurrent duplicate submissions serialize to one order and one promotion mutation', async () => {
+  const { session } = await createTableSession(tenantA);
+  const key = randomUUID();
+  const beforeCount = await database.prisma.order.count();
+  const request = () => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      promotionCode: tenantA.promotion.code,
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+
+  const responses = await Promise.all([request(), request()]);
+  const bodies = await Promise.all(responses.map(response => response.json()));
+
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 201]);
+  assert.equal(bodies[0].id, bodies[1].id);
+  assert.equal(await database.prisma.order.count(), beforeCount + 1);
+  assert.equal(
+    (await database.prisma.promotion.findUnique({ where: { id: tenantA.promotion.id } })).times_used,
+    1,
+  );
+});
+
+test('idempotency keys are isolated by capability scope and may be reused after 24-hour expiry', async () => {
+  const alpha = await createTableSession(tenantA);
+  const beta = await createTableSession(tenantB);
+  const key = randomUUID();
+  const createFor = (tenant, session) => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenant.menu.id, quantity: 1 }],
+    }),
+  });
+
+  const alphaFirst = await createFor(tenantA, alpha.session);
+  const betaFirst = await createFor(tenantB, beta.session);
+  assert.equal(alphaFirst.status, 201);
+  assert.equal(betaFirst.status, 201);
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key } }), 2);
+
+  const alphaRecord = await database.prisma.publicOrderIdempotency.findFirst({
+    where: { key, organization_id: tenantA.organization.id },
+  });
+  const oldCreatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  await database.prisma.publicOrderIdempotency.update({
+    where: { id: alphaRecord.id },
+    data: { created_at: oldCreatedAt, expires_at: new Date(oldCreatedAt.getTime() + 24 * 60 * 60 * 1000) },
+  });
+
+  const alphaAfterExpiry = await createFor(tenantA, alpha.session);
+  const alphaAfterExpiryBody = await alphaAfterExpiry.json();
+  assert.equal(alphaAfterExpiry.status, 201);
+  assert.notEqual(alphaAfterExpiryBody.id, (await alphaFirst.json()).id);
+  assert.equal(
+    await database.prisma.publicOrderIdempotency.count({
+      where: { key, organization_id: tenantA.organization.id },
+    }),
+    1,
+  );
+});
+
+test('capability rotation starts a new idempotency version scope', async () => {
+  const first = await createTableSession(tenantA);
+  const key = randomUUID();
+  const submit = session => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+
+  const firstResponse = await submit(first.session);
+  const firstOrder = await firstResponse.json();
+  assert.equal(firstResponse.status, 201);
+
+  const rotation = await authenticatedRequest(
+    first.adminToken,
+    `/api/tables/${tenantA.table.id}/capability/rotate`,
+    { method: 'POST' },
+  );
+  const { capability } = await rotation.json();
+  const exchange = await postJson('/api/public/table-session', { capability });
+  const secondSession = await exchange.json();
+  const secondResponse = await submit(secondSession);
+  const secondOrder = await secondResponse.json();
+
+  assert.equal(secondResponse.status, 201);
+  assert.notEqual(secondOrder.id, firstOrder.id);
+  const records = await database.prisma.publicOrderIdempotency.findMany({
+    where: { key, organization_id: tenantA.organization.id },
+    orderBy: { capability_version: 'asc' },
+  });
+  assert.equal(records.length, 2);
+  assert.notEqual(records[0].capability_version, records[1].capability_version);
 });
 
 test('dine-in order creation requires a valid current table session before mutation', async () => {

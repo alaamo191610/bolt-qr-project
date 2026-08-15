@@ -367,13 +367,14 @@ model Table {
   status          String?  @default("available")
   created_at      DateTime @default(now()) @db.Timestamptz
 
-  admin           Admin?           @relation(fields: [admin_id], references: [id])
-  organization    Organization?    @relation(fields: [organization_id], references: [id], onDelete: SetNull)
-  branch          Branch?          @relation(fields: [branch_id], references: [id], onDelete: SetNull)
-  orders          Order[]
-  promotions      Promotion[]
-  dining_sessions DiningSession[]
-  capability      TableCapability?
+  admin                    Admin?                   @relation(fields: [admin_id], references: [id])
+  organization             Organization?            @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  branch                   Branch?                  @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  orders                   Order[]
+  promotions               Promotion[]
+  dining_sessions          DiningSession[]
+  capability               TableCapability?
+  public_order_idempotency PublicOrderIdempotency[]
 
   @@unique([admin_id, code])
   @@unique([id, organization_id])
@@ -392,9 +393,11 @@ model TableCapability {
   created_at      DateTime @default(now()) @db.Timestamptz
   rotated_at      DateTime @default(now()) @db.Timestamptz
 
-  table        Table        @relation(fields: [table_id, organization_id], references: [id, organization_id], onDelete: Cascade)
-  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  table                    Table                    @relation(fields: [table_id, organization_id], references: [id, organization_id], onDelete: Cascade)
+  organization             Organization             @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  public_order_idempotency PublicOrderIdempotency[]
 
+  @@unique([id, table_id, organization_id])
   @@unique([table_id, organization_id])
   @@index([organization_id, active])
   @@map("table_capabilities")
@@ -423,14 +426,16 @@ model Order {
   created_at      DateTime    @default(now()) @db.Timestamptz
   updated_at      DateTime    @default(now()) @updatedAt @db.Timestamptz
 
-  admin        Admin?        @relation(fields: [admin_id], references: [id])
-  organization Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
-  branch       Branch?       @relation(fields: [branch_id], references: [id], onDelete: SetNull)
-  check        Check?        @relation(fields: [check_id], references: [id], onDelete: SetNull)
-  table        Table?        @relation(fields: [table_id], references: [id])
-  order_items  OrderItem[]
-  promotion    Promotion?    @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
+  admin              Admin?                  @relation(fields: [admin_id], references: [id])
+  organization       Organization?           @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  branch             Branch?                 @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  check              Check?                  @relation(fields: [check_id], references: [id], onDelete: SetNull)
+  table              Table?                  @relation(fields: [table_id], references: [id])
+  order_items        OrderItem[]
+  promotion          Promotion?              @relation(fields: [promotion_id], references: [id], onDelete: SetNull)
+  public_idempotency PublicOrderIdempotency?
 
+  @@unique([id, table_id, organization_id])
   @@index([admin_id])
   @@index([branch_id, created_at])
   @@index([organization_id])
@@ -507,20 +512,21 @@ model Organization {
   created_at DateTime @default(now()) @db.Timestamptz
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
 
-  admins             Admin[]
-  categories         Category[]
-  ingredients        Ingredient[]
-  menus              Menu[]
-  tables             Table[]
-  table_capabilities TableCapability[]
-  orders             Order[]
-  promotions         Promotion[]
-  modifier_groups    ModifierGroup[]
-  users              OrganizationUser[]
-  branches           Branch[]
-  employees          Employee[]
-  pos_roles          PosRole[]
-  audit_events       AuditEvent[]
+  admins                   Admin[]
+  categories               Category[]
+  ingredients              Ingredient[]
+  menus                    Menu[]
+  tables                   Table[]
+  table_capabilities       TableCapability[]
+  public_order_idempotency PublicOrderIdempotency[]
+  orders                   Order[]
+  promotions               Promotion[]
+  modifier_groups          ModifierGroup[]
+  users                    OrganizationUser[]
+  branches                 Branch[]
+  employees                Employee[]
+  pos_roles                PosRole[]
+  audit_events             AuditEvent[]
 
   @@index([active])
   @@map("organizations")
@@ -857,6 +863,30 @@ model ApiIdempotencyKey {
   @@unique([branch_id, scope, key])
   @@index([expires_at])
   @@map("api_idempotency_keys")
+}
+
+model PublicOrderIdempotency {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organization_id    String   @db.Uuid
+  table_id           Int
+  capability_id      String   @db.Uuid
+  capability_version Int
+  key                String
+  request_hash       String
+  order_id           Int?     @unique
+  created_at         DateTime @default(now()) @db.Timestamptz
+  expires_at         DateTime @db.Timestamptz
+
+  organization Organization    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  table        Table           @relation(fields: [table_id, organization_id], references: [id, organization_id], onDelete: Cascade)
+  capability   TableCapability @relation(fields: [capability_id, table_id, organization_id], references: [id, table_id, organization_id], onDelete: Cascade)
+  order        Order?          @relation(fields: [order_id, table_id, organization_id], references: [id, table_id, organization_id], onDelete: Cascade)
+
+  @@unique([capability_id, capability_version, key])
+  @@unique([order_id, table_id, organization_id])
+  @@index([organization_id, table_id, created_at])
+  @@index([expires_at])
+  @@map("public_order_idempotency")
 }
 
 // 🆕 Super Admin Model for platform management

@@ -127,12 +127,9 @@ export const orderService = {
      * docs/contracts/table-capability.md — the server derives restaurant/
      * table identity from this token and ignores table_code/admin_id. */
     table_session_token?: string
-    /** Client-generated key so a retried checkout (e.g. timeout-after-commit)
-     * returns the original order instead of creating a duplicate. ADR 0007
-     * commits to this policy but the wire format isn't published yet — sent
-     * as an `Idempotency-Key` header (Stripe/GitHub convention) as a
-     * best-effort default. Confirm the real field name with Yazan; the
-     * server ignores unknown headers, so this is harmless until then. */
+    /** Required client-generated key for dine-in checkout. The backend scopes
+     * it to the current table capability/version and returns the original
+     * order for an unchanged retry. See docs/contracts/order-idempotency.md. */
     idempotency_key?: string
   }) {
     try {

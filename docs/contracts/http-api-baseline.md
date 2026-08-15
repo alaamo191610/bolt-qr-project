@@ -31,6 +31,12 @@ Endpoint-specific policy errors may override the generic status mapping. For Rel
 `POST /api/orders` with `type: take_away` returns `403` with
 `code: ORDER_TYPE_DISABLED` and performs no order, promotion, or table mutation.
 
+Capability-authorized dine-in orders require a valid `Idempotency-Key`. Missing keys return
+`400 IDEMPOTENCY_KEY_REQUIRED`; malformed keys return `400 VALIDATION_ERROR`; reuse with a changed
+payload returns `409 IDEMPOTENCY_CONFLICT`. First creation returns `201` and
+`Idempotency-Replayed: false`; an unchanged replay returns the same order with `200` and
+`Idempotency-Replayed: true`. Both `Idempotency-Replayed` and `X-Request-Id` are CORS-exposed.
+
 ## Authentication classes
 
 Restaurant endpoints require a verified `restaurant-session` token. SuperAdmin endpoints
@@ -57,5 +63,6 @@ authorization rules, and stable error codes before frontend consumption.
 
 Takeaway is disabled for Release 1. Dine-in now derives organization, restaurant, branch, and table
 identity from a database-revalidated table capability/session and ignores public request-body
-identity for authorization. Idempotency, open-order capacity, pause behavior, a production shared
-limiter, and Alaa's frontend/E2E handoff remain launch blockers.
+identity for authorization. Durable backend idempotency is implemented. Open-order capacity, pause
+behavior, a production shared limiter, frontend key persistence, and real-backend E2E evidence
+remain launch blockers.

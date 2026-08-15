@@ -62,9 +62,10 @@ The exchange is limited to 20 attempts per IP and 10 attempts per capability has
 `type: dine_in` requires `Authorization: Bearer <table-session>`. The server derives restaurant,
 organization, branch, and table identity from the revalidated capability. Body identity fields are
 ignored for authorization. Release 1 accepts 1–50 line items. The accepted session/organization
-order-attempt limits are enforced by the current bounded local limiter. The three-open-order cap,
-durable idempotency, ordering pause, and production shared store remain the next bounded M2/M3
-points.
+order-attempt limits are enforced by the current bounded local limiter. A 16–128-character
+`Idempotency-Key` is required and is durably scoped to this capability and version; see the
+[public order-idempotency contract](order-idempotency.md). The three-open-order cap, ordering pause,
+and production shared store remain the next bounded M2/M3 points.
 
 `type: take_away` remains disabled for Release 1 and returns `403 ORDER_TYPE_DISABLED` before any
 order mutation.
@@ -74,9 +75,11 @@ order mutation.
 | HTTP | Code | Meaning |
 |---:|---|---|
 | 400 | `VALIDATION_ERROR` | Order input is malformed. |
+| 400 | `IDEMPOTENCY_KEY_REQUIRED` | A dine-in order is missing its idempotency key. |
 | 401 | `TABLE_SESSION_REQUIRED` | A dine-in request has no table-session bearer token. |
 | 403 | `TABLE_SESSION_INVALID` | Capability/session is malformed, invalid, expired, rotated, revoked, or inconsistent. |
 | 404 | `VALIDATION_ERROR` | Authenticated table rotation/revocation target does not exist in the tenant. |
+| 409 | `IDEMPOTENCY_CONFLICT` | The scoped key was already used for a different order payload. |
 | 429 | `RATE_LIMITED` | Exchange limit exceeded; `Retry-After` is present. |
 
 All errors also contain `requestId`. Error responses and logs must not reveal whether a supplied

@@ -259,6 +259,55 @@ published contract and tests, or the work must be explicitly reassigned. Durable
 idempotency remains the next Yazan task but was not started because progression was conditional on
 this review passing.
 
+## Implementation tracking — 15 August 2026 (QR/order gap re-review)
+
+The core frontend table-capability handoff is now present at `1396b5f`: authenticated QR
+rotation/revocation with invalidation warning, public exchange, session-only customer state,
+table-session bearer checkout without body identity, and missing/invalid recovery UI. Verification
+passes 24 unit, 14 PostgreSQL integration, 40 frontend, and 8 desktop/mobile browser tests plus all
+static/build gates.
+
+M2 is still No-Go for these concrete gaps:
+
+- `TableManagement` exposes a legacy external, capability-less QR that opens a non-orderable menu;
+  remove it or route users to the secure generator.
+- Browser QR tests fully mock the API; real disposable-backend rotate → exchange → order → tracking,
+  post-exchange rotation/revocation, and RTL evidence remain.
+- Server order creation ignores the client's `Idempotency-Key`; retries can create duplicate orders
+  and duplicate promotion usage. The client key also does not survive reload/mobile resume.
+- Three-open-order capacity, restaurant pause/closed/overload checks, stable error codes, and safe
+  rejection telemetry are not implemented.
+- Production shared limiting remains M3 work, and new tables currently lack the branch ownership
+  required by the existing generic idempotency table.
+
+Decision: accept the core QR/session handoff for Yazan to continue with durable PostgreSQL order
+idempotency, while keeping pilot/release blocked on the legacy QR and remaining controls.
+
+## Implementation tracking — 15 August 2026 (durable order idempotency started)
+
+The legacy capability-less QR remains a parallel pilot blocker; it does not block the isolated
+backend transaction work. The public order-idempotency contract is published with a required
+`Idempotency-Key`, 24-hour retention, canonical request hashing, capability-version tenant scope,
+atomic create/replay/conflict semantics, PostgreSQL concurrency behavior, and the remaining
+frontend persistence handoff. Schema/service implementation and evidence are in progress.
+
+## Implementation tracking — 15 August 2026 (durable order idempotency complete)
+
+The backend now requires and validates `Idempotency-Key` for capability-authorized dine-in orders
+and persists a 24-hour PostgreSQL record scoped to organization, table capability ID, and capability
+version. Composite foreign keys fail closed on tenant/table/capability mismatch. Reservation, order,
+items, promotion usage, table status, and completion are one transaction. Exact replays return the
+same order with `200`; changed payloads return `409 IDEMPOTENCY_CONFLICT`; failed transactions leave
+no reservation or partial effects; replay does not emit duplicate socket events.
+
+Final evidence passes ESLint, TypeScript, Prisma validation, production build, 26 unit tests, 21
+disposable-PostgreSQL integration tests, 40 frontend tests, and 8 desktop/mobile browser E2E tests.
+Database cases include concurrent same-key requests, one promotion increment, rollback/key reuse,
+cross-tenant scope, QR capability rotation scope, and 24-hour expiry reuse. M2 remains No-Go until
+the legacy QR is removed, frontend keys survive reload/mobile resume, real-backend golden E2E
+exists, and capacity/pause/telemetry controls are complete. The next Yazan point is the
+transactional maximum-three-open-orders control.
+
 ## Outcome and planning rule
 
 Release a secure, observable, recoverable multi-tenant restaurant QR platform without
@@ -397,7 +446,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Foundation implemented | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, and cross-tenant negatives pass; staging verify/enforce remain. | — | 14 Aug 2026 |
-| M2 bounded order cycle | Backend capability implemented; frontend handoff rejected | — | Backend capability controls pass. Main `4701771` lacks capability QR/exchange/bearer/recovery/E2E, so checkout returns `TABLE_SESSION_REQUIRED`; idempotency/capacity/pause/shared limiting also remain. | Yazan review; Alaa action | 14 Aug 2026 |
+| M2 bounded order cycle | Core QR/session and backend idempotency integrated; remaining controls in progress | — | Capability-scoped durable retry creates one order/one promotion increment across concurrency; 26 unit and 21 PostgreSQL integration tests pass. Legacy QR, frontend reload persistence, real-backend golden E2E, capacity/pause/telemetry/shared limiting remain. | Yazan + Alaa | 15 Aug 2026 |
 | M3 production infrastructure | Not started | — | — | — | — |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |
