@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, Plus, Trash2 } from "lucide-react";
+import { Users, Plus, Trash2, QrCode } from "lucide-react";
 import { tableService } from "../../services/tableService";
 import toast from "react-hot-toast";
 import { socket } from "../../services/socket";
@@ -240,15 +240,18 @@ const TableManagement: React.FC<TableManagementProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between group/qr">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Digital Menu</span>
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                      `${window.location.origin}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`
-                    )}&color=64748b`}
-                    alt={`QR ${table.number}`}
-                    className="w-10 h-10 rounded-lg opacity-50 grayscale group-hover/qr:grayscale-0 group-hover/qr:opacity-100 transition-all duration-300"
-                  />
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Digital Menu</span>
+                  {/* Each table's QR encodes a rotatable, revocable capability
+                      secret (docs/contracts/table-capability.md) that only the
+                      rotate endpoint ever returns, and only once - it cannot
+                      be reconstructed here, and must not be sent to a
+                      third-party QR image service either way. Generate/print
+                      it from QR Studio instead. */}
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                    <QrCode className="w-3.5 h-3.5" />
+                    QR Studio
+                  </span>
                 </div>
               </div>
             </div>
