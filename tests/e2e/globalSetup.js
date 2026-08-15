@@ -6,15 +6,18 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createTestDatabase } from '../helpers/testDatabase.js';
 
-const port = Number(process.env.REAL_E2E_PORT || 3100);
-const fixturePath = process.env.REAL_E2E_FIXTURE
-  || path.join(os.tmpdir(), 'bolt-qr-real-backend-fixture.json');
+// Runs as Playwright's globalSetup (not a webServer entry) so its returned
+// teardown function executes in the same process: an http.Server managing a
+// live Socket.IO connection can hang well past a cross-process webServer
+// teardown window (confirmed - disposable bolt_qr_test_* databases were
+// leaking on every run), but only the database drop actually needs to
+// complete reliably here, and an in-process function call guarantees that.
 
-let database;
-let applicationDatabase;
-let applicationServer;
-let uploadDirectory;
-let shuttingDown = false;
+const port = Number(process.env.REAL_E2E_PORT || 3100);
+// tests/e2e/real-backend-golden.spec.ts reads this same fixed path directly
+// (it has no access to this process's env). Not os.tmpdir()-derived: that
+// resolves outside /tmp on macOS, which would silently desync the two.
+const fixturePath = process.env.REAL_E2E_FIXTURE || '/tmp/bolt-qr-real-backend-fixture.json';
 
 const seedFixture = async prisma => {
   const organizationId = randomUUID();
@@ -107,45 +110,50 @@ const seedFixture = async prisma => {
   };
 };
 
-const cleanup = async exitCode => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  try {
-    if (applicationServer?.listening) {
-      await new Promise((resolve, reject) => applicationServer.close(error => error ? reject(error) : resolve()));
-    }
-    if (applicationDatabase) await applicationDatabase.$disconnect();
-    if (database) await database.close();
-    if (uploadDirectory) await rm(uploadDirectory, { recursive: true, force: true });
-    await rm(fixturePath, { force: true });
-  } catch (error) {
-    console.error('Real E2E cleanup failed:', error);
-    exitCode = 1;
-  } finally {
-    process.exit(exitCode);
-  }
-};
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise(resolve => setTimeout(resolve, ms)),
+]);
 
-try {
-  process.env.NODE_ENV = 'test';
+export default async function globalSetup() {
+  process.env.NODE_ENV = 'test'; // keeps server/index.js's own auto-listen disabled; we listen explicitly below
   process.env.PORT = String(port);
-  uploadDirectory = await mkdtemp(path.join(os.tmpdir(), 'bolt-qr-real-e2e-uploads-'));
+  const uploadDirectory = await mkdtemp(path.join(os.tmpdir(), 'bolt-qr-real-e2e-uploads-'));
   process.env.UPLOAD_DIR = uploadDirectory;
-  database = await createTestDatabase();
+
+  const database = await createTestDatabase();
   process.env.DATABASE_URL = database.databaseUrl;
 
   const application = await import(`../../server/index.js?real-e2e=${Date.now()}`);
-  applicationServer = application.server;
-  ({ default: applicationDatabase } = await import('../../server/db.js'));
+  const { default: applicationDatabase } = await import('../../server/db.js');
+  const applicationServer = application.server;
+
   const fixture = await seedFixture(database.prisma);
   await writeFile(fixturePath, JSON.stringify(fixture), 'utf8');
+
   await new Promise((resolve, reject) => {
-    applicationServer.listen(port, '127.0.0.1', error => error ? reject(error) : resolve());
+    applicationServer.once('error', reject);
+    applicationServer.listen(port, '127.0.0.1', () => resolve());
   });
-  console.log(`Real E2E backend listening on http://127.0.0.1:${port}`);
-  process.once('SIGINT', () => void cleanup(0));
-  process.once('SIGTERM', () => void cleanup(0));
-} catch (error) {
-  console.error('Real E2E backend failed to start:', error);
-  await cleanup(1);
+  console.log(`[real-e2e] backend ready on port ${port}, database ${database.databaseName}`);
+
+  return async () => {
+    console.log('[real-e2e] tearing down');
+    try {
+      await withTimeout(applicationDatabase.$disconnect(), 3000);
+    } catch (error) {
+      console.error('[real-e2e] prisma disconnect failed:', error);
+    }
+    try {
+      await withTimeout(database.close(), 5000);
+    } catch (error) {
+      console.error('[real-e2e] database drop failed:', error);
+    }
+    try {
+      await rm(uploadDirectory, { recursive: true, force: true });
+      await rm(fixturePath, { force: true });
+    } catch (error) {
+      console.error('[real-e2e] fixture cleanup failed:', error);
+    }
+  };
 }
