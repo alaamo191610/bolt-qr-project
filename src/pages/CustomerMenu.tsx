@@ -97,6 +97,7 @@ const ACTIVE_ORDER_TTL_MS = 24 * 60 * 60 * 1000;
 // expires, so an in-progress checkout never races the expiry.
 const TABLE_SESSION_REFRESH_SKEW_MS = 15_000;
 const tableSessionKeyFor = (table: string) => `qr-table-session-v1:${table || "unknown"}`;
+const idempotencyKeyStorageKeyFor = (table: string) => `qr-idempotency-v1:${table || "unknown"}`;
 
 type TableSessionState =
   | { status: 'missing' }
@@ -172,6 +173,40 @@ const generateIdempotencyKey = () => {
   return `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
+interface IdempotencyRecord {
+  key: string;
+  fingerprint: string;
+}
+
+// Persisted (not just in-memory) so a timeout-after-commit followed by a
+// reload or mobile background-resume still reuses the same key instead of
+// the server treating the retry as a brand new order. See
+// docs/contracts/order-idempotency.md's frontend handoff note.
+const readPersistedIdempotency = (table: string): IdempotencyRecord | null => {
+  try {
+    const saved = sessionStorage.getItem(idempotencyKeyStorageKeyFor(table));
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as Partial<IdempotencyRecord>;
+    return parsed.key && parsed.fingerprint
+      ? { key: parsed.key, fingerprint: parsed.fingerprint }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistIdempotency = (table: string, record: IdempotencyRecord | null) => {
+  try {
+    if (record) {
+      sessionStorage.setItem(idempotencyKeyStorageKeyFor(table), JSON.stringify(record));
+    } else {
+      sessionStorage.removeItem(idempotencyKeyStorageKeyFor(table));
+    }
+  } catch {
+    /* ignore storage failures - the in-memory ref still covers same-session retry */
+  }
+};
+
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
   const { prefs, restaurantName, logoUrl, loading: moneyLoading } = useAdminMonetary(); // 🆕 Get branding
@@ -210,9 +245,10 @@ const CustomerMenu: React.FC = () => {
   // order creation requires this; see docs/contracts/table-capability.md.
   const [tableSession, setTableSession] = useState<TableSessionState>({ status: 'missing' });
   const tableSessionRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Reused across a retry of the exact same checkout attempt; regenerated
-  // whenever the cart/promo/tip actually changes, or after a successful order.
-  const idempotencyKeyRef = useRef<{ key: string; fingerprint: string } | null>(null);
+  // Reused across a retry of the exact same checkout attempt (including a
+  // reload/mobile-resume, via sessionStorage); regenerated whenever the
+  // cart/promo/tip actually changes, or after a successful order.
+  const idempotencyKeyRef = useRef<IdempotencyRecord | null>(null);
   // NEW: Store the full active order, not just a boolean
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(restoreActiveOrderFromUrl);
 
@@ -354,6 +390,15 @@ const CustomerMenu: React.FC = () => {
       /* ignore */
     }
   }, [adminId, tableNumber]);
+
+  // Reload/mobile-resume recovery for an in-flight checkout: if the last
+  // attempt never got a definitive success/failure before the page went
+  // away, restore its idempotency key so the next submit reuses it instead
+  // of the server treating it as an unrelated new order.
+  useEffect(() => {
+    if (!tableNumber) return;
+    idempotencyKeyRef.current = readPersistedIdempotency(tableNumber);
+  }, [tableNumber]);
 
   useEffect(() => {
     if (!tableNumber) return;
@@ -746,6 +791,10 @@ const CustomerMenu: React.FC = () => {
         ? idempotencyKeyRef.current.key
         : generateIdempotencyKey();
     idempotencyKeyRef.current = { key: idempotencyKey, fingerprint };
+    // Persisted before the network call, not after - a reload that happens
+    // mid-request (the exact timeout-after-commit case this defends
+    // against) must still find it.
+    persistIdempotency(tableNumber, idempotencyKeyRef.current);
 
     try {
       const orderItems = cart.map((item) => ({
@@ -778,6 +827,7 @@ const CustomerMenu: React.FC = () => {
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber, adminId || getTrackingContextFromUrl().adminId)); // clear persisted cart
       idempotencyKeyRef.current = null; // next order starts a fresh attempt
+      persistIdempotency(tableNumber, null);
     } catch (err) {
       // Stay on the cart/checkout view so the customer can retry without
       // losing their place - a failed checkout is recoverable, unlike a
@@ -792,7 +842,17 @@ const CustomerMenu: React.FC = () => {
         // locally - stop trusting it and require a rescan.
         setTableSession({ status: "invalid" });
         toast.error(t("status.tableSessionInvalid"));
+      } else if (err instanceof ApiError && err.code === "IDEMPOTENCY_CONFLICT") {
+        // The server has a different payload under this key than we think
+        // we're sending - our local view has diverged. Abandon the key
+        // rather than retry into the same conflict forever.
+        idempotencyKeyRef.current = null;
+        persistIdempotency(tableNumber, null);
+        toast.error(getErrorMessage(err, t("status.failedToPlaceOrder")));
       } else {
+        // Any other failure (network/server/validation/capacity/pause) keeps
+        // the same key so a retry - including after a reload - replays or
+        // completes the same attempt instead of risking a duplicate order.
         toast.error(getErrorMessage(err, t("status.failedToPlaceOrder")));
       }
     } finally {
