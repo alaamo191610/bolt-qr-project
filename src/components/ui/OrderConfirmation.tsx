@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { Clock, CheckCircle2, PartyPopper, ArrowRight, UtensilsCrossed, TimerReset } from 'lucide-react';
+import { Clock, CheckCircle2, PartyPopper, ArrowRight, UtensilsCrossed, TimerReset, WifiOff } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { socket, joinOrderRoom } from '../../services/socket';
 import { orderService } from '../../services/orderService';
@@ -29,6 +29,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
   const { t, isRTL } = useLanguage();
   const [order, setOrder] = useState(initialOrder);
   const [isTrackingExpired, setIsTrackingExpired] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const onOrderChangeRef = useRef(onOrderChange);
   const initialOrderRef = useRef(initialOrder);
   const currentVersionRef = useRef(initialOrder.version ?? 0);
@@ -91,6 +92,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
     };
     const joinAndRefresh = () => {
       if (expired) return;
+      setIsReconnecting(false);
       joinOrderRoom(orderId, trackingToken);
       void refreshStatus();
     };
@@ -103,20 +105,36 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
       if (!socket.connected) socket.connect();
       else joinAndRefresh();
     };
+    const handleDisconnect = () => {
+      if (expired) return;
+      setIsReconnecting(true);
+    };
+    // socket.io's own reconnection backoff can lag noticeably behind the OS
+    // actually reporting connectivity back - force an immediate attempt
+    // rather than waiting it out.
+    const handleOnline = () => {
+      if (expired) return;
+      if (!socket.connected) socket.connect();
+      else joinAndRefresh();
+    };
 
     socket.on('connect', joinAndRefresh);
+    socket.on('disconnect', handleDisconnect);
     socket.on('order.status.v1', handleUpdate);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pageshow', joinAndRefresh);
+    window.addEventListener('online', handleOnline);
 
     if (socket.connected) joinAndRefresh();
     else socket.connect();
 
     return () => {
       socket.off('connect', joinAndRefresh);
+      socket.off('disconnect', handleDisconnect);
       socket.off('order.status.v1', handleUpdate);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', joinAndRefresh);
+      window.removeEventListener('online', handleOnline);
     };
   }, [orderId, trackingToken]);
 
@@ -189,6 +207,15 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
           <p className="text-sm text-slate-400 mt-2 font-mono">
             Order #{order.id}
           </p>
+          {isReconnecting && (
+            <div
+              role="status"
+              className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium"
+            >
+              <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+              {t('status.reconnecting')}
+            </div>
+          )}
         </div>
 
         {/* Status Stepper */}

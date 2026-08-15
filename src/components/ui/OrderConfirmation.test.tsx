@@ -12,6 +12,7 @@ const translations: Record<string, string> = {
   'status.current': 'Current',
   'status.trackingExpired': 'This tracking link has expired',
   'status.trackingExpiredDescription': 'Please ask restaurant staff for your order status.',
+  'status.reconnecting': 'Reconnecting…',
   'menu.orderPlaced': 'Order placed',
   'menu.orderPlacedDescription': 'Table {table}',
   'menu.startNewOrder': 'Start new order',
@@ -175,5 +176,42 @@ describe('OrderConfirmation tracking-link expiry', () => {
       status: 'ready',
       version: 3,
     }));
+  });
+
+  it('shows a reconnecting indicator while the socket is disconnected and clears it once reconnected', async () => {
+    vi.mocked(orderService.getPublicOrderStatus).mockResolvedValue({
+      id: 1,
+      status: 'pending',
+      version: 1,
+      updated_at: new Date().toISOString(),
+    });
+
+    render(<OrderConfirmation order={baseOrder} onStartNewOrder={vi.fn()} />);
+    await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    const disconnectHandler = socketHandlers['disconnect'][0];
+    await act(async () => disconnectHandler());
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting');
+
+    const connectHandler = socketHandlers['connect'][0];
+    await act(async () => connectHandler());
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('refetches immediately on a browser "online" event rather than waiting on socket backoff', async () => {
+    vi.mocked(orderService.getPublicOrderStatus).mockResolvedValue({
+      id: 1,
+      status: 'pending',
+      version: 1,
+      updated_at: new Date().toISOString(),
+    });
+
+    render(<OrderConfirmation order={baseOrder} onStartNewOrder={vi.fn()} />);
+    await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalledTimes(1));
+
+    window.dispatchEvent(new Event('online'));
+
+    await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalledTimes(2));
   });
 });
