@@ -25,6 +25,8 @@
     "test:frontend": "vitest run",
     "test:frontend:watch": "vitest",
     "test:e2e": "playwright test",
+    "pretest:e2e:golden": "npx prisma generate --schema server/prisma/schema.prisma",
+    "test:e2e:golden": "playwright test --config=playwright.golden.config.ts",
     "test:e2e:install": "playwright install chromium",
     "test:all": "npm run test:unit && npm run test:frontend && npm run test:e2e",
     "verify:tenant-ownership": "node server/prisma/verification/runTenantOwnershipVerification.js",

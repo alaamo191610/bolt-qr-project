@@ -143,6 +143,54 @@ test.describe('QR capability -> table-session -> dine-in order', () => {
     expect(tableSessionCalled).toBe(false);
   });
 
+  test('a failed submit followed by a reload retries with the same idempotency key', async ({ page }) => {
+    await mockMenuAndTable(page);
+    await seedCart(page);
+
+    await page.route('**/api/public/table-session', (route) =>
+      json(route, 200, {
+        token: SESSION_TOKEN,
+        expiresIn: 1800,
+        restaurantId: ADMIN_ID,
+        organizationId: 'org-1',
+        table: { id: TABLE_ID, code: TABLE_CODE },
+      })
+    );
+
+    const seenKeys: (string | undefined)[] = [];
+    let attempt = 0;
+    await page.route('**/api/orders', async (route) => {
+      attempt += 1;
+      seenKeys.push(route.request().headers()['idempotency-key']);
+      if (attempt === 1) {
+        // Simulate the exact case the contract exists for: the request may
+        // have committed server-side, but the client never saw the response.
+        await route.abort('failed');
+        return;
+      }
+      await json(route, 200, { id: 501, status: 'pending', order_number: 12, total: 10, tracking_token: 'track-1' });
+    });
+    await page.route('**/api/public/orders/*/status', (route) =>
+      json(route, 200, { id: 501, order_number: 12, status: 'pending', updated_at: new Date().toISOString() })
+    );
+
+    await page.goto(`/menu?table=${TABLE_CODE}&restaurant=${ADMIN_ID}&cap=${CAPABILITY}`);
+    await openCartDrawer(page);
+
+    await page.getByRole('button', { name: /place order/i }).click();
+    // The failed attempt keeps the customer on the cart to retry.
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    await page.reload();
+    await openCartDrawer(page);
+    await page.getByRole('button', { name: /place order/i }).click();
+    await expect(page.getByText('Order #501')).toBeVisible();
+
+    expect(seenKeys).toHaveLength(2);
+    expect(seenKeys[0]).toMatch(/.+/);
+    expect(seenKeys[1]).toBe(seenKeys[0]);
+  });
+
   test('a rotated/revoked capability disables checkout and reports it', async ({ page }) => {
     await mockMenuAndTable(page);
     await seedCart(page);
