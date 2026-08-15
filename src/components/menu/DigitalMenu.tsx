@@ -1054,6 +1054,7 @@ const DigitalMenu: React.FC = () => {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
+              aria-label={t("common.selectCategory")}
               className="w-full appearance-none px-4 py-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none text-slate-700 dark:text-slate-200 cursor-pointer"
             >
               <option value="All">{t("menu.all")}</option>
@@ -1090,7 +1091,7 @@ const DigitalMenu: React.FC = () => {
       {filteredItems.length > 0 ? (
         <div className="space-y-4">
           {/* Select All */}
-          <div className="flex items-center space-x-3">
+          <label className="flex items-center space-x-3 w-fit cursor-pointer">
             <input
               type="checkbox"
               checked={
@@ -1103,7 +1104,7 @@ const DigitalMenu: React.FC = () => {
             <span className="text-sm text-slate-600 dark:text-slate-400">
               {t("common.selectAll")} ({filteredItems.length})
             </span>
-          </div>
+          </label>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredItems.map((item) => (
@@ -1132,6 +1133,7 @@ const DigitalMenu: React.FC = () => {
                         type="checkbox"
                         checked={selectedItems.includes(item.id)}
                         onChange={() => toggleItemSelection(item.id)}
+                        aria-label={t("common.selectItem", { name: getLocalizedName(item) })}
                         className="absolute -top-2 -left-2 w-6 h-6 text-emerald-600 border-white ring-2 ring-white rounded-lg shadow-sm focus:ring-emerald-500 cursor-pointer"
                       />
                     </div>
@@ -1141,12 +1143,12 @@ const DigitalMenu: React.FC = () => {
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate pr-2">
                           {getLocalizedName(item)}
                         </h3>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-bold text-lg">
                           ${Number(item.price).toFixed(2)}
                         </span>
                       </div>
 
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
                         {item.categories
                           ? getLocalizedName(item.categories)
                           : t("common.noCategory")}
@@ -1334,11 +1336,12 @@ const DigitalMenu: React.FC = () => {
 
                   {/* Category */}
                   <div>
-                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    <label htmlFor="item-form-category" className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
                       {t("common.category")} <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
                       <select
+                        id="item-form-category"
                         ref={(el) => { fieldRefs.current.category_id = el; }}
                         value={form.category_id ?? ""}
                         onChange={(e) =>

@@ -323,15 +323,18 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
             {/* Color Picker */}
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                 <Palette className="w-3 h-3" />
                 Color
-              </label>
-              <div className="flex flex-wrap gap-2">
+              </span>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="QR code color">
                 {COLORS.map((color) => (
                   <button
                     key={color.name}
+                    type="button"
                     onClick={() => setAccentColor(color)}
+                    aria-label={color.name}
+                    aria-pressed={accentColor.name === color.name}
                     className={`w-6 h-6 rounded-full transition-all duration-300 relative group ${color.class} ${accentColor.name === color.name ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-900 scale-110' : 'hover:scale-110'
                       }`}
                   />
@@ -341,11 +344,12 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
             {/* Pattern Style */}
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <label htmlFor="qr-pattern" className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                 <Settings className="w-3 h-3" />
                 Pattern
               </label>
               <select
+                id="qr-pattern"
                 value={dotStyle}
                 onChange={(e) => setDotStyle(e.target.value as DotType)}
                 className="w-full text-sm bg-slate-100 dark:bg-slate-700 border-none rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500"
@@ -356,11 +360,12 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
             {/* Corner Style */}
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <label htmlFor="qr-corners" className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                 <Maximize2 className="w-3 h-3" />
                 Corners
               </label>
               <select
+                id="qr-corners"
                 value={cornerStyle}
                 onChange={(e) => setCornerStyle(e.target.value as CornerSquareType)}
                 className="w-full text-sm bg-slate-100 dark:bg-slate-700 border-none rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500"
@@ -371,10 +376,11 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
             {/* Size Slider */}
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <label htmlFor="qr-size" className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                 Size: {qrSize}px
               </label>
               <input
+                id="qr-size"
                 type="range"
                 min="150"
                 max="350"
@@ -416,7 +422,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                       {table.number}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Dining table</p>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Dining table</p>
                       <h3 className="truncate text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                         Table {table.number}
                       </h3>
@@ -469,14 +475,14 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
                 <div className="my-5 grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
-                    <div className="mb-1 flex items-center gap-1.5 text-slate-400">
+                    <div className="mb-1 flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                       <Users className="h-3.5 w-3.5" />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Capacity</span>
                     </div>
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{table.capacity} guests</p>
                   </div>
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
-                    <div className="mb-1 flex items-center gap-1.5 text-slate-400">
+                    <div className="mb-1 flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                       <Link2 className="h-3.5 w-3.5" />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Menu link</span>
                     </div>

@@ -551,7 +551,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ orders }) => {
                   <div className="text-xs text-slate-600">
                     {t("analytics.orders")}
                   </div>
-                  <div className="text-xs font-medium text-emerald-600 mt-1">
+                  <div className="text-xs font-medium text-emerald-700 mt-1">
                     {formatPrice(item.revenue)}
                   </div>
                 </div>

@@ -221,6 +221,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
+                aria-label="Filter by date"
                 className="w-full sm:w-auto pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none text-slate-700 dark:text-slate-300"
               />
               {/* Clear Date Button */}
@@ -402,6 +403,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
               </div>
               <button
                 onClick={() => setShowDetailsModal(false)}
+                aria-label="Close"
                 className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="w-6 h-6" />
@@ -418,14 +420,14 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
                   {selectedOrder.status === 'ready' && <CheckCircle className="w-4 h-4" />}
                   {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
                 </span>
-                <p className="text-xs text-slate-400 mt-2 font-medium uppercase tracking-wider">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium uppercase tracking-wider">
                   {new Date(selectedOrder.timestamp).toLocaleString()}
                 </p>
               </div>
 
               {/* Items List */}
               <div className="space-y-1 mb-8">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">
                   Items Ordered
                 </h4>
                 {(selectedOrder.items || []).map((item, idx) => (
@@ -545,7 +547,7 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
                 }`}>
                 {isTakeAway ? <LayoutList className="w-6 h-6" /> : (order.tableNumber?.replace(/\D/g, '') || 'N/A')}
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {isTakeAway ? 'Takeaway' : 'Table'}
               </span>
             </div>
@@ -578,7 +580,7 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
         <div className="border-y border-slate-100 dark:border-slate-700/60 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Order items</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Order items</span>
               <span className="inline-flex min-w-6 h-6 px-1.5 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
                 {itemCount}
               </span>
@@ -599,7 +601,7 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
         {/* Actions Footer */}
         <div className="mt-auto pt-5 flex flex-col gap-3">
           <div className="flex items-end justify-between gap-4">
-            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Order total</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Order total</span>
             <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               {formatPrice(Number(order.total))}
             </span>
@@ -635,7 +637,7 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
           {(order.status === 'pending' || order.status === 'preparing') && (
             <button
               onClick={() => onCancelClick(order)}
-              className="text-xs font-bold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 py-2 transition-colors uppercase tracking-widest"
+              className="text-xs font-bold text-rose-700 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 py-2 transition-colors uppercase tracking-widest"
             >
               Cancel Order
             </button>

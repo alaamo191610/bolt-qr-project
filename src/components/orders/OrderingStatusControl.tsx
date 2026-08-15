@@ -133,7 +133,7 @@ const OrderingStatusControl: React.FC = () => {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-700/50 p-6">
       <div className="mb-5">
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('orderingState.title')}</h3>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t('orderingState.title')}</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('orderingState.subtitle')}</p>
       </div>
 
@@ -172,7 +172,7 @@ const OrderingStatusControl: React.FC = () => {
               >
                 <Icon className="w-6 h-6" />
                 <span className="text-sm font-bold">{t(s.labelKey)}</span>
-                <span className="text-[11px] leading-tight opacity-80">{t(s.descriptionKey)}</span>
+                <span className="text-[11px] leading-tight">{t(s.descriptionKey)}</span>
               </button>
             );
           })}

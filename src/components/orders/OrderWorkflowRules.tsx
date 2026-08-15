@@ -205,10 +205,11 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
               {/* Labels (EN/AR) */}
               <div className="md:col-span-4 grid grid-cols-2 gap-2 w-full">
                 <div className="space-y-1">
-                  <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider md:hidden">
+                  <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider md:hidden">
                     English Label
                   </span>
                   <input
+                    aria-label={`English label for ${s.key}`}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                     value={s.label_en}
                     onChange={(e) =>
@@ -218,10 +219,11 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider md:hidden">
+                  <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider md:hidden">
                     Arabic Label
                   </span>
                   <input
+                    aria-label={`Arabic label for ${s.key}`}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-right bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                     value={s.label_ar}
                     onChange={(e) =>
@@ -267,6 +269,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                 <input
                   type="number"
                   min={0}
+                  aria-label={`SLA in minutes for ${s.key}`}
                   className="w-20 md:w-24 border border-slate-200 rounded-lg px-3 py-2 text-right text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                   value={s.slaMin ?? 0}
                   onChange={(e) =>
@@ -309,6 +312,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                       ) : (
                         <input
                           type="checkbox"
+                          aria-label={`Allow transition from ${from} to ${to}`}
                           checked={
                             flow.transitions[from]?.includes(
                               to as OrderStatusKey
@@ -337,6 +341,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
           <input
             type="number"
             min={0}
+            aria-label="Auto-cancel PENDING after (min)"
             className="w-28 border rounded-md px-2 py-1 text-right bg-white text-slate-900"
             value={flow.autoCancelAfterMin ?? 0}
             onChange={(e) => {

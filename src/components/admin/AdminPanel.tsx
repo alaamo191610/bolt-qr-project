@@ -175,10 +175,11 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             }}
           >
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="admin-restaurant-name" className="block text-sm font-medium text-slate-700 mb-2">
                 {t("admin.name") || "Restaurant Name"}
               </label>
               <input
+                id="admin-restaurant-name"
                 type="text"
                 value={form.restaurant_name}
                 onChange={onChange("restaurant_name")}
@@ -188,10 +189,11 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="admin-phone" className="block text-sm font-medium text-slate-700 mb-2">
                 {t("admin.phone") || "Contact Phone"}
               </label>
               <input
+                id="admin-phone"
                 type="tel"
                 value={form.phone}
                 onChange={onChange("phone")}
@@ -200,10 +202,11 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="admin-address" className="block text-sm font-medium text-slate-700 mb-2">
                 {t("admin.address") || "Address"}
               </label>
               <input
+                id="admin-address"
                 type="text"
                 value={form.address}
                 onChange={onChange("address")}
@@ -212,10 +215,11 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="admin-description" className="block text-sm font-medium text-slate-700 mb-2">
                 {t("admin.description") || "Description"}
               </label>
               <textarea
+                id="admin-description"
                 rows={3}
                 value={form.description}
                 onChange={onChange("description")}

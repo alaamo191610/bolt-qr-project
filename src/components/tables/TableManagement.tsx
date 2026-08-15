@@ -182,7 +182,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
             <div key={idx} className="bg-slate-50 dark:bg-slate-700/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 group hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
               <div className="flex items-baseline gap-2">
                 <span className={`text-2xl font-bold ${stat.color} dark:text-white`}>{stat.count}</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">{stat.label}</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">{stat.label}</span>
               </div>
             </div>
           ))}
@@ -201,7 +201,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
                 <div className="relative">
                   <div className="absolute -left-2 -top-2 w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <div className="relative">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Table</p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Table</p>
                     <h3 className="text-3xl font-medium text-slate-900 dark:text-white">
                       {table.number}
                     </h3>
@@ -215,6 +215,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
                 <button
                   onClick={() => deleteTable(table.id)}
                   disabled={table.status === 'occupied'}
+                  aria-label={`Delete table ${table.number}`}
                   className={`p-3 rounded-xl transition-all duration-200 ${table.status === 'occupied'
                     ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed bg-slate-50 dark:bg-slate-800'
                     : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 bg-transparent'
@@ -229,6 +230,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
                   <select
                     value={table.status}
                     onChange={(e) => updateTableStatus(table.id, e.target.value)}
+                    aria-label={`Status for table ${table.number}`}
                     className={`w-full appearance-none pl-4 pr-10 py-3 rounded-xl border font-bold text-sm transition-all focus:ring-2 focus:ring-offset-2 ${getStatusColor(table.status)}`}
                   >
                     {["available", "occupied", "reserved", "cleaning"].map((s) => (
@@ -244,7 +246,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
 
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between group/qr">
                   <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Secure QR</span>
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Secure QR</span>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage in QR Studio</p>
                   </div>
                   {/* Each table's QR encodes a rotatable, revocable capability

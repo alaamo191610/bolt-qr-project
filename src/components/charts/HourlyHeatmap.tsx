@@ -90,7 +90,7 @@ const HourlyHeatmap: React.FC<HourlyHeatmapProps> = ({ orders }) => {
             <div key={`${period.day}-${period.hour}`} className="bg-white px-4 py-4 dark:bg-slate-900">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     {index === 0 ? t('analytics.highestActivity') : t('analytics.peakRank', { rank: String(index + 1) })}
                   </p>
                   <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">

@@ -112,7 +112,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
       )}
 
       {/* Sidebar (mobile only) */}
-      <div
+      <aside
+        aria-label={t("common.openMenu")}
         className={`fixed inset-y-0 ${isRTL ? "right-0" : "left-0"
           } z-50 w-64 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 dark:border-slate-700
           ${sidebarOpen
@@ -153,6 +154,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
           {/* Close Sidebar */}
           <button
             onClick={() => setSidebarOpen(false)}
+            aria-label={t("common.closeMenu")}
             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg"
           >
             <X className="w-6 h-6" />
@@ -217,7 +219,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             )}
           </div>
         )}
-      </div>
+      </aside>
 
       {/* Main Panel */}
       <div className="lg:pl-0 rtl:lg:pl-0 rtl:lg:pr-0">
@@ -228,6 +230,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               {/* Sidebar toggle on mobile */}
               <button
                 onClick={() => setSidebarOpen(true)}
+                aria-label={t("common.openMenu")}
                 className="lg:hidden p-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
               >
                 <Menu className="w-6 h-6" />
@@ -346,7 +349,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
                       {organizations && organizations.length > 1 && (
                         <div className="p-2">
-                          <p className="px-4 pt-2 pb-1 text-xs font-bold uppercase tracking-widest text-slate-400">
+                          <p className="px-4 pt-2 pb-1 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                             {t("auth.organizations") || "Organizations"}
                           </p>
                           {organizations.map((org) => {
@@ -366,7 +369,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                                     <Building2 className="w-4 h-4 shrink-0" />
                                     <span className="flex-1 min-w-0 text-left rtl:text-right truncate">
                                       {org.name}
-                                      <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                                      <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                         {org.role}
                                       </span>
                                     </span>

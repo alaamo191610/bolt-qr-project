@@ -111,7 +111,7 @@ export function Tab({ value, children }: { value: string; children: React.ReactN
       tabIndex={selected ? 0 : -1}
       onClick={() => ctx.setActive(value)}
       className={`flex-none md:flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition
-        ${selected ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
+        ${selected ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
     >
       {children}
     </button>
