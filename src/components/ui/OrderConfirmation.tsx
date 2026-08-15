@@ -4,10 +4,13 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { socket, joinOrderRoom } from '../../services/socket';
 import { orderService } from '../../services/orderService';
 import { isUnauthenticatedError } from '../../services/api';
+import { isNewerOrderEvent, type OrderRealtimeEvent } from '../../services/orderRealtime';
 
 interface ConfirmedOrder {
   id: number;
   status: string;
+  version?: number;
+  updated_at?: string;
   order_number?: number;
   total?: number | string;
   tracking_token?: string;
@@ -28,6 +31,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
   const [isTrackingExpired, setIsTrackingExpired] = useState(false);
   const onOrderChangeRef = useRef(onOrderChange);
   const initialOrderRef = useRef(initialOrder);
+  const currentVersionRef = useRef(initialOrder.version ?? 0);
   initialOrderRef.current = initialOrder;
   const orderId = initialOrder.id;
   const trackingToken = initialOrder.tracking_token;
@@ -46,6 +50,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
 
   useEffect(() => {
     setOrder(initialOrder);
+    currentVersionRef.current = initialOrder.version ?? currentVersionRef.current;
   }, [initialOrder]);
 
   // Mobile browsers suspend sockets and can reload discarded tabs. Rejoin and
@@ -54,8 +59,14 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
     if (!orderId || !trackingToken) return;
     let expired = false;
 
-    const applyStatus = (status: string) => {
-      const updated = { ...initialOrderRef.current, status };
+    const applyStatus = (status: string, version: number, updatedAt?: string) => {
+      currentVersionRef.current = version;
+      const updated = {
+        ...initialOrderRef.current,
+        status,
+        version,
+        ...(updatedAt ? { updated_at: updatedAt } : {}),
+      };
       setOrder(updated);
       onOrderChangeRef.current?.(updated);
     };
@@ -63,7 +74,9 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
       if (expired) return;
       try {
         const latest = await orderService.getPublicOrderStatus(orderId, trackingToken);
-        applyStatus(latest.status);
+        if (latest.version >= currentVersionRef.current) {
+          applyStatus(latest.status, latest.version, latest.updated_at);
+        }
       } catch (error) {
         if (isUnauthenticatedError(error)) {
           // The tracking token expired server-side; stop retrying with a
@@ -81,7 +94,10 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
       joinOrderRoom(orderId, trackingToken);
       void refreshStatus();
     };
-    const handleUpdate = (data: { status: string }) => applyStatus(data.status);
+    const handleUpdate = (event: OrderRealtimeEvent) => {
+      if (!isNewerOrderEvent(event, { orderId, currentVersion: currentVersionRef.current })) return;
+      applyStatus(event.order.status, event.order.version, event.order.updated_at);
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       if (!socket.connected) socket.connect();
@@ -89,7 +105,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
     };
 
     socket.on('connect', joinAndRefresh);
-    socket.on('order-status-updated', handleUpdate);
+    socket.on('order.status.v1', handleUpdate);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pageshow', joinAndRefresh);
 
@@ -98,7 +114,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
 
     return () => {
       socket.off('connect', joinAndRefresh);
-      socket.off('order-status-updated', handleUpdate);
+      socket.off('order.status.v1', handleUpdate);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', joinAndRefresh);
     };

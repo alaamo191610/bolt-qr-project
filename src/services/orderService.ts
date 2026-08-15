@@ -279,6 +279,7 @@ export const orderService = {
       id: number
       order_number?: number
       status: string
+      version: number
       updated_at: string
     }
   },

@@ -54,6 +54,11 @@ require `super-admin-session`. Customer status and the corresponding socket room
 `order-tracking`; it is read-only and cannot authenticate an admin route. All classes carry
 issuer, audience, purpose, subject where applicable, and expiry claims.
 
+Realtime room authority is derived from verified credentials rather than client-supplied tenant
+or restaurant identifiers. Versioned socket events are best-effort hints; clients recover from
+reconnect or process restart through authoritative tenant-scoped HTTP refetch. See the
+[order realtime integrity contract](order-realtime-integrity.md).
+
 Dine-in order creation requires the separate 30-minute `table-session` class with audience
 `table-ordering`. It is issued only by exchanging a current high-entropy table capability and
 cannot authenticate restaurant, SuperAdmin, tracking, or socket-admin routes. See the
@@ -77,3 +82,8 @@ identity for authorization. Durable backend idempotency and per-session open-ord
 implemented. Branch pause/closure/overload, table availability, and safe local rejection telemetry
 are also implemented. A production shared limiter, frontend state-control/key-persistence work, and
 real-backend E2E evidence remain launch blockers.
+
+Authorized/versioned order realtime and authoritative reconnect/resume refetch are implemented as
+documented in `order-realtime-integrity.md`. The remaining M2 launch work is the joint tracking
+expiry/recovery decision, legacy QR/admin UI and client handoff, real-backend golden E2E, and
+staging evidence.

@@ -29,7 +29,6 @@ import { createRequestContextMiddleware } from './requestContext.js';
 import {
   TOKEN_TYPES,
   issueToken,
-  verifyToken,
 } from './tokenPolicy.js';
 import { createTableCapabilityService, hashTableCapability } from './tableCapability.js';
 import {
@@ -44,6 +43,10 @@ import {
   assertPublicOrderAvailable,
   createPublicOrderRejectionTelemetry,
 } from './publicOrderAvailability.js';
+import {
+  OrderTrackingAuthorizationError,
+  createOrderRealtimeService,
+} from './orderRealtime.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -103,6 +106,11 @@ const authenticate = createAuthenticate({
 const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
 const publicOrderIdempotency = createPublicOrderIdempotencyService();
 const publicOrderRejectionTelemetry = createPublicOrderRejectionTelemetry();
+const orderRealtime = createOrderRealtimeService({
+  db: prisma,
+  tokenSecret: JWT_SECRET,
+  resolveTenantClaims,
+});
 
 const app = express();
 const server = createServer(app);
@@ -113,29 +121,9 @@ if (Number.isInteger(trustedProxyHops) && trustedProxyHops >= 0) {
 const io = new Server(server, {
   cors: corsOptions
 });
+orderRealtime.register(io);
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('join-admin', async (payload) => {
-    const adminId = typeof payload === 'string' ? payload : payload?.adminId;
-    const token = typeof payload === 'object' ? payload?.token : null;
-
-    if (!adminId || !token) return;
-
-    try {
-      const claims = verifyToken(TOKEN_TYPES.RESTAURANT_SESSION, token, JWT_SECRET);
-      if (claims.role !== 'RESTAURANT_ADMIN') return;
-      const session = await resolveTenantClaims(claims);
-      if (!session || session.admin.id !== adminId) return;
-
-      socket.join(`admin_${adminId}`);
-      console.log(`Socket ${socket.id} joined admin_${adminId}`);
-    } catch {
-      // Invalid socket credentials are deliberately ignored.
-    }
-  });
-
   socket.on('join-menu', async (adminId) => {
     if (!isUuid(adminId)) return;
     try {
@@ -151,23 +139,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('join-order', (payload) => {
-    const orderId = Number(payload?.orderId);
-    const trackingToken = payload?.trackingToken;
-    if (!Number.isInteger(orderId) || !trackingToken) return;
-    try {
-      const claims = verifyToken(TOKEN_TYPES.ORDER_TRACKING, trackingToken, JWT_SECRET);
-      if (Number(claims.orderId) !== orderId) return;
-      socket.join(`order_${orderId}`);
-      console.log(`Socket ${socket.id} joined order_${orderId}`);
-    } catch {
-      // Expired or invalid tracking credentials are deliberately ignored.
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
 });
 
 const upload = multer({
@@ -1575,7 +1546,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     const { order: fullOrder, replayed } = transactionResult;
     const presentedOrder = presentPublicOrder(fullOrder);
     if (!replayed && fullOrder?.admin_id) {
-      io.to(`admin_${fullOrder.admin_id}`).emit('new-order', presentedOrder);
+      orderRealtime.emitCreated(io, fullOrder, presentedOrder);
       if (fullOrder?.table) {
         io.to(`admin_${fullOrder.admin_id}`).emit('table-updated', {
           ...fullOrder.table,
@@ -1587,7 +1558,8 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     const trackingToken = issueToken(TOKEN_TYPES.ORDER_TRACKING, {
       orderId: fullOrder.id,
       adminId: fullOrder.admin_id,
-    }, JWT_SECRET);
+      organizationId: fullOrder.organization_id,
+    }, JWT_SECRET, { subject: String(fullOrder.id) });
     res.setHeader('Idempotency-Replayed', String(replayed));
     res.status(replayed ? 200 : 201).json({ ...presentedOrder, tracking_token: trackingToken });
   } catch (err) {
@@ -1610,23 +1582,42 @@ app.get('/api/public/orders/:id/status', async (req, res) => {
   const orderId = Number(req.params.id);
   const authorization = String(req.headers.authorization || '');
   const trackingToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  if (!Number.isInteger(orderId) || !trackingToken) {
-    return res.status(400).json({ error: 'Order tracking credentials are required' });
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return sendError(res, req, Object.assign(new Error('Invalid order identifier'), {
+      status: 400,
+      code: ERROR_CODES.VALIDATION_ERROR,
+    }));
+  }
+  if (!trackingToken) {
+    return sendError(res, req, Object.assign(new Error('Order tracking credentials are required'), {
+      status: 401,
+      code: ERROR_CODES.AUTHENTICATION_REQUIRED,
+    }));
   }
 
   try {
-    const claims = verifyToken(TOKEN_TYPES.ORDER_TRACKING, trackingToken, JWT_SECRET);
-    if (Number(claims.orderId) !== orderId) {
-      return res.status(403).json({ error: 'Invalid order tracking credentials' });
-    }
-    const order = await prisma.order.findFirst({
-      where: { id: orderId, admin_id: claims.adminId },
-      select: { id: true, status: true, updated_at: true },
+    const order = await orderRealtime.resolveTrackingOrder({ orderId, trackingToken });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      id: order.id,
+      status: order.status,
+      version: order.version,
+      updated_at: order.updated_at,
     });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-    res.json(order);
-  } catch {
-    res.status(401).json({ error: 'Order tracking session expired' });
+  } catch (error) {
+    if (error instanceof OrderTrackingAuthorizationError) {
+      const invalidCredential = error.reason === 'INVALID_CREDENTIAL';
+      return sendError(res, req, Object.assign(new Error(
+        invalidCredential
+          ? 'Order tracking credentials are invalid or expired'
+          : 'Order not found',
+      ), {
+        status: invalidCredential ? 401 : 404,
+        code: invalidCredential ? ERROR_CODES.AUTHENTICATION_REQUIRED : ERROR_CODES.ORDER_NOT_FOUND,
+      }));
+    }
+    console.error('Error fetching order status:', logSafeError(error));
+    return sendError(res, req, error);
   }
 });
 
@@ -1634,51 +1625,65 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
   const { status } = req.body;
   if (!ORDER_STATUSES.has(status)) return res.status(400).json({ error: 'Invalid order status' });
   try {
-    const order = await prisma.$transaction(async tx => {
+    const result = await prisma.$transaction(async tx => {
       const current = await tx.order.findFirst({
-        where: { id: Number(req.params.id), admin_id: req.user.id },
-        select: { id: true, status: true, version: true }
+        where: {
+          id: Number(req.params.id),
+          admin_id: req.user.id,
+          organization_id: req.auth.organizationId,
+        },
+        select: { id: true, status: true, version: true, table_id: true }
       });
       if (!current) throw Object.assign(new Error('Order not found'), { status: 404 });
-      if (current.status === status) return tx.order.findUnique({ where: { id: current.id } });
+      if (current.status === status) {
+        return {
+          changed: false,
+          order: await tx.order.findUnique({ where: { id: current.id } }),
+          releasedTable: null,
+        };
+      }
       if (!canTransitionOrder(current.status, status)) {
         throw Object.assign(new Error(`Cannot move order from ${current.status} to ${status}`), { status: 409 });
       }
 
       const updated = await tx.order.updateMany({
-        where: { id: current.id, admin_id: req.user.id, version: current.version },
+        where: {
+          id: current.id,
+          admin_id: req.user.id,
+          organization_id: req.auth.organizationId,
+          version: current.version,
+        },
         data: { status, version: { increment: 1 } }
       });
       if (updated.count !== 1) throw Object.assign(new Error('Order changed; refresh and retry'), { status: 409 });
-      return tx.order.findUnique({ where: { id: current.id } });
+      const order = await tx.order.findUnique({ where: { id: current.id } });
+      let releasedTable = null;
+      if (current.table_id && ['served', 'cancelled'].includes(status)) {
+        const activeOrders = await tx.order.count({
+          where: {
+            organization_id: req.auth.organizationId,
+            table_id: current.table_id,
+            id: { not: current.id },
+            status: { in: ['pending', 'preparing', 'ready'] },
+          },
+        });
+        if (activeOrders === 0) {
+          releasedTable = await tx.table.update({
+            where: { id: current.table_id },
+            data: { status: 'available' },
+          });
+        }
+      }
+      return { changed: true, order, releasedTable };
     }, { isolationLevel: 'Serializable' });
 
-    let releasedTable = null;
-    if (order.table_id && ['served', 'cancelled'].includes(status)) {
-      const activeOrders = await prisma.order.count({
-        where: {
-          table_id: order.table_id,
-          id: { not: order.id },
-          status: { in: ['pending', 'preparing', 'ready'] }
-        }
-      });
-      if (activeOrders === 0) {
-        releasedTable = await prisma.table.update({
-          where: { id: order.table_id },
-          data: { status: 'available' }
-        });
+    if (result.changed) {
+      orderRealtime.emitStatus(io, result.order);
+      if (result.releasedTable) {
+        io.to(`admin_${result.order.admin_id}`).emit('table-updated', result.releasedTable);
       }
     }
-    // Emit to customer tracking this order
-    io.to(`order_${order.id}`).emit('order-status-updated', { status });
-    // Emit to admin dashboard
-    if (order.admin_id) {
-      io.to(`admin_${order.admin_id}`).emit('order-updated', order);
-      if (releasedTable) {
-        io.to(`admin_${order.admin_id}`).emit('table-updated', releasedTable);
-      }
-    }
-    res.json(order);
+    res.json(result.order);
   } catch (err) { res.status(err.status || 500).json({ error: err.status ? err.message : 'Internal server error' }); }
 });
 

@@ -358,6 +358,58 @@ production build, 30 unit tests, 25 PostgreSQL integration tests, 41 frontend te
 desktop/mobile browser E2E tests. Admin control UI remains a frontend handoff. The next Yazan point
 is authorized/versioned order realtime and authoritative reconnect/refetch behavior.
 
+## Implementation tracking — 15 August 2026 (local migration deployment repaired)
+
+Local tenant login exposed an environment drift failure: the generated Prisma Client selected
+`branches.ordering_state`, but `restaurant_db` had not applied the latest three M2 migrations.
+Deployed `20260815100000_public_order_idempotency`,
+`20260815110000_table_session_order_capacity`, and
+`20260815120000_public_order_availability` in order without resetting data.
+
+Verification shows all 19 migrations applied, both availability columns present, and the
+`OrganizationUser` login relation query successfully loading its organization/default branch with
+ordering state `OPEN`. This closes the local runtime blocker only; staging migration evidence is
+still required by the production definition of done, and M2 work proceeds to order/realtime
+integrity.
+
+## Implementation tracking — 15 August 2026 (order/realtime integrity started)
+
+The M2 realtime contract is published in
+`docs/contracts/order-realtime-integrity.md`. PostgreSQL/HTTP state remains authoritative;
+authenticated sockets carry versioned notification hints using persisted `Order.version`.
+Implementation covers server-derived tenant rooms, database-backed order-room authorization,
+safe join acknowledgements, atomic status/table mutation, monotonic client application, and
+authoritative reconnect/resume refetch tests. Tracking-token lifetime remains at the current 24
+hours until the separate D1 expiry/recovery decision is jointly approved.
+
+## Implementation tracking — 15 August 2026 (order/realtime implementation complete)
+
+The realtime boundary now derives tenant rooms from active credentials, revalidates customer order
+scope in PostgreSQL, returns non-enumerating join failures, and emits protocol-v1 envelopes only
+after commit. Persisted `Order.version` drives monotonic customer updates; no-op transitions do not
+emit. Status transition and terminal table release are one serializable transaction, and the
+minimal status endpoint is non-cacheable and distinguishes authentication from server failure.
+
+Customer reconnect/resume and restaurant reconnect both perform authoritative HTTP reconciliation.
+Legacy event names/rooms remain as a bounded compatibility bridge for Alaa. Focused unit/frontend
+checks and 26 disposable-PostgreSQL integration tests pass, including real Socket.IO delivery,
+cross-order denial, missed-event recovery, no-op suppression, and committed table release. Full
+regression verification remains in progress.
+
+## Implementation tracking — 15 August 2026 (order/realtime integrity complete)
+
+Final evidence passes 37 backend unit tests, 26 disposable-PostgreSQL integration tests, 45
+frontend tests, 8 desktop/mobile browser E2E tests, ESLint, TypeScript, Prisma validation, and the
+production build. Real Socket.IO integration proves authenticated tenant/order isolation,
+post-commit versioned events, no event for no-op transitions, reconnect recovery through
+authoritative HTTP state, and atomic status/table release. No temporary test database remains; the
+existing large-chunk warning remains assigned to later performance work.
+
+This completes Yazan's local M2 backend order-cycle scope. The M2 milestone is not production-Done
+until Alaa's legacy QR/admin-control/client handoff and real-backend golden E2E are complete, the
+tracking expiry/recovery decision is approved, and staging evidence exists. Yazan's next unblocked
+implementation area is M3, gated where applicable by provider and RPO/RTO decisions.
+
 ## Outcome and planning rule
 
 Release a secure, observable, recoverable multi-tenant restaurant QR platform without
@@ -496,7 +548,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Foundation implemented | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, and cross-tenant negatives pass; staging verify/enforce remain. | — | 14 Aug 2026 |
-| M2 bounded order cycle | Core QR/session, idempotency, capacity, availability, and local rejection telemetry integrated; realtime integrity remains | — | Capability retry, capacity, operational states, tenant/role controls, audit, and no-mutation rejections pass; 30 unit and 25 PostgreSQL integration tests. Legacy QR, frontend controls/persistence, real-backend golden E2E, realtime integrity, and M3 shared limiting remain. | Yazan + Alaa | 15 Aug 2026 |
+| M2 bounded order cycle | Yazan local backend complete; joint/frontend/staging closure remains | — | QR/session, idempotency, capacity, availability, telemetry, atomic transitions, authorized/versioned realtime, and authoritative recovery pass with 37 unit, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests. Legacy QR/admin UI, tracking-expiry decision, real-backend golden E2E, Alaa handoff, and staging evidence remain. | Yazan + Alaa | 15 Aug 2026 |
 | M3 production infrastructure | Not started | — | — | — | — |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import OrderConfirmation from './OrderConfirmation';
 import { orderService } from '../../services/orderService';
@@ -54,6 +54,7 @@ afterEach(() => {
 const baseOrder = {
   id: 1,
   status: 'pending',
+  version: 1,
   order_number: 42,
   tracking_token: 'a-valid-tracking-token',
   table: { code: '5' },
@@ -87,6 +88,7 @@ describe('OrderConfirmation tracking-link expiry', () => {
     vi.mocked(orderService.getPublicOrderStatus).mockResolvedValue({
       id: 1,
       status: 'preparing',
+      version: 2,
       updated_at: new Date().toISOString(),
     });
 
@@ -94,5 +96,84 @@ describe('OrderConfirmation tracking-link expiry', () => {
 
     await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalled());
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('applies only newer matching protocol-v1 socket events', async () => {
+    vi.mocked(orderService.getPublicOrderStatus).mockResolvedValue({
+      id: 1,
+      status: 'pending',
+      version: 1,
+      updated_at: new Date().toISOString(),
+    });
+    const onOrderChange = vi.fn();
+    render(
+      <OrderConfirmation
+        order={baseOrder}
+        onStartNewOrder={vi.fn()}
+        onOrderChange={onOrderChange}
+      />,
+    );
+    await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalled());
+    onOrderChange.mockClear();
+
+    const handler = socketHandlers['order.status.v1'][0];
+    await act(async () => handler({
+      protocolVersion: 1,
+      eventId: 'event-new',
+      occurredAt: new Date().toISOString(),
+      order: { id: 1, status: 'preparing', version: 2, updated_at: new Date().toISOString() },
+    }));
+    await act(async () => handler({
+      protocolVersion: 1,
+      eventId: 'event-stale',
+      occurredAt: new Date().toISOString(),
+      order: { id: 1, status: 'served', version: 1, updated_at: new Date().toISOString() },
+    }));
+    await act(async () => handler({
+      protocolVersion: 1,
+      eventId: 'event-other-order',
+      occurredAt: new Date().toISOString(),
+      order: { id: 2, status: 'served', version: 3, updated_at: new Date().toISOString() },
+    }));
+
+    expect(onOrderChange).toHaveBeenCalledTimes(1);
+    expect(onOrderChange).toHaveBeenCalledWith(expect.objectContaining({
+      id: 1,
+      status: 'preparing',
+      version: 2,
+    }));
+  });
+
+  it('refetches authoritative status when a suspended page is shown again', async () => {
+    vi.mocked(orderService.getPublicOrderStatus)
+      .mockResolvedValueOnce({
+        id: 1,
+        status: 'pending',
+        version: 1,
+        updated_at: new Date().toISOString(),
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        status: 'ready',
+        version: 3,
+        updated_at: new Date().toISOString(),
+      });
+    const onOrderChange = vi.fn();
+    render(
+      <OrderConfirmation
+        order={baseOrder}
+        onStartNewOrder={vi.fn()}
+        onOrderChange={onOrderChange}
+      />,
+    );
+    await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalledTimes(1));
+
+    window.dispatchEvent(new Event('pageshow'));
+
+    await waitFor(() => expect(orderService.getPublicOrderStatus).toHaveBeenCalledTimes(2));
+    expect(onOrderChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: 'ready',
+      version: 3,
+    }));
   });
 });

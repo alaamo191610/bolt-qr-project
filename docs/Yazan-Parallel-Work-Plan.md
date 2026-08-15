@@ -484,6 +484,59 @@ Final verification passes ESLint, TypeScript, Prisma validation, production buil
 tests. The next Yazan point is order/realtime integrity: authorized and versioned socket events,
 status/refetch authority, reconnect/server-restart behavior, and cross-tenant transition tests.
 
+## Tracking update — 15 August 2026 (local database migration repair)
+
+The local `restaurant_db` was still three migrations behind the generated Prisma Client, which
+caused tenant login to fail with `P2022` while loading `branches.ordering_state`. Applied the
+pending public-order idempotency, table-session capacity, and ordering-availability migrations
+with `prisma migrate deploy`; no database reset or destructive cleanup was used.
+
+Post-deploy verification reports all 19 migrations current, confirms both
+`branches.ordering_state` and `branches.ordering_state_updated_at`, and successfully executes the
+login-shaped `OrganizationUser` query with its organization and default branch. Existing local
+data resolves with default branch ordering state `OPEN`. The runtime schema mismatch is cleared;
+the next implementation point remains order/realtime integrity.
+
+## Tracking update — 15 August 2026 (order/realtime integrity started)
+
+Published the [order realtime and authoritative refetch contract](contracts/order-realtime-integrity.md).
+This slice derives private socket rooms from verified credentials, database-revalidates tracking
+scope, adds safe join acknowledgements and versioned event envelopes, makes status/table changes
+one transaction, and treats sockets as hints over authoritative REST state. Customer and admin
+clients must rejoin and refetch after reconnect/resume; persisted `Order.version` rejects stale
+events. The existing 24-hour tracking lifetime remains unchanged pending the separate joint D1
+expiry/recovery decision.
+
+## Tracking update — 15 August 2026 (order/realtime implementation complete)
+
+Implemented a dedicated order-realtime boundary with tenant-qualified rooms, server-derived admin
+scope, database-backed tracking authorization, generic failure acknowledgements, and protocol-v1
+event envelopes. New tracking tokens bind order, organization, restaurant, purpose, audience,
+issuer, expiry, and subject. The public status endpoint now returns minimal versioned state with
+`Cache-Control: no-store` and separates credential failures from database failures.
+
+Status/version mutation and terminal table release now commit in one serializable transaction;
+no-op updates emit nothing. Customer clients accept only newer matching order versions and refetch
+on connect/resume/pageshow. Restaurant clients rejoin and authoritatively refetch orders after
+reconnect. Legacy event names/rooms remain temporarily for Alaa compatibility, while new clients
+consume only `.v1` events. Focused unit/frontend checks and all 26 disposable-PostgreSQL integration
+tests pass; full regression verification is in progress.
+
+## Tracking update — 15 August 2026 (order/realtime integrity complete)
+
+Final verification passes 37 backend unit tests, 26 disposable-PostgreSQL integration tests, 45
+frontend tests, 8 desktop/mobile browser E2E tests, ESLint, TypeScript, Prisma validation, and the
+production build. The integration suite runs against the real Socket.IO server and proves
+credential-derived joins, cross-order denial, committed version delivery, no-op suppression,
+missed-event recovery through authoritative refetch, and atomic terminal table release. No
+temporary test databases remain. The existing large-chunk warning is unchanged.
+
+Yazan's local M2 backend order cycle is complete. M2 release closure still requires Alaa's legacy
+QR removal/admin controls/client handoff and real-backend golden customer E2E, plus the joint
+tracking-expiry/recovery decision. The next unblocked Yazan implementation area is M3 production
+infrastructure; provider choices and RPO/RTO are required before durable storage, shared limiting,
+hosted monitoring, and restore work can be finalized.
+
 ## Fair-split agreement
 
 Ownership is not a measure of effort. Each milestone is planned as an approximately equal
@@ -562,7 +615,7 @@ documentation, fixture, or regression task instead of waiting.
 | QR/table capability | **Core backend/frontend integrated and re-reviewed 15 Aug at `1396b5f`:** secure generator, exchange, table bearer checkout, recovery states, and mocked desktop/mobile E2E pass. Legacy capability-less `TableManagement` QR and real-backend golden E2E remain. | Backend negatives and mocked browser paths pass; remove legacy QR and add real rotate/exchange/order/tracking evidence plus RTL. |
 | Idempotency | **Backend complete 15 Aug:** required safe key, capability-version/tenant/table scope, 24-hour durable record, atomic order/effects, exact replay, changed-payload conflict, rollback, and no duplicate socket emission. | 26 unit and 21 PostgreSQL integration tests include concurrent retry with one order/one promotion increment. Frontend reload/mobile-resume persistence remains. |
 | Abuse controls | **Local M2 controls complete 15 Aug:** individual session/organization/IP limits, transactional three-open-order cap, branch pause/closed/overload, fail-closed table availability, audited management, and redacted rejection telemetry pass. Shared limiting remains M3. | Capacity concurrency plus full state/role/tenant/no-mutation/replay/telemetry tests pass. Admin state-control UI remains Alaa's handoff. |
-| Order/realtime integrity | Transactional totals/promotions; authorized/versioned socket rooms/events; tracking credentials are minimal and scoped. | Socket/transition/cross-tenant tests; document authoritative refetch endpoint. |
+| Order/realtime integrity | **Local backend/client integrity complete 15 Aug:** credential-derived tenant rooms, database-revalidated tracking scope, protocol-v1 events, monotonic versions, atomic status/table transitions, and authoritative reconnect/resume refetch. | 37 unit, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests pass; tracking-expiry decision and Alaa real-backend golden E2E remain. |
 
 ### Y3 — M3 production infrastructure (Weeks 6–8)
 

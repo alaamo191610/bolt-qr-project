@@ -12,16 +12,26 @@ export const socket = io(SOCKET_URL, {
     autoConnect: true,
 });
 
-export const joinAdminRoom = (adminId: string) => {
+export interface SocketJoinAcknowledgement {
+    ok: boolean;
+    protocolVersion: number;
+    code?: 'SOCKET_AUTHORIZATION_FAILED';
+}
+
+export const joinAdminRoom = (acknowledge?: (result: SocketJoinAcknowledgement) => void) => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
-    socket.emit("join-admin", { adminId, token });
+    socket.emit("join-admin", { token }, acknowledge);
 };
 
 export const joinMenuRoom = (adminId: string) => {
     socket.emit("join-menu", adminId);
 };
 
-export const joinOrderRoom = (orderId: number, trackingToken: string) => {
-    socket.emit("join-order", { orderId, trackingToken });
+export const joinOrderRoom = (
+    orderId: number,
+    trackingToken: string,
+    acknowledge?: (result: SocketJoinAcknowledgement) => void,
+) => {
+    socket.emit("join-order", { orderId, trackingToken }, acknowledge);
 };

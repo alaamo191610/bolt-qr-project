@@ -22,6 +22,10 @@ import ResponsiveLayout from "./components/common/ResponsiveLayout";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { Toaster, toast } from "react-hot-toast";
 import { socket, joinAdminRoom } from "./services/socket";
+import {
+  isOrderRealtimeEvent,
+  type OrderRealtimeEvent,
+} from "./services/orderRealtime";
 
 const QRGenerator = React.lazy(() => import("./components/tables/QRGenerator"));
 const DigitalMenu = React.lazy(() => import("./components/menu/DigitalMenu"));
@@ -60,6 +64,7 @@ interface Order {
   }>;
   total: number;
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
+  version?: number;
   timestamp: Date | string;
   type?: 'dine_in' | 'take_away';
 }
@@ -111,6 +116,7 @@ interface ApiOrder {
   order_items?: ApiOrderItem[];
   total?: number;
   status?: Order['status'];
+  version?: number;
   type?: Order['type'];
   created_at: string;
 }
@@ -275,6 +281,7 @@ const AdminDashboard: React.FC = () => {
             })) || [],
           total: order.total || 0,
           status: order.status || "pending",
+          version: order.version || 1,
           timestamp: new Date(order.created_at),
           type: order.type,
         }))
@@ -343,16 +350,23 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    joinAdminRoom(user.id);
+    joinAdminRoom();
 
     const handleConnect = () => {
       // Socket.IO room membership does not survive a disconnect/reconnect;
       // without this, table/order updates silently stop arriving after any
       // network blip until the page is refreshed.
-      joinAdminRoom(user.id);
+      joinAdminRoom();
+      void fetchOrders();
     };
 
-    const handleNewOrder = (order: ApiOrder) => {
+    const handleNewOrder = (event: OrderRealtimeEvent<ApiOrder>) => {
+      if (!isOrderRealtimeEvent(event)) return;
+      const order = event.orderRepresentation;
+      if (!order) {
+        void fetchOrders();
+        return;
+      }
       const transformedOrder: Order = {
         id: order.id,
         order_number: order.order_number,
@@ -366,22 +380,38 @@ const AdminDashboard: React.FC = () => {
         })) || [],
         total: order.total || 0,
         status: order.status || "pending",
+        version: event.order.version,
         timestamp: new Date(order.created_at),
         type: order.type,
       };
 
-      setOrders((prev) => [transformedOrder, ...prev]);
+      setOrders((prev) => prev.some(existing => existing.id === transformedOrder.id)
+        ? prev.map(existing => existing.id === transformedOrder.id ? transformedOrder : existing)
+        : [transformedOrder, ...prev]);
       toast.success(`New Order #${order.order_number || order.id} received!`);
+      void fetchOrders();
+    };
+
+    const handleStatusUpdate = (event: OrderRealtimeEvent) => {
+      if (!isOrderRealtimeEvent(event)) return;
+      setOrders(prev => prev.map(order => (
+        order.id === event.order.id && event.order.version > (order.version ?? 0)
+          ? { ...order, status: event.order.status as Order['status'], version: event.order.version }
+          : order
+      )));
+      void fetchOrders();
     };
 
     socket.on("connect", handleConnect);
-    socket.on("new-order", handleNewOrder);
+    socket.on("order.created.v1", handleNewOrder);
+    socket.on("order.status.v1", handleStatusUpdate);
 
     return () => {
       socket.off("connect", handleConnect);
-      socket.off("new-order", handleNewOrder);
+      socket.off("order.created.v1", handleNewOrder);
+      socket.off("order.status.v1", handleStatusUpdate);
     };
-  }, [user]);
+  }, [user, fetchOrders]);
 
   // Simple tab change handler
   const handleTabChange = (tabId: string) => {

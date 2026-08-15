@@ -1,14 +1,13 @@
 import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { io as createSocketClient } from 'socket.io-client';
 import { createTestDatabase } from '../helpers/testDatabase.js';
 import { runTenantOwnershipVerification } from '../../server/prisma/verification/runTenantOwnershipVerification.js';
 
 let database;
 let applicationDatabase;
-let app;
 let httpServer;
 let baseUrl;
 let tenantA;
@@ -29,6 +28,35 @@ const authenticatedRequest = (token, path, init = {}) => fetch(`${baseUrl}${path
     Authorization: `Bearer ${token}`,
     ...(init.headers || {}),
   },
+});
+
+const connectSocket = socket => new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => reject(new Error('Socket connection timed out')), 3000);
+  socket.once('connect', () => {
+    clearTimeout(timeout);
+    resolve();
+  });
+  socket.once('connect_error', error => {
+    clearTimeout(timeout);
+    reject(error);
+  });
+  socket.connect();
+});
+
+const emitWithAck = (socket, event, payload) => new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => reject(new Error(`${event} acknowledgement timed out`)), 3000);
+  socket.emit(event, payload, result => {
+    clearTimeout(timeout);
+    resolve(result);
+  });
+});
+
+const nextSocketEvent = (socket, event) => new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => reject(new Error(`${event} delivery timed out`)), 3000);
+  socket.once(event, payload => {
+    clearTimeout(timeout);
+    resolve(payload);
+  });
 });
 
 const createTenantFixture = async (label) => {
@@ -179,9 +207,10 @@ before(async () => {
   database = await createTestDatabase();
   process.env.DATABASE_URL = database.databaseUrl;
   const application = await import(`../../server/index.js?integration=${Date.now()}`);
-  ({ app } = application);
+  ({ server: httpServer } = application);
   rejectionTelemetry = application.publicOrderRejectionTelemetry;
   rateLimiters = [
+    application.authRateLimit,
     application.orderRateLimit,
     application.tableExchangeIpRateLimit,
     application.tableExchangeCapabilityRateLimit,
@@ -189,7 +218,6 @@ before(async () => {
     application.organizationOrderRateLimit,
   ];
   ({ default: applicationDatabase } = await import('../../server/db.js'));
-  httpServer = createServer(app);
   await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
 });
@@ -912,6 +940,159 @@ test('public orders enforce branch and table states without breaking exact repla
       'counters',
     ].includes(key))
   ));
+});
+
+test('realtime order rooms are scoped, versioned, and recover through authoritative refetch', async () => {
+  await database.prisma.order.update({
+    where: { id: tenantA.order.id },
+    data: { status: 'served' },
+  });
+  const { adminToken, session } = await createTableSession(tenantA);
+  const createdResponse = await authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': randomUUID() },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+  const created = await createdResponse.json();
+  assert.equal(createdResponse.status, 201);
+  assert.equal(created.version, 1);
+  assert.ok(created.tracking_token);
+
+  const customerSocket = createSocketClient(baseUrl, {
+    autoConnect: false,
+    forceNew: true,
+    reconnection: false,
+    transports: ['websocket'],
+  });
+  const adminSocket = createSocketClient(baseUrl, {
+    autoConnect: false,
+    forceNew: true,
+    reconnection: false,
+    transports: ['websocket'],
+  });
+  let customerStatusEvents = 0;
+  customerSocket.on('order.status.v1', () => { customerStatusEvents += 1; });
+
+  try {
+    await Promise.all([connectSocket(customerSocket), connectSocket(adminSocket)]);
+    assert.deepEqual(
+      await emitWithAck(customerSocket, 'join-order', {
+        orderId: created.id,
+        trackingToken: created.tracking_token,
+      }),
+      { ok: true, protocolVersion: 1 },
+    );
+    assert.deepEqual(
+      await emitWithAck(adminSocket, 'join-admin', {
+        token: adminToken,
+        adminId: tenantB.admin.id,
+      }),
+      { ok: true, protocolVersion: 1 },
+    );
+    assert.deepEqual(
+      await emitWithAck(customerSocket, 'join-order', {
+        orderId: tenantB.order.id,
+        trackingToken: created.tracking_token,
+      }),
+      { ok: false, protocolVersion: 1, code: 'SOCKET_AUTHORIZATION_FAILED' },
+    );
+
+    const customerPreparing = nextSocketEvent(customerSocket, 'order.status.v1');
+    const adminPreparing = nextSocketEvent(adminSocket, 'order.status.v1');
+    const preparingResponse = await authenticatedRequest(
+      adminToken,
+      `/api/orders/${created.id}/status`,
+      { method: 'PUT', body: JSON.stringify({ status: 'preparing' }) },
+    );
+    const preparing = await preparingResponse.json();
+    const [customerEvent, adminEvent] = await Promise.all([customerPreparing, adminPreparing]);
+    assert.equal(preparingResponse.status, 200);
+    assert.equal(preparing.version, 2);
+    assert.deepEqual(customerEvent.order, adminEvent.order);
+    assert.deepEqual(customerEvent.order, {
+      id: created.id,
+      status: 'preparing',
+      version: 2,
+      updated_at: preparing.updated_at,
+    });
+    assert.equal(customerEvent.protocolVersion, 1);
+    assert.match(customerEvent.eventId, /^[0-9a-f-]{36}$/);
+
+    const noOpResponse = await authenticatedRequest(
+      adminToken,
+      `/api/orders/${created.id}/status`,
+      { method: 'PUT', body: JSON.stringify({ status: 'preparing' }) },
+    );
+    assert.equal((await noOpResponse.json()).version, 2);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(customerStatusEvents, 1);
+
+    const authoritative = await authenticatedRequest(
+      created.tracking_token,
+      `/api/public/orders/${created.id}/status`,
+    );
+    assert.deepEqual(await authoritative.json(), {
+      id: created.id,
+      status: 'preparing',
+      version: 2,
+      updated_at: preparing.updated_at,
+    });
+    assert.equal(authoritative.headers.get('cache-control'), 'no-store');
+
+    const crossOrder = await authenticatedRequest(
+      created.tracking_token,
+      `/api/public/orders/${tenantB.order.id}/status`,
+    );
+    assert.equal(crossOrder.status, 404);
+    assert.equal((await crossOrder.json()).code, 'ORDER_NOT_FOUND');
+
+    customerSocket.disconnect();
+    const readyResponse = await authenticatedRequest(
+      adminToken,
+      `/api/orders/${created.id}/status`,
+      { method: 'PUT', body: JSON.stringify({ status: 'ready' }) },
+    );
+    assert.equal((await readyResponse.json()).version, 3);
+    assert.equal(customerStatusEvents, 1);
+
+    await connectSocket(customerSocket);
+    assert.equal((await emitWithAck(customerSocket, 'join-order', {
+      orderId: created.id,
+      trackingToken: created.tracking_token,
+    })).ok, true);
+    const recovered = await authenticatedRequest(
+      created.tracking_token,
+      `/api/public/orders/${created.id}/status`,
+    );
+    assert.deepEqual(await recovered.json(), {
+      id: created.id,
+      status: 'ready',
+      version: 3,
+      updated_at: (await database.prisma.order.findUnique({ where: { id: created.id } })).updated_at.toISOString(),
+    });
+
+    const servedEventPromise = nextSocketEvent(customerSocket, 'order.status.v1');
+    const servedResponse = await authenticatedRequest(
+      adminToken,
+      `/api/orders/${created.id}/status`,
+      { method: 'PUT', body: JSON.stringify({ status: 'served' }) },
+    );
+    const served = await servedResponse.json();
+    const servedEvent = await servedEventPromise;
+    assert.equal(served.version, 4);
+    assert.equal(servedEvent.order.version, 4);
+    assert.equal(customerStatusEvents, 2);
+    assert.equal(
+      (await database.prisma.table.findUnique({ where: { id: tenantA.table.id } })).status,
+      'available',
+    );
+  } finally {
+    customerSocket.close();
+    adminSocket.close();
+  }
 });
 
 test('dine-in order creation requires a valid current table session before mutation', async () => {
