@@ -38,7 +38,7 @@ const CategoryFilter: React.FC<Props> = ({
 
         {/* Actual categories */}
         {categories.map((category) => {
-          const label = isRTL ? category.name_ar : category.name_en;
+          const label = (isRTL ? category.name_ar : category.name_en) || category.name_en || category.name_ar;
           return (
             <button
               key={category.id}

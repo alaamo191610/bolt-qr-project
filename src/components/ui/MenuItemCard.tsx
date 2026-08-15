@@ -190,6 +190,7 @@ async function flyToHeaderFromRect(
   if (!inView) return;
 
   bubble.textContent = emoji;
+  bubble.setAttribute("aria-hidden", "true"); // decorative animation only, outside the React tree
   bubble.style.position = "fixed";
   bubble.style.left = `${startX}px`;
   bubble.style.top = `${startY}px`;
@@ -303,6 +304,13 @@ const MenuItemCard: React.FC<Props> = ({
     tinyPulseCartIcon?.();
     confettiOnceForItem?.(item.id);
     requestAnimationFrame(() => flyToHeaderFromRect(r, isRTL));
+  };
+
+  const openDetails = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isAvailable) return;
+    lastTriggerRef.current = e.currentTarget;
+    setOpenMenuId(item.id);
+    track("item_modal_open", { id: item.id });
   };
   useEffect(() => {
     setPendingQty(quantity);
@@ -551,34 +559,27 @@ const MenuItemCard: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Clickable Area */}
+        {/* Clickable Area - a plain (non-interactive) row. The image and the
+            title/description block each carry their own real button for
+            opening details; neither wraps the Add-to-cart button below, so
+            it's never a focusable descendant of another focusable element
+            (that nesting used to break keyboard focus order and
+            screen-reader announcement of both controls). */}
         <div
-          role="button"
-          tabIndex={isAvailable ? 0 : -1}
-          aria-disabled={!isAvailable || undefined}
           dir={isRTL ? "rtl" : "ltr"}
           className="flex-1 w-full outline-none text-start flex flex-row p-4 sm:p-5 gap-4 sm:gap-6"
-          onClick={(e) => {
-            if (!isAvailable) return;
-            lastTriggerRef.current = e.currentTarget as HTMLElement;
-            setOpenMenuId(item.id);
-            track("item_modal_open", { id: item.id });
-          }}
-          onKeyDown={(e) => {
-            if (!isAvailable) return;
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              lastTriggerRef.current = e.currentTarget as HTMLElement;
-              setOpenMenuId(item.id);
-              track("item_modal_open", { id: item.id });
-            }
-          }}
         >
           {/* Image Section */}
-          <div className="shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner">
+          <button
+            type="button"
+            onClick={openDetails}
+            disabled={!isAvailable}
+            aria-label={tt("menu.viewDetailsFor", `View details for ${displayName}`, { name: displayName })}
+            className="shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner appearance-none border-0 p-0 disabled:cursor-not-allowed"
+          >
             <img
               src={item.image_url || FALLBACK_400}
-              alt={displayName}
+              alt=""
               loading="lazy"
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             />
@@ -598,11 +599,16 @@ const MenuItemCard: React.FC<Props> = ({
                 <MenuBadgeStack tags={item.tags} maxVisible={1} />
               </div>
             )}
-          </div>
+          </button>
 
           {/* Content Section */}
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1">
+            <button
+              type="button"
+              onClick={openDetails}
+              disabled={!isAvailable}
+              className="flex-1 text-start appearance-none bg-transparent border-0 p-0 w-full disabled:cursor-not-allowed"
+            >
               <div className="flex justify-between items-start gap-2">
                 <h3 className={`text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-tight mb-2 line-clamp-2 ${showCompareChip ? (isRTL ? "pl-10" : "pr-10") : ""}`}>
                   {displayName}
@@ -614,7 +620,7 @@ const MenuItemCard: React.FC<Props> = ({
                   {displayDesc || (item.ingredients_details || []).map(d => isRTL ? d.ingredient.name_ar : d.ingredient.name_en).join(", ")}
                 </p>
               )}
-            </div>
+            </button>
 
             {/* Action Footer */}
             <div className={`flex items-end justify-between mt-2 pt-2 gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>

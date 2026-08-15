@@ -57,7 +57,7 @@ const AuthForm: React.FC = () => {
         <LanguageToggle variant="button" />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <main className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl flex items-center justify-center mx-auto mb-4">
             <LogIn className="w-8 h-8 text-white" />
@@ -164,14 +164,14 @@ const AuthForm: React.FC = () => {
         <div className="mt-6 text-center">
           <button
             onClick={() => setIsSignUp(!isSignUp)}
-            className="text-emerald-600 hover:text-emerald-700 font-medium"
+            className="text-emerald-700 hover:text-emerald-800 font-medium"
           >
             {isSignUp
               ? t("auth.alreadyHaveAccount")
               : t("auth.dontHaveAccount")}
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

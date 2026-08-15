@@ -191,7 +191,7 @@ const CartDrawer: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" onClick={onClose}>
+    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-labelledby="cart-drawer-title" onClick={onClose}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px] opacity-0 animate-fade-in" />
 
@@ -226,7 +226,7 @@ const CartDrawer: React.FC<Props> = ({
                 <ShoppingCart className="w-4 h-4" />
               </div>
               <div className="leading-tight">
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                <h1 id="cart-drawer-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                   {t('menu.yourOrder')}
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -290,9 +290,9 @@ const CartDrawer: React.FC<Props> = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <h4 className="font-semibold text-slate-900 dark:text-white truncate">
+                              <h2 className="font-semibold text-slate-900 dark:text-white truncate">
                                 {isRTL ? (item.name_ar || item.name_en) : item.name_en}
-                              </h4>
+                              </h2>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                 {fmt(item.price)} {t('menu.each')}
                               </p>

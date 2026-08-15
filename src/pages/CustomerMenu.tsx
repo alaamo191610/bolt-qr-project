@@ -1036,7 +1036,14 @@ const CustomerMenu: React.FC = () => {
         }`}
     >
       {/* Header */}
-      <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40">
+      {/* Hidden from the accessibility tree while the cart drawer covers it -
+          otherwise its own header/main landmarks collide with the drawer's,
+          and a screen reader could navigate into content that's visually
+          obscured behind an open modal. */}
+      <header
+        aria-hidden={showCart || undefined}
+        className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40"
+      >
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             {/* left: logo + title & meta */}
@@ -1088,6 +1095,7 @@ const CustomerMenu: React.FC = () => {
                 aria-haspopup="dialog"
                 aria-expanded={showCartOverlay}
                 aria-controls="header-cart-popover"
+                aria-label={totalItems > 0 ? `${t("menu.cart")} (${totalItems})` : t("menu.cart")}
               >
                 <BsBagHeart className="w-5 h-5" />
                 <span className="font-medium hidden sm:inline">
@@ -1108,7 +1116,7 @@ const CustomerMenu: React.FC = () => {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div role="main" aria-hidden={showCart || undefined} className="max-w-4xl mx-auto px-4 py-6">
         {/* Search + Filters */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft border border-slate-200 dark:border-slate-700 p-4 mb-6 animate-slide-up">
           <div className="flex flex-col gap-4">
