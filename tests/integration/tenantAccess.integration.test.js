@@ -665,6 +665,104 @@ test('capability rotation starts a new idempotency version scope', async () => {
   assert.notEqual(records[0].capability_version, records[1].capability_version);
 });
 
+test('a table session permits three open orders, replays at capacity, and releases terminal capacity', async () => {
+  const { session } = await createTableSession(tenantA);
+  const submit = key => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+  const keys = [randomUUID(), randomUUID(), randomUUID()];
+  const createdResponses = [];
+
+  for (const key of keys) createdResponses.push(await submit(key));
+  const createdOrders = await Promise.all(createdResponses.map(response => response.json()));
+  assert.deepEqual(createdResponses.map(response => response.status), [201, 201, 201]);
+  assert.ok(createdOrders.every(order => order.table_session_id === undefined));
+  const persistedOrders = await database.prisma.order.findMany({
+    where: { id: { in: createdOrders.map(order => order.id) } },
+    select: { table_session_id: true },
+  });
+  assert.ok(persistedOrders.every(order => /^[0-9a-f-]{36}$/i.test(order.table_session_id)));
+  assert.equal(new Set(persistedOrders.map(order => order.table_session_id)).size, 1);
+
+  const replay = await submit(keys[0]);
+  assert.equal(replay.status, 200);
+  assert.equal((await replay.json()).id, createdOrders[0].id);
+
+  const blockedKey = randomUUID();
+  const blocked = await submit(blockedKey);
+  const blockedBody = await blocked.json();
+  assert.equal(blocked.status, 409);
+  assert.equal(blockedBody.code, 'ORDER_LIMIT_REACHED');
+  assert.equal(blockedBody.requestId, blocked.headers.get('x-request-id'));
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key: blockedKey } }), 0);
+
+  await database.prisma.order.update({
+    where: { id: createdOrders[0].id },
+    data: { status: 'served' },
+  });
+  const afterService = await submit(blockedKey);
+  assert.equal(afterService.status, 201);
+  assert.equal(
+    await database.prisma.order.count({
+      where: {
+        table_session_id: persistedOrders[0].table_session_id,
+        status: { in: ['pending', 'preparing', 'ready'] },
+      },
+    }),
+    3,
+  );
+});
+
+test('concurrent unique orders cannot cross the session cap and a new session has an independent allowance', async () => {
+  const first = await createTableSession(tenantA);
+  const submit = (session, key) => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({
+      type: 'dine_in',
+      items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+    }),
+  });
+
+  const firstOrder = await submit(first.session, randomUUID());
+  const secondOrder = await submit(first.session, randomUUID());
+  assert.equal(firstOrder.status, 201);
+  assert.equal(secondOrder.status, 201);
+
+  const concurrentKeys = [randomUUID(), randomUUID()];
+  const concurrent = await Promise.all(concurrentKeys.map(key => submit(first.session, key)));
+  const concurrentBodies = await Promise.all(concurrent.map(response => response.json()));
+  assert.deepEqual(concurrent.map(response => response.status).sort(), [201, 409]);
+  assert.equal(concurrentBodies.find(body => body.code)?.code, 'ORDER_LIMIT_REACHED');
+
+  const persisted = await database.prisma.order.findMany({
+    where: { id: { in: [(await firstOrder.json()).id, (await secondOrder.json()).id, ...concurrentBodies.map(body => body.id).filter(Boolean)] } },
+    select: { table_session_id: true },
+  });
+  assert.equal(persisted.length, 3);
+  assert.equal(new Set(persisted.map(order => order.table_session_id)).size, 1);
+  const rejectedKey = concurrentKeys[concurrent.findIndex(response => response.status === 409)];
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key: rejectedKey } }), 0);
+
+  const exchange = await postJson('/api/public/table-session', { capability: first.capability });
+  const secondSession = await exchange.json();
+  assert.equal(exchange.status, 200);
+  const independent = await submit(secondSession, randomUUID());
+  const independentBody = await independent.json();
+  assert.equal(independent.status, 201);
+  assert.equal(independentBody.table_session_id, undefined);
+  const independentOrder = await database.prisma.order.findUnique({
+    where: { id: independentBody.id },
+    select: { table_session_id: true },
+  });
+  assert.notEqual(independentOrder.table_session_id, persisted[0].table_session_id);
+});
+
 test('dine-in order creation requires a valid current table session before mutation', async () => {
   const beforeCount = await database.prisma.order.count();
   const missing = await postJson('/api/orders', {

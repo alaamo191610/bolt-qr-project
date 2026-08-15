@@ -2,12 +2,8 @@ import { ApiError } from '../services/api';
 
 const NETWORK_ERROR_MESSAGE = 'Could not connect. Check your internet connection and try again.';
 const SERVER_ERROR_MESSAGE = 'Something went wrong on our end. Please try again in a moment.';
-// ADR 0007 commits to a three-open-order cap and a restaurant pause/closed/
-// overloaded control, but Yazan hasn't shipped or published the actual error
-// codes yet (M2 point after idempotency). These names follow the existing
-// TABLE_SESSION_* pattern as a best-effort default - confirm against the
-// real contract once it lands; an unmatched code just falls through to the
-// generic message below, so this is harmless until then.
+// ORDER_LIMIT_REACHED is published in docs/contracts/order-capacity.md.
+// RESTAURANT_PAUSED remains the provisional name for the next M2 control.
 const ORDER_LIMIT_MESSAGE = 'This table already has the maximum number of open orders. Please wait for one to be served before ordering again.';
 const RESTAURANT_PAUSED_MESSAGE = "This restaurant isn't accepting new orders right now. Please ask staff or try again shortly.";
 

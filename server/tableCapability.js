@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { ApiError, ERROR_CODES } from './errors.js';
 import { TOKEN_TYPES, issueToken, verifyToken } from './tokenPolicy.js';
@@ -121,7 +121,9 @@ export const createTableCapabilityService = ({ db, tokenSecret }) => {
     if (!isUsable(capability)) throw invalidTableSession();
 
     const table = capability.table;
+    const sessionId = randomUUID();
     const token = issueToken(TOKEN_TYPES.TABLE_SESSION, {
+      sessionId,
       capabilityId: capability.id,
       capabilityVersion: capability.version,
       tableId: table.id,
@@ -146,13 +148,16 @@ export const createTableCapabilityService = ({ db, tokenSecret }) => {
       throw invalidTableSession();
     }
 
-    if (!UUID_PATTERN.test(String(claims.capabilityId || ''))) throw invalidTableSession();
+    if (
+      !UUID_PATTERN.test(String(claims.capabilityId || ''))
+      || !UUID_PATTERN.test(String(claims.sessionId || ''))
+    ) throw invalidTableSession();
     if (lock) {
       await database.$queryRaw(Prisma.sql`
         SELECT "id"
         FROM "table_capabilities"
         WHERE "id" = ${String(claims.capabilityId)}::uuid
-        FOR SHARE
+        FOR UPDATE
       `);
     }
 
@@ -172,6 +177,7 @@ export const createTableCapabilityService = ({ db, tokenSecret }) => {
     }
 
     return {
+      sessionId: String(claims.sessionId),
       capabilityId: capability.id,
       capabilityVersion: capability.version,
       organizationId: capability.organization_id,

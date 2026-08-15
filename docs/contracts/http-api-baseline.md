@@ -37,6 +37,11 @@ payload returns `409 IDEMPOTENCY_CONFLICT`. First creation returns `201` and
 `Idempotency-Replayed: false`; an unchanged replay returns the same order with `200` and
 `Idempotency-Replayed: true`. Both `Idempotency-Replayed` and `X-Request-Id` are CORS-exposed.
 
+A table session may have at most three open (`pending`, `preparing`, or `ready`) orders. A new order
+at capacity returns `409 ORDER_LIMIT_REACHED` without mutation. Exact idempotency replay remains
+successful at capacity; `served` and `cancelled` orders no longer consume a slot. See the
+[public order-capacity contract](order-capacity.md).
+
 ## Authentication classes
 
 Restaurant endpoints require a verified `restaurant-session` token. SuperAdmin endpoints
@@ -63,6 +68,6 @@ authorization rules, and stable error codes before frontend consumption.
 
 Takeaway is disabled for Release 1. Dine-in now derives organization, restaurant, branch, and table
 identity from a database-revalidated table capability/session and ignores public request-body
-identity for authorization. Durable backend idempotency is implemented. Open-order capacity, pause
-behavior, a production shared limiter, frontend key persistence, and real-backend E2E evidence
-remain launch blockers.
+identity for authorization. Durable backend idempotency and per-session open-order capacity are
+implemented. Pause behavior, a production shared limiter, frontend key persistence, and
+real-backend E2E evidence remain launch blockers.

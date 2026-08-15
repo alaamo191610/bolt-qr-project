@@ -1,7 +1,7 @@
 # ADR 0007: Public order entry and abuse policy
 
-Status: Option A and dine-in defaults selected by Yazan; capability slice implemented 14 August
-2026; Alaa sign-off recorded 14 August 2026 — remaining M2 controls pending
+Status: Option A and dine-in defaults selected by Yazan; capability, idempotency, and open-order
+capacity implemented by 15 August 2026; Alaa sign-off recorded — remaining M2 controls pending
 
 ## Recorded decision
 
@@ -12,16 +12,17 @@ verifies no order is created.
 
 Alaa recorded `Takeaway: A — disabled for Release 1; abuse defaults accepted` on 14 August 2026,
 agreeing with Yazan's selection and the mandatory dine-in controls below. This closes the joint
-decision for ADR 0007; idempotency, open-order capacity, pause/overload behavior, rejection
-telemetry, and the production shared limiter remain the separate M2/M3 work items already listed
-under "Implementation evidence" below.
+decision for ADR 0007. Idempotency and open-order capacity are now implemented; pause/overload
+behavior, rejection telemetry, and the production shared limiter remain the separate M2/M3 work
+items listed under "Implementation evidence" below.
 
 ## Current risk
 
-The capability slice removes request-body tenant/table trust and disables anonymous takeaway, but
-the public write is not release-ready until durable idempotency, open-order capacity, ordering
-pause/overload behavior, rejection telemetry, and a production shared limiter are complete. The
-current in-process limiter cannot coordinate horizontally scaled instances.
+The capability, idempotency, and capacity slices remove request-body tenant/table trust, disable
+anonymous takeaway, prevent duplicate retries, and bound open orders. The public write is not
+release-ready until ordering pause/overload behavior, rejection telemetry, and a production shared
+limiter are complete. The current in-process limiter cannot coordinate horizontally scaled
+instances.
 
 ## Mandatory controls for every option
 
@@ -93,7 +94,7 @@ Any changed limit or session lifetime must be written explicitly with the choice
 - Authenticated rotation returns a new 256-bit secret once; rotation and revocation increment the
   version used to invalidate already-issued sessions.
 - Public exchange issues only a 30-minute `table-session`, with accepted 20/IP and 10/capability
-  exchange limits. Order creation also applies the accepted 6/capability-session and
+  exchange limits. Order creation also applies the accepted 6/individually issued session and
   120/organization attempt limits in the current bounded local limiter.
 - Dine-in creation requires and transactionally revalidates the session under a capability-row
   lock, derives all ownership identity from it, ignores body identity for authorization, and
@@ -101,5 +102,9 @@ Any changed limit or session lifetime must be written explicitly with the choice
 - Unit, PostgreSQL integration, frontend regression, and E2E suites pass. Invalid, rotated,
   revoked, cross-tenant, cross-organization-constraint, and body-substitution cases fail closed.
 
-Idempotency, durable three-open-order enforcement, pause/closed/overload behavior, safe rejection
-telemetry, and the production shared limiter remain separate mandatory M2/M3 points.
+Durable idempotency and three-open-order enforcement are implemented. Each exchange issues a random
+session UUID, public orders persist it, and an exclusive capability lock serializes count plus
+insert. `pending`/`preparing`/`ready` consume the three slots; `served`/`cancelled` release them;
+capacity rejection is `409 ORDER_LIMIT_REACHED` and rolls back idempotency. Pause/closed/overload
+behavior, safe rejection telemetry, and the production shared limiter remain mandatory M2/M3
+points.

@@ -425,6 +425,35 @@ followed by stable restaurant pause/closed/overload/table-unavailable decisions 
 telemetry. The legacy external capability-less `TableManagement` QR remains a separate pilot
 blocker and must be removed or routed to the secure generator.
 
+## Tracking update — 15 August 2026 (three-open-order capacity started)
+
+The next Yazan M2 point is now in progress. The
+[public order-capacity contract](contracts/order-capacity.md) defines a maximum of three
+`pending`/`preparing`/`ready` orders per individually issued table session; `served` and
+`cancelled` release capacity. Enforcement will run under an exclusive PostgreSQL capability lock
+inside the existing idempotent order transaction. A new order at capacity returns
+`409 ORDER_LIMIT_REACHED` without mutation, while an exact idempotency replay remains successful.
+
+## Tracking update — 15 August 2026 (three-open-order capacity complete)
+
+Implemented a random UUID for each exchanged table session, strict claim validation, durable order
+attribution, and a scoped status index. The six-attempt limiter now uses the individual session UUID
+rather than the broader capability. Order creation takes an exclusive capability-row lock and,
+inside the idempotency transaction, rejects a fourth `pending`/`preparing`/`ready` order with
+`409 ORDER_LIMIT_REACHED`. Replay bypasses the new-order count; `served` and `cancelled` release a
+slot; rejected attempts roll back the idempotency reservation and emit no business mutation. The
+internal session UUID is not returned in public order responses or socket events.
+
+Final verification passes ESLint, TypeScript, Prisma validation, production build, 28 unit tests,
+23 disposable-PostgreSQL integration tests, 40 frontend tests, and 8 desktop/mobile browser E2E
+tests. PostgreSQL evidence includes three-order boundary, replay while full, terminal release,
+independent sessions, and two unique concurrent submissions producing one success and one stable
+rejection. The migration is additive; pre-deployment table tokens intentionally require re-scan
+because they lack the new claim and expire within 30 minutes.
+
+Next Yazan point: publish and implement restaurant pause/closed/overloaded/table-unavailable
+enforcement and audit-safe rejection telemetry. The production shared limiter remains M3 work.
+
 ## Fair-split agreement
 
 Ownership is not a measure of effort. Each milestone is planned as an approximately equal
@@ -502,7 +531,7 @@ documentation, fixture, or regression task instead of waiting.
 |---|---|---|
 | QR/table capability | **Core backend/frontend integrated and re-reviewed 15 Aug at `1396b5f`:** secure generator, exchange, table bearer checkout, recovery states, and mocked desktop/mobile E2E pass. Legacy capability-less `TableManagement` QR and real-backend golden E2E remain. | Backend negatives and mocked browser paths pass; remove legacy QR and add real rotate/exchange/order/tracking evidence plus RTL. |
 | Idempotency | **Backend complete 15 Aug:** required safe key, capability-version/tenant/table scope, 24-hour durable record, atomic order/effects, exact replay, changed-payload conflict, rollback, and no duplicate socket emission. | 26 unit and 21 PostgreSQL integration tests include concurrent retry with one order/one promotion increment. Frontend reload/mobile-resume persistence remains. |
-| Abuse controls | Limits by IP, capability/session, table, organization, route; active-order cap; pause/overload state; safe rejection telemetry. | Deterministic integration tests and documented status/error codes. |
+| Abuse controls | **Capacity slice complete 15 Aug:** individual session identity/rate key and transactional three-open-order cap pass. Existing IP/capability/session/organization route limits remain local. Pause/closed/overload/table availability and safe rejection telemetry are next; shared limiting remains M3. | Boundary, replay-at-capacity, terminal release, rollback, session isolation, and concurrent unique-order integration tests pass. |
 | Order/realtime integrity | Transactional totals/promotions; authorized/versioned socket rooms/events; tracking credentials are minimal and scoped. | Socket/transition/cross-tenant tests; document authoritative refetch endpoint. |
 
 ### Y3 — M3 production infrastructure (Weeks 6–8)

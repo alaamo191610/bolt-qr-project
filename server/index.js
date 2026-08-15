@@ -38,6 +38,7 @@ import {
   publicOrderRequestHash,
   requireIdempotencyKey,
 } from './orderIdempotency.js';
+import { enforcePublicOrderCapacity } from './orderCapacity.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -243,7 +244,7 @@ const tableExchangeCapabilityRateLimit = createRateLimiter({
 const tableSessionOrderRateLimit = createRateLimiter({
   windowMs: 10 * 60 * 1000,
   max: 6,
-  key: req => `table-order-session:${req.tableSession?.capabilityId || 'invalid'}`,
+  key: req => `table-order-session:${req.tableSession?.sessionId || 'invalid'}`,
 });
 const organizationOrderRateLimit = createRateLimiter({
   windowMs: 10 * 60 * 1000,
@@ -1180,6 +1181,11 @@ const findPublicOrder = (db, orderId) => db.order.findUnique({
   include: publicOrderInclude,
 });
 
+const presentPublicOrder = order => {
+  const { table_session_id: _tableSessionId, ...safeOrder } = order;
+  return safeOrder;
+};
+
 app.post('/api/orders', orderRateLimit, async (req, res) => {
   const { items, type, promotionCode, tipPercent } = req.body;
 
@@ -1250,6 +1256,12 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
           if (!replayedOrder) throw new Error('Idempotent order record is unavailable');
           return { order: replayedOrder, replayed: true };
         }
+
+        await enforcePublicOrderCapacity(tx, {
+          organizationId: tableSession.organizationId,
+          tableId: table.id,
+          tableSessionId: tableSession.sessionId,
+        });
 
         const targetAdmin = await tx.admin.findUnique({
         where: { id: adminId },
@@ -1499,6 +1511,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
         promotion_code: promotion?.code || null,
         status: 'pending',
         type,
+        table_session_id: tableSession.sessionId,
         admin: { connect: { id: adminId } },
         organization: { connect: { id: tableSession.organizationId } },
       };
@@ -1548,8 +1561,9 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     // Emit only for the transaction that created the order. Replays return
     // the same order without duplicating socket events or table mutations.
     const { order: fullOrder, replayed } = transactionResult;
+    const presentedOrder = presentPublicOrder(fullOrder);
     if (!replayed && fullOrder?.admin_id) {
-      io.to(`admin_${fullOrder.admin_id}`).emit('new-order', fullOrder);
+      io.to(`admin_${fullOrder.admin_id}`).emit('new-order', presentedOrder);
       if (fullOrder?.table) {
         io.to(`admin_${fullOrder.admin_id}`).emit('table-updated', {
           ...fullOrder.table,
@@ -1563,7 +1577,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       adminId: fullOrder.admin_id,
     }, JWT_SECRET);
     res.setHeader('Idempotency-Replayed', String(replayed));
-    res.status(replayed ? 200 : 201).json({ ...fullOrder, tracking_token: trackingToken });
+    res.status(replayed ? 200 : 201).json({ ...presentedOrder, tracking_token: trackingToken });
   } catch (err) {
     if (!err.status || err.status >= 500) console.error('Error creating order:', logSafeError(err));
     sendError(res, req, err);

@@ -308,6 +308,32 @@ the legacy QR is removed, frontend keys survive reload/mobile resume, real-backe
 exists, and capacity/pause/telemetry controls are complete. The next Yazan point is the
 transactional maximum-three-open-orders control.
 
+## Implementation tracking — 15 August 2026 (three-open-order capacity started)
+
+The public order-capacity contract is published before implementation. It fixes the scope to an
+individually issued 30-minute table-session UUID, open statuses to
+`pending`/`preparing`/`ready`, terminal release to `served`/`cancelled`, and the stable response to
+`409 ORDER_LIMIT_REACHED`. The count and insertion will share the existing order transaction under
+an exclusive PostgreSQL capability lock; idempotency replay remains valid at capacity and rejected
+new orders leave no reservation or business mutation.
+
+## Implementation tracking — 15 August 2026 (three-open-order capacity complete)
+
+Each capability exchange now issues a random signed table-session UUID; public orders persist it
+through an additive nullable migration and indexed tenant/table/session/status scope. The local
+six-attempt limiter also uses this individual session identity. Inside the existing idempotent order
+transaction, an exclusive capability-row lock serializes the open-order count and insertion.
+`pending`/`preparing`/`ready` consume three slots; `served`/`cancelled` release capacity; a fourth new
+order returns `409 ORDER_LIMIT_REACHED` with no idempotency, order, promotion, table, or socket
+mutation. Exact replay still succeeds while full, and the internal UUID is omitted from public
+responses/events.
+
+Final evidence passes ESLint, TypeScript, Prisma validation, production build, 28 unit tests, 23
+disposable-PostgreSQL integration tests, 40 frontend tests, and 8 desktop/mobile browser E2E tests.
+The database suite proves the boundary, replay, rollback, terminal release, independent sessions,
+and concurrent unique submissions. The next Yazan point is ordering
+pause/closed/overloaded/table-unavailable enforcement plus audit-safe rejection telemetry.
+
 ## Outcome and planning rule
 
 Release a secure, observable, recoverable multi-tenant restaurant QR platform without
@@ -446,7 +472,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Foundation implemented | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, and cross-tenant negatives pass; staging verify/enforce remain. | — | 14 Aug 2026 |
-| M2 bounded order cycle | Core QR/session and backend idempotency integrated; remaining controls in progress | — | Capability-scoped durable retry creates one order/one promotion increment across concurrency; 26 unit and 21 PostgreSQL integration tests pass. Legacy QR, frontend reload persistence, real-backend golden E2E, capacity/pause/telemetry/shared limiting remain. | Yazan + Alaa | 15 Aug 2026 |
+| M2 bounded order cycle | Core QR/session, backend idempotency, and transactional capacity integrated; remaining controls in progress | — | Three-open-order boundary and capability-scoped retry are concurrency-safe; 28 unit and 23 PostgreSQL integration tests pass. Legacy QR, frontend reload persistence, real-backend golden E2E, pause/telemetry/shared limiting remain. | Yazan + Alaa | 15 Aug 2026 |
 | M3 production infrastructure | Not started | — | — | — | — |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |

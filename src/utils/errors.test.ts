@@ -15,7 +15,7 @@ describe('getErrorMessage', () => {
   });
 
   it('returns a wait-and-retry message for ORDER_LIMIT_REACHED', () => {
-    const error = new ApiError({ message: 'too many open orders', status: 403, code: 'ORDER_LIMIT_REACHED' });
+    const error = new ApiError({ message: 'too many open orders', status: 409, code: 'ORDER_LIMIT_REACHED' });
     expect(getErrorMessage(error)).toMatch(/maximum number of open orders/i);
   });
 
