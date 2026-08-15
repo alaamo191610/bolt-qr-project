@@ -531,11 +531,11 @@ credential-derived joins, cross-order denial, committed version delivery, no-op 
 missed-event recovery through authoritative refetch, and atomic terminal table release. No
 temporary test databases remain. The existing large-chunk warning is unchanged.
 
-Yazan's local M2 backend order cycle is complete. M2 release closure still requires Alaa's legacy
-QR removal/admin controls/client handoff and real-backend golden customer E2E, plus the joint
-tracking-expiry/recovery decision. The next unblocked Yazan implementation area is M3 production
-infrastructure; provider choices and RPO/RTO are required before durable storage, shared limiting,
-hosted monitoring, and restore work can be finalized.
+Yazan's local M2 backend order cycle, real-backend golden customer E2E, secure TableManagement QR
+routing, and local final tenant-enforcement rehearsal are complete. M2 release closure still
+requires Alaa's admin-controls/client handoff and staging evidence. The next unblocked Yazan
+implementation area is M3 production infrastructure; provider choices and RPO/RTO are required
+before durable storage, shared limiting, hosted monitoring, and restore work can be finalized.
 
 ## Tracking update — 15 August 2026 (Phase 1 pilot infrastructure selected)
 
@@ -666,7 +666,7 @@ documentation, fixture, or regression task instead of waiting.
 
 | Task | Backend scope | Required test / Alaa handoff |
 |---|---|---|
-| QR/table capability | **Core backend/frontend integrated and re-reviewed 15 Aug at `1396b5f`:** secure generator, exchange, table bearer checkout, recovery states, and mocked desktop/mobile E2E pass. Legacy capability-less `TableManagement` QR and real-backend golden E2E remain. | Backend negatives and mocked browser paths pass; remove legacy QR and add real rotate/exchange/order/tracking evidence plus RTL. |
+| QR/table capability | **Core backend/frontend integrated and re-reviewed 15 Aug:** secure generator, exchange, table bearer checkout, recovery states, secure TableManagement routing, mocked desktop/mobile E2E, and real-backend golden E2E pass. | Backend negatives and browser paths pass; Alaa handoff, staging evidence, and any remaining RTL review remain. |
 | Idempotency | **Backend complete 15 Aug:** required safe key, capability-version/tenant/table scope, 24-hour durable record, atomic order/effects, exact replay, changed-payload conflict, rollback, and no duplicate socket emission. | 26 unit and 21 PostgreSQL integration tests include concurrent retry with one order/one promotion increment. Frontend reload/mobile-resume persistence remains. |
 | Abuse controls | **Local M2 controls complete 15 Aug:** individual session/organization/IP limits, transactional three-open-order cap, branch pause/closed/overload, fail-closed table availability, audited management, and redacted rejection telemetry pass. Shared limiting remains M3. | Capacity concurrency plus full state/role/tenant/no-mutation/replay/telemetry tests pass. Admin state-control UI remains Alaa's handoff. |
 | Order/realtime integrity | **Local backend/client integrity complete 15 Aug:** credential-derived tenant rooms, database-revalidated tracking scope, protocol-v1 events, monotonic versions, atomic status/table transitions, and authoritative reconnect/resume refetch. | 37 unit, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests pass; tracking-expiry decision and Alaa real-backend golden E2E remain. |

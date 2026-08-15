@@ -18,6 +18,7 @@ interface TableManagementProps {
   tables: Table[];
   setTables: React.Dispatch<React.SetStateAction<Table[]>>;
   onDataChange: () => void;
+  onOpenQrStudio: () => void;
 }
 
 interface TableStatusUpdate {
@@ -28,6 +29,7 @@ interface TableStatusUpdate {
 const TableManagement: React.FC<TableManagementProps> = ({
   tables,
   setTables,
+  onOpenQrStudio,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTable, setNewTable] = useState({ code: "", capacity: 4 });
@@ -240,18 +242,25 @@ const TableManagement: React.FC<TableManagementProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Digital Menu</span>
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between group/qr">
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider group-hover/qr:text-emerald-500 transition-colors">Secure QR</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage in QR Studio</p>
+                  </div>
                   {/* Each table's QR encodes a rotatable, revocable capability
                       secret (docs/contracts/table-capability.md) that only the
                       rotate endpoint ever returns, and only once - it cannot
                       be reconstructed here, and must not be sent to a
                       third-party QR image service either way. Generate/print
                       it from QR Studio instead. */}
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400">
-                    <QrCode className="w-3.5 h-3.5" />
-                    QR Studio
-                  </span>
+                  <button
+                    type="button"
+                    onClick={onOpenQrStudio}
+                    aria-label={`Open QR Studio for table ${table.number}`}
+                    className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                  >
+                    <QrCode className="w-5 h-5" aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             </div>

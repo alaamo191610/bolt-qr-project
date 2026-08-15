@@ -9,6 +9,7 @@ const MIGRATIONS_ROOT = resolve(process.cwd(), 'server/prisma/migrations');
 const TRANSITION_MIGRATION = '20260813010000_tenant_identity_transition';
 const EXPAND_MIGRATION = '20260814090000_expand_tenant_ownership';
 const BACKFILL_MIGRATION = '20260814100000_backfill_tenant_ownership';
+const ENFORCEMENT_MIGRATION = '20260815140000_enforce_tenant_ownership';
 const VERIFICATION_SQL = resolve(
   process.cwd(),
   'server/prisma/verification/tenant_ownership.sql',
@@ -113,6 +114,29 @@ const applyBackfillMigration = async () => {
   await client.query(sql);
 };
 
+const applyPostBackfillMigrations = async () => {
+  const entries = await readdir(MIGRATIONS_ROOT, { withFileTypes: true });
+  const migrations = entries
+    .filter(entry => entry.isDirectory()
+      && entry.name > BACKFILL_MIGRATION
+      && entry.name < ENFORCEMENT_MIGRATION)
+    .map(entry => entry.name)
+    .sort();
+
+  for (const migration of migrations) {
+    const sql = await readFile(resolve(MIGRATIONS_ROOT, migration, 'migration.sql'), 'utf8');
+    await client.query(sql);
+  }
+};
+
+const applyEnforcementMigration = async () => {
+  const sql = await readFile(
+    resolve(MIGRATIONS_ROOT, ENFORCEMENT_MIGRATION, 'migration.sql'),
+    'utf8',
+  );
+  await client.query(sql);
+};
+
 const runOwnershipVerification = async () => {
   const sql = await readFile(VERIFICATION_SQL, 'utf8');
   return client.query(sql);
@@ -161,6 +185,7 @@ before(async () => {
   await applyTenantTransition();
   await applyExpandMigration();
   await applyBackfillMigration();
+  await applyPostBackfillMigrations();
 });
 
 after(async () => {
@@ -326,4 +351,64 @@ test('organization backfill fails closed for a modifier group linked across tena
       && error.message.includes('modifier_groups')
       && error.message.includes('multiple organizations'),
   );
+
+  await client.query('DELETE FROM "menu_modifier_groups" WHERE "group_id" = $1', [group.rows[0].id]);
+  await client.query('DELETE FROM "modifier_groups" WHERE "id" = $1', [group.rows[0].id]);
+});
+
+test('final tenant enforcement blocks corruption and applies cleanly after rollback', async () => {
+  const [alpha, beta] = legacyAdmins;
+
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      'UPDATE "categories" SET "organization_id" = $1 WHERE "id" = $2',
+      [beta.adminId, alpha.categoryId],
+    );
+
+    await assert.rejects(
+      applyEnforcementMigration(),
+      error => error?.code === '23514'
+        && error.message.includes('Tenant ownership enforcement blocked'),
+    );
+  } finally {
+    await client.query('ROLLBACK');
+  }
+
+  const cleanReport = await runOwnershipVerification();
+  assert.ok(cleanReport.rows.every(row => Number(row.issue_count) === 0));
+
+  await applyEnforcementMigration();
+
+  const requiredColumns = await client.query(`
+    SELECT table_name, column_name, is_nullable
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND column_name = 'organization_id'
+      AND table_name = ANY($1::text[])
+    ORDER BY table_name
+  `, [['categories', 'ingredients', 'menus', 'modifier_groups', 'orders', 'promotions', 'tables']]);
+  assert.equal(requiredColumns.rowCount, 7);
+  assert.ok(requiredColumns.rows.every(row => row.is_nullable === 'NO'));
+
+  await assert.rejects(
+    client.query(
+      'UPDATE "categories" SET "organization_id" = $1 WHERE "id" = $2',
+      [beta.adminId, alpha.categoryId],
+    ),
+    error => error?.code === '23503',
+  );
+
+  const enforcedConstraints = await client.query(`
+    SELECT conname
+    FROM pg_constraint
+    WHERE conname IN (
+      'categories_admin_organization_fkey',
+      'categories_branch_organization_fkey',
+      'menus_category_organization_fkey',
+      'orders_table_organization_fkey',
+      'promotions_table_organization_fkey'
+    )
+  `);
+  assert.equal(enforcedConstraints.rowCount, 5);
 });
