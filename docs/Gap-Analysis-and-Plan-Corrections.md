@@ -497,7 +497,7 @@ enforced in exactly one place because errors now flow through one handler.
 `src/components/super-admin/SuperAdminLogin.tsx:25`,
 `src/components/super-admin/SuperAdminDashboard.tsx:19`
 
-SuperAdmin uses a separate token in a separate localStorage key (`superAdminToken` vs
+SuperAdmin originally used a separate token in a separate localStorage key (`superAdminToken` vs
 `auth_token`), read directly by components, with its own fetch path. Both eventually reach
 the same `authenticate` middleware server-side, but the client has two independent session
 lifecycles, two expiry behaviours, and two logout paths.
@@ -513,20 +513,13 @@ the M4 security test pass rather than after.
 **Owner:** Alaa, reviewed by Yazan. **Milestone:** M2 or M3. Optional if capacity is tight —
 flag it as accepted risk rather than silently skipping.
 
-**Status: Done, pending Yazan's review.** `codex/api-response-typing` @ `828c46c`.
-`superAdminService.ts` no longer hand-rolls `fetch`/URL-resolution/error-parsing; it calls
-`api.get`/`api.put` from `src/services/api.ts` with a new `TokenNamespace`
-(`'restaurant' | 'superAdmin'`) parameter backed by a `tokenStore.get/set/clear`
-abstraction. Only the transport (fetch, error normalization, retry semantics) is shared —
-restaurant admin and SuperAdmin keep separate storage keys, separate expiry, and separate
-logout paths, exactly as this finding's "what to implement" specifies. All ~54 existing
-restaurant-admin call sites default to the `'restaurant'` namespace and needed no changes.
-Net deletion of 49 lines of duplicated logic in `superAdminService.ts`. New tests in
-`api.test.ts` and `superAdminService.test.ts` prove namespace isolation: a SuperAdmin token
-is never attached to a default request and vice versa, and login sends no `Authorization`
-header (no session exists yet at that point). Still needs Yazan's review before merging to
-`main`, per the plan's own PR checklist ("Yazan reviewed contract/security/session
-changes").
+**Status: Done and security-reviewed.** `codex/api-response-typing` @ `828c46c` first consolidated
+the transport. ADR 0009 then superseded the browser-storage portion: `TokenNamespace` still keeps
+restaurant and platform requests distinct, but only restaurant auth uses the compatibility bearer
+store. SuperAdmin requests use a 30-minute HttpOnly SameSite cookie, and frontend JavaScript never
+receives or attaches that credential. `api.test.ts` and `superAdminService.test.ts` prove a
+restaurant bearer cannot appear on a platform request and platform cookie mode cannot appear on a
+restaurant request.
 
 ---
 

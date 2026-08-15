@@ -30,9 +30,35 @@ export interface Restaurant {
     };
 }
 
+export interface SuperAdminMfaChallenge {
+    mfaRequired: true;
+    enrollmentRequired: boolean;
+    challengeToken: string;
+    enrollment?: {
+        secret: string;
+        otpauthUri: string;
+    };
+}
+
+export interface SuperAdminSession {
+    user: { id: string; email: string; name?: string; role: 'SUPER_ADMIN' };
+    recoveryCodes?: string[];
+}
+
 export const superAdminService = {
-    async login(email: string, password: string) {
-        return api.postPublic<{ token: string; user: { name?: string } }>('/super-admin/login', { email, password });
+    async login(email: string, password: string): Promise<SuperAdminMfaChallenge> {
+        return api.postPublic<SuperAdminMfaChallenge>('/super-admin/login', { email, password });
+    },
+
+    async verifyMfa(challengeToken: string, value: string, recovery = false): Promise<SuperAdminSession> {
+        return api.postPublic<SuperAdminSession>('/super-admin/mfa/verify', {
+            challengeToken,
+            ...(recovery ? { recoveryCode: value } : { code: value }),
+        });
+    },
+
+    async logout(): Promise<void> {
+        await api.post('/super-admin/logout', {}, 'superAdmin');
     },
 
     async getRestaurants(): Promise<Restaurant[]> {

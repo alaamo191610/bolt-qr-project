@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assertCatalogOwnership,
   createAuthenticate,
+  requireRecentSuperAdmin,
   requireOrganizationRole,
   requireSuperAdmin,
 } from '../server/accessControl.js';
@@ -107,6 +108,72 @@ test('platform and organization role guards deny insufficient roles', () => {
     () => { nextCalled = true; },
   );
   assert.equal(nextCalled, true);
+});
+
+test('SuperAdmin authentication revalidates MFA enrollment and session version', async () => {
+  const token = issueToken(TOKEN_TYPES.SUPER_ADMIN_SESSION, {
+    id: adminId,
+    role: 'SUPER_ADMIN',
+    mfa: true,
+    sessionVersion: 4,
+    authTime: 1_000,
+  }, secret);
+  const authenticate = createAuthenticate({
+    db: {
+      superAdmin: {
+        findUnique: async () => ({
+          id: adminId,
+          active: true,
+          session_version: 4,
+          mfa_enabled_at: new Date(),
+        }),
+      },
+    },
+    tokenSecret: secret,
+    resolveTenantClaims: async () => null,
+  });
+  const req = { headers: { authorization: `Bearer ${token}` } };
+  let nextCalled = false;
+  await authenticate(req, createResponse(), () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+  assert.equal(req.user.mfa, true);
+
+  const staleAuthenticate = createAuthenticate({
+    db: {
+      superAdmin: {
+        findUnique: async () => ({
+          id: adminId,
+          active: true,
+          session_version: 5,
+          mfa_enabled_at: new Date(),
+        }),
+      },
+    },
+    tokenSecret: secret,
+    resolveTenantClaims: async () => null,
+  });
+  const staleResponse = createResponse();
+  await staleAuthenticate({ headers: { authorization: `Bearer ${token}` } }, staleResponse, () => undefined);
+  assert.equal(staleResponse.statusCode, 403);
+});
+
+test('sensitive SuperAdmin writes require a recent MFA authentication event', () => {
+  let nextCalled = false;
+  requireRecentSuperAdmin(600, () => 1_500_000)(
+    { user: { role: 'SUPER_ADMIN', authTime: 1_000 } },
+    createResponse(),
+    () => { nextCalled = true; },
+  );
+  assert.equal(nextCalled, true);
+
+  const response = createResponse();
+  requireRecentSuperAdmin(600, () => 1_700_000)(
+    { user: { role: 'SUPER_ADMIN', authTime: 1_000 } },
+    response,
+    () => undefined,
+  );
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.body.code, 'SUPER_ADMIN_REAUTH_REQUIRED');
 });
 
 test('catalog ownership guard validates category and ingredient ownership together', async () => {

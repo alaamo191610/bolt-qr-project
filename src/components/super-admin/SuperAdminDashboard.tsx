@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings } from 'lucide-react';
 import { superAdminService, type Restaurant, type SubscriptionPlan } from '../../services/superAdminService';
-import { isUnauthenticatedError, tokenStore } from '../../services/api';
+import { isUnauthenticatedError } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import PlanManagementModal from './PlanManagementModal';
 import toast from 'react-hot-toast';
@@ -18,11 +18,6 @@ const SuperAdminDashboard: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const loadData = useCallback(async () => {
-        if (!tokenStore.get('superAdmin')) {
-            navigate('/super-admin/login');
-            return;
-        }
-
         try {
             const [statsData, restaurantsData] = await Promise.all([
                 superAdminService.getStats(),
@@ -33,7 +28,6 @@ const SuperAdminDashboard: React.FC = () => {
         } catch (error) {
             console.error('Error loading data:', error);
             if (isUnauthenticatedError(error)) {
-                tokenStore.clear('superAdmin');
                 toast.error('Your session expired. Please sign in again.');
                 navigate('/super-admin/login');
             } else {
@@ -48,18 +42,21 @@ const SuperAdminDashboard: React.FC = () => {
         loadData();
     }, [loadData]);
 
-    const handleLogout = () => {
-        tokenStore.clear('superAdmin');
+    const handleLogout = async () => {
+        await superAdminService.logout().catch(() => undefined);
         navigate('/super-admin/login');
     };
 
     const handleUpgradePlan = async (restaurantId: string, newPlan: string, status?: string, endDate?: string) => {
-        if (!tokenStore.get('superAdmin')) return;
-
         try {
             await superAdminService.updateRestaurantPlan(restaurantId, newPlan, status, endDate);
             loadData(); // Reload data
         } catch (error) {
+            if (isUnauthenticatedError(error)) {
+                toast.error('For security, please sign in with MFA again.');
+                navigate('/super-admin/login');
+                return;
+            }
             toast.error(getErrorMessage(error, 'Failed to update plan'));
         }
     };

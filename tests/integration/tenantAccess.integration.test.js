@@ -6,6 +6,8 @@ import jwt from 'jsonwebtoken';
 import { io as createSocketClient } from 'socket.io-client';
 import { createTestDatabase } from '../helpers/testDatabase.js';
 import { runTenantOwnershipVerification } from '../../server/prisma/verification/runTenantOwnershipVerification.js';
+import { totpCode } from '../../server/superAdminAuth.js';
+import { TOKEN_TYPES, issueToken } from '../../server/tokenPolicy.js';
 
 let database;
 let applicationDatabase;
@@ -28,6 +30,15 @@ const authenticatedRequest = (token, path, init = {}) => fetch(`${baseUrl}${path
   headers: {
     ...(init.body ? { 'Content-Type': 'application/json' } : {}),
     Authorization: `Bearer ${token}`,
+    ...(init.headers || {}),
+  },
+});
+
+const cookieRequest = (cookie, path, init = {}) => fetch(`${baseUrl}${path}`, {
+  ...init,
+  headers: {
+    ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+    Cookie: cookie,
     ...(init.headers || {}),
   },
 });
@@ -218,6 +229,8 @@ const createTableSession = async tenant => {
 before(async () => {
   database = await createTestDatabase();
   process.env.DATABASE_URL = database.databaseUrl;
+  process.env.JWT_SECRET = 'integration-only-super-admin-jwt-secret';
+  process.env.SUPER_ADMIN_MFA_ENCRYPTION_KEY = '42'.repeat(32);
   const application = await import(`../../server/index.js?integration=${Date.now()}`);
   ({ server: httpServer } = application);
   rejectionTelemetry = application.publicOrderRejectionTelemetry;
@@ -284,6 +297,32 @@ test('organization membership lifecycle is tenant-scoped and revokes active admi
   assert.equal(organizations.status, 200);
   assert.deepEqual(organizationBody.map(item => item.id), [tenantA.organization.id]);
 
+  await database.prisma.organizationUser.create({
+    data: {
+      organization_id: tenantB.organization.id,
+      user_id: tenantA.user.id,
+      default_branch_id: tenantB.branchId,
+      role: 'STAFF',
+      status: 'ACTIVE',
+    },
+  });
+  const switchResponse = await authenticatedRequest(ownerToken, '/api/auth/switch-organization', {
+    method: 'POST',
+    body: JSON.stringify({ organizationId: tenantB.organization.id }),
+  });
+  const switched = await switchResponse.json();
+  assert.equal(switchResponse.status, 200);
+  assert.equal(switched.user.organizationId, tenantB.organization.id);
+  assert.equal(switched.user.role, 'STAFF');
+  const switchedMemberList = await authenticatedRequest(switched.token, '/api/organization/members');
+  assert.equal(switchedMemberList.status, 403);
+
+  const unavailableSwitch = await authenticatedRequest(ownerToken, '/api/auth/switch-organization', {
+    method: 'POST',
+    body: JSON.stringify({ organizationId: randomUUID() }),
+  });
+  assert.equal(unavailableSwitch.status, 403);
+
   const memberEmail = `staff-${randomUUID()}@example.com`;
   const createdMemberResponse = await authenticatedRequest(ownerToken, '/api/organization/members', {
     method: 'POST',
@@ -292,6 +331,36 @@ test('organization membership lifecycle is tenant-scoped and revokes active admi
   const createdMember = await createdMemberResponse.json();
   assert.equal(createdMemberResponse.status, 201);
   assert.equal(createdMember.role, 'STAFF');
+
+  const duplicateMember = await authenticatedRequest(ownerToken, '/api/organization/members', {
+    method: 'POST',
+    body: JSON.stringify({ email: memberEmail, role: 'STAFF' }),
+  });
+  assert.equal(duplicateMember.status, 409);
+
+  const emptyUpdate = await authenticatedRequest(ownerToken, `/api/organization/members/${createdMember.userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({}),
+  });
+  assert.equal(emptyUpdate.status, 400);
+
+  const selfSuspension = await authenticatedRequest(ownerToken, `/api/organization/members/${tenantA.user.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'SUSPENDED' }),
+  });
+  assert.equal(selfSuspension.status, 409);
+
+  const lastOwnerDemotion = await authenticatedRequest(ownerToken, `/api/organization/members/${tenantA.user.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role: 'STAFF' }),
+  });
+  assert.equal(lastOwnerDemotion.status, 409);
+
+  const promoteMember = await authenticatedRequest(ownerToken, `/api/organization/members/${createdMember.userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role: 'MANAGER' }),
+  });
+  assert.equal(promoteMember.status, 200);
 
   const members = await authenticatedRequest(ownerToken, '/api/organization/members');
   const memberBody = await members.json();
@@ -303,6 +372,15 @@ test('organization membership lifecycle is tenant-scoped and revokes active admi
     password: 'Staff-password-1!',
   });
   const { token: memberToken } = await memberLogin.json();
+  const managerOwnerGrant = await authenticatedRequest(memberToken, '/api/organization/members', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: `owner-${randomUUID()}@example.com`,
+      password: 'Owner-password-1!',
+      role: 'OWNER',
+    }),
+  });
+  assert.equal(managerOwnerGrant.status, 403);
   const memberSocket = createSocketClient(baseUrl, { autoConnect: false });
   await connectSocket(memberSocket);
   assert.deepEqual(await emitWithAck(memberSocket, 'join-admin', { token: memberToken }), {
@@ -327,6 +405,128 @@ test('organization membership lifecycle is tenant-scoped and revokes active admi
   });
   assert.equal(crossTenantUpdate.status, 404);
   memberSocket.close();
+});
+
+test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and revocable sessions', async () => {
+  const email = `platform-${randomUUID()}@example.com`;
+  const password = 'Platform-admin-password-1!';
+  const superAdmin = await database.prisma.superAdmin.create({
+    data: { email, password: await bcrypt.hash(password, 4), name: 'Platform Admin' },
+  });
+
+  const passwordLogin = await postJson('/api/super-admin/login', { email, password });
+  const challenge = await passwordLogin.json();
+  assert.equal(passwordLogin.status, 200);
+  assert.equal(challenge.mfaRequired, true);
+  assert.equal(challenge.enrollmentRequired, true);
+  assert.ok(challenge.enrollment.secret);
+  assert.equal(challenge.token, undefined);
+
+  const enrollment = await postJson('/api/super-admin/mfa/verify', {
+    challengeToken: challenge.challengeToken,
+    code: totpCode(challenge.enrollment.secret),
+  });
+  const session = await enrollment.json();
+  const enrollmentCookieHeader = enrollment.headers.get('set-cookie');
+  const sessionCookie = enrollmentCookieHeader?.split(';')[0];
+  assert.equal(enrollment.status, 200);
+  assert.ok(sessionCookie?.startsWith('boltqr_superadmin='));
+  assert.match(enrollmentCookieHeader, /HttpOnly/u);
+  assert.match(enrollmentCookieHeader, /SameSite=Strict/u);
+  assert.match(enrollmentCookieHeader, /Path=\/api\/super-admin/u);
+  assert.match(enrollmentCookieHeader, /Max-Age=1800/u);
+  assert.equal(session.token, undefined);
+  assert.equal(session.recoveryCodes.length, 8);
+
+  const stored = await database.prisma.superAdmin.findUnique({ where: { id: superAdmin.id } });
+  assert.ok(stored.mfa_enabled_at);
+  assert.ok(stored.mfa_secret_encrypted.startsWith('v1.'));
+  assert.ok(!stored.mfa_secret_encrypted.includes(challenge.enrollment.secret));
+  assert.equal(stored.mfa_recovery_code_hashes.length, 8);
+  assert.ok(stored.mfa_recovery_code_hashes.every(hash => !session.recoveryCodes.includes(hash)));
+
+  const stats = await cookieRequest(sessionCookie, '/api/super-admin/stats');
+  assert.equal(stats.status, 200);
+
+  const planChange = await cookieRequest(
+    sessionCookie,
+    `/api/super-admin/restaurants/${tenantA.admin.id}/plan`,
+    { method: 'PUT', body: JSON.stringify({ plan: 'BASIC', status: 'ACTIVE' }) },
+  );
+  assert.equal(planChange.status, 200);
+  const planChangeBody = await planChange.json();
+  assert.equal(planChangeBody.subscription_plan, 'BASIC');
+  assert.equal(planChangeBody.password, undefined);
+
+  const staleSession = issueToken(TOKEN_TYPES.SUPER_ADMIN_SESSION, {
+    id: superAdmin.id,
+    email,
+    role: 'SUPER_ADMIN',
+    mfa: true,
+    sessionVersion: stored.session_version,
+    authTime: Math.floor(Date.now() / 1000) - 601,
+  }, process.env.JWT_SECRET, { subject: superAdmin.id });
+  const staleWrite = await authenticatedRequest(
+    staleSession,
+    `/api/super-admin/restaurants/${tenantA.admin.id}/plan`,
+    { method: 'PUT', body: JSON.stringify({ plan: 'PRO', status: 'ACTIVE' }) },
+  );
+  const staleWriteBody = await staleWrite.json();
+  assert.equal(staleWrite.status, 401);
+  assert.equal(staleWriteBody.code, 'SUPER_ADMIN_REAUTH_REQUIRED');
+
+  const recoveryLogin = await postJson('/api/super-admin/login', { email, password });
+  const recoveryChallenge = await recoveryLogin.json();
+  assert.equal(recoveryChallenge.enrollmentRequired, false);
+  const recovery = await postJson('/api/super-admin/mfa/verify', {
+    challengeToken: recoveryChallenge.challengeToken,
+    recoveryCode: session.recoveryCodes[0],
+  });
+  const recoverySession = await recovery.json();
+  const recoveryCookie = recovery.headers.get('set-cookie')?.split(';')[0];
+  assert.equal(recovery.status, 200);
+  assert.ok(recoveryCookie?.startsWith('boltqr_superadmin='));
+  assert.equal(recoverySession.token, undefined);
+  assert.equal(
+    (await database.prisma.superAdmin.findUnique({ where: { id: superAdmin.id } })).mfa_recovery_code_hashes.length,
+    7,
+  );
+
+  const repeatedRecoveryLogin = await postJson('/api/super-admin/login', { email, password });
+  const repeatedChallenge = await repeatedRecoveryLogin.json();
+  const repeatedRecovery = await postJson('/api/super-admin/mfa/verify', {
+    challengeToken: repeatedChallenge.challengeToken,
+    recoveryCode: session.recoveryCodes[0],
+  });
+  assert.equal(repeatedRecovery.status, 401);
+  await database.prisma.superAdmin.update({
+    where: { id: superAdmin.id },
+    data: { mfa_failed_attempts: 0, mfa_locked_until: null },
+  });
+
+  const logout = await cookieRequest(recoveryCookie, '/api/super-admin/logout', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  assert.equal(logout.status, 200);
+  assert.match(logout.headers.get('set-cookie'), /Max-Age=0/u);
+  const revokedSession = await cookieRequest(recoveryCookie, '/api/super-admin/stats');
+  assert.equal(revokedSession.status, 403);
+
+  const lockLogin = await postJson('/api/super-admin/login', { email, password });
+  const lockChallenge = await lockLogin.json();
+  const failures = await Promise.all(Array.from({ length: 5 }, () =>
+    postJson('/api/super-admin/mfa/verify', {
+      challengeToken: lockChallenge.challengeToken,
+      code: 'not-a-code',
+    })));
+  assert.deepEqual(failures.map(response => response.status).sort(), [401, 401, 401, 401, 429]);
+  const lockedFailure = failures.find(response => response.status === 429);
+  const failureBody = await lockedFailure.json();
+  assert.equal(failureBody.code, 'SUPER_ADMIN_MFA_LOCKED');
+  assert.equal(lockedFailure.headers.get('retry-after'), '900');
+  const lockedPasswordLogin = await postJson('/api/super-admin/login', { email, password });
+  assert.equal(lockedPasswordLogin.status, 429);
 });
 
 test('uploads are recorded under the tenant and only the owner tenant can delete them', async () => {

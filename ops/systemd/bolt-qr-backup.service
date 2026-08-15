@@ -1,27 +1,27 @@
 [Unit]
-Description=Bolt QR pilot application
+Description=Bolt QR encrypted off-VPS backup
 After=network-online.target postgresql.service
 Wants=network-online.target
 Requires=postgresql.service
+StartLimitIntervalSec=6h
+StartLimitBurst=12
 
 [Service]
-Type=simple
-User=boltqr
-Group=boltqr
+Type=oneshot
+User=boltqrbackup
+Group=boltqrbackup
 SupplementaryGroups=boltqruploads
-WorkingDirectory=/opt/bolt-qr/current
-EnvironmentFile=/etc/bolt-qr/bolt-qr.env
-EnvironmentFile=-/opt/bolt-qr/current/.release.env
-ExecStartPre=/usr/bin/npm run migrate:deploy
-ExecStart=/usr/bin/npm run start:server
+EnvironmentFile=/etc/bolt-qr/bolt-qr-backup.env
+LoadCredential=restic-password:/etc/bolt-qr/restic-password
+LoadCredential=postgres-passfile:/etc/bolt-qr/postgres-passfile
+Environment=RESTIC_PASSWORD_FILE=%d/restic-password
+Environment=PGPASSFILE=%d/postgres-passfile
+ExecStart=/opt/bolt-qr/current/ops/bin/backup-pilot.sh
 Restart=on-failure
-RestartSec=5s
-TimeoutStartSec=120s
-TimeoutStopSec=30s
-KillSignal=SIGTERM
-UMask=0027
+RestartSec=15m
+TimeoutStartSec=4h
+UMask=0077
 
-# The application is read-only except for its dedicated persistent upload directory.
 NoNewPrivileges=true
 PrivateDevices=true
 PrivateTmp=true
@@ -33,7 +33,8 @@ ProtectKernelLogs=true
 ProtectKernelModules=true
 ProtectKernelTunables=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/bolt-qr/uploads
+ReadOnlyPaths=/var/lib/bolt-qr/uploads
+ReadWritePaths=/var/lib/bolt-qr/backup-state /var/cache/bolt-qr-backup
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=true
 RestrictRealtime=true
@@ -42,7 +43,3 @@ LockPersonality=true
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 AmbientCapabilities=
-LimitNOFILE=65535
-
-[Install]
-WantedBy=multi-user.target

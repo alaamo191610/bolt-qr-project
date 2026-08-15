@@ -2,13 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, tokenStore } from './api';
 import { superAdminService } from './superAdminService';
 
-beforeEach(() => {
-  tokenStore.set('superAdmin', 'super-admin-token');
-});
+beforeEach(() => sessionStorage.clear());
 
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe('superAdminService error propagation', () => {
@@ -44,9 +43,8 @@ describe('superAdminService error propagation', () => {
 });
 
 describe('superAdminService token namespace isolation (G9)', () => {
-  it('sends the superAdmin token, never the restaurant admin token, on SuperAdmin requests', async () => {
+  it('uses the HttpOnly-cookie credential mode and never sends a JavaScript bearer', async () => {
     tokenStore.set('restaurant', 'restaurant-admin-token');
-    tokenStore.set('superAdmin', 'the-real-super-admin-token');
 
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ totalRestaurants: 0, activeRestaurants: 0, totalRevenue: 0, growth: 0 }), {
@@ -60,16 +58,15 @@ describe('superAdminService token namespace isolation (G9)', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer the-real-super-admin-token');
-    expect(headers.Authorization).not.toContain('restaurant-admin-token');
+    expect(headers.Authorization).toBeUndefined();
+    expect(init.credentials).toBe('include');
   });
 
   it('login does not attach any Authorization header (no session exists yet)', async () => {
     tokenStore.set('restaurant', 'restaurant-admin-token');
-    tokenStore.set('superAdmin', 'stale-super-admin-token');
 
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ token: 'new-token', user: {} }), {
+      new Response(JSON.stringify({ mfaRequired: true, enrollmentRequired: false, challengeToken: 'challenge' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -81,5 +78,24 @@ describe('superAdminService token namespace isolation (G9)', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBeUndefined();
+    expect(init.credentials).toBe('include');
+  });
+
+  it('submits the MFA challenge without attaching an existing admin session', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ token: 'new-token', user: { role: 'SUPER_ADMIN' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await superAdminService.verifyMfa('challenge', '123456');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(init.credentials).toBe('include');
+    expect(init.body).toBe(JSON.stringify({ challengeToken: 'challenge', code: '123456' }));
   });
 });

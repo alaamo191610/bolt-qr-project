@@ -39,6 +39,27 @@ test('table sessions use a dedicated audience and 30-minute lifetime', () => {
   assert.throws(() => verifyAuthToken(token, secret), /Invalid authentication token/);
 });
 
+test('SuperAdmin sessions are short-lived and MFA challenges cannot authenticate API routes', () => {
+  const session = issueToken(TOKEN_TYPES.SUPER_ADMIN_SESSION, {
+    id: 'platform-admin',
+    role: 'SUPER_ADMIN',
+    mfa: true,
+    sessionVersion: 1,
+  }, secret);
+  const challenge = issueToken(TOKEN_TYPES.SUPER_ADMIN_MFA_CHALLENGE, {
+    id: 'platform-admin',
+    role: 'SUPER_ADMIN_MFA_CHALLENGE',
+    sessionVersion: 1,
+  }, secret);
+  const decodedSession = jwt.decode(session);
+  const decodedChallenge = jwt.decode(challenge);
+
+  assert.equal(decodedSession.exp - decodedSession.iat, 30 * 60);
+  assert.equal(decodedChallenge.exp - decodedChallenge.iat, 5 * 60);
+  assert.equal(verifyAuthToken(session, secret).mfa, true);
+  assert.throws(() => verifyAuthToken(challenge, secret), /Invalid authentication token/u);
+});
+
 test('authentication verification rejects tracking tokens and wrong audiences', () => {
   const trackingToken = issueToken(TOKEN_TYPES.ORDER_TRACKING, { orderId: 42 }, secret);
 

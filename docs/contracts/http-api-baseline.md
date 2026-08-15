@@ -59,6 +59,10 @@ or restaurant identifiers. Versioned socket events are best-effort hints; client
 reconnect or process restart through authoritative tenant-scoped HTTP refetch. See the
 [order realtime integrity contract](order-realtime-integrity.md).
 
+Organization selection and membership administration follow the tenant-derived role, last-owner,
+and revocation rules in the
+[organization and membership contract](organization-membership.md).
+
 Dine-in order creation requires the separate 30-minute `table-session` class with audience
 `table-ordering`. It is issued only by exchanging a current high-entropy table capability and
 cannot authenticate restaurant, SuperAdmin, tracking, or socket-admin routes. See the
