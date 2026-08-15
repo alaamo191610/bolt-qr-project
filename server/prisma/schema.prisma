@@ -97,6 +97,13 @@ enum MembershipStatus {
   SUSPENDED
 }
 
+enum OrderingState {
+  OPEN
+  PAUSED
+  CLOSED
+  OVERLOADED
+}
+
 model User {
   id            String    @id @default(uuid()) @db.Uuid
   email         String    @unique
@@ -535,16 +542,18 @@ model Organization {
 }
 
 model Branch {
-  id                String   @id @default(uuid()) @db.Uuid
-  organization_id   String   @db.Uuid
-  code              String
-  name              String
-  timezone          String   @default("Asia/Amman")
-  currency          String   @default("JOD")
-  active            Boolean  @default(true)
-  next_check_number Int      @default(1)
-  created_at        DateTime @default(now()) @db.Timestamptz
-  updated_at        DateTime @default(now()) @updatedAt @db.Timestamptz
+  id                        String        @id @default(uuid()) @db.Uuid
+  organization_id           String        @db.Uuid
+  code                      String
+  name                      String
+  timezone                  String        @default("Asia/Amman")
+  currency                  String        @default("JOD")
+  active                    Boolean       @default(true)
+  ordering_state            OrderingState @default(OPEN)
+  ordering_state_updated_at DateTime      @default(now()) @db.Timestamptz
+  next_check_number         Int           @default(1)
+  created_at                DateTime      @default(now()) @db.Timestamptz
+  updated_at                DateTime      @default(now()) @updatedAt @db.Timestamptz
 
   organization       Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   default_for_admins Admin[]              @relation("AdminDefaultBranch")
@@ -566,6 +575,7 @@ model Branch {
 
   @@unique([organization_id, code])
   @@index([organization_id, active])
+  @@index([organization_id, ordering_state, active])
   @@map("branches")
 }
 

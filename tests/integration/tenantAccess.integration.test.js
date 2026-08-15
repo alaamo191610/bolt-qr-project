@@ -14,6 +14,7 @@ let baseUrl;
 let tenantA;
 let tenantB;
 let rateLimiters;
+let rejectionTelemetry;
 
 const postJson = async (path, body) => fetch(`${baseUrl}${path}`, {
   method: 'POST',
@@ -179,7 +180,9 @@ before(async () => {
   process.env.DATABASE_URL = database.databaseUrl;
   const application = await import(`../../server/index.js?integration=${Date.now()}`);
   ({ app } = application);
+  rejectionTelemetry = application.publicOrderRejectionTelemetry;
   rateLimiters = [
+    application.orderRateLimit,
     application.tableExchangeIpRateLimit,
     application.tableExchangeCapabilityRateLimit,
     application.tableSessionOrderRateLimit,
@@ -761,6 +764,154 @@ test('concurrent unique orders cannot cross the session cap and a new session ha
     select: { table_session_id: true },
   });
   assert.notEqual(independentOrder.table_session_id, persisted[0].table_session_id);
+});
+
+test('ordering-state management is role- and tenant-scoped, audited, and assigns new tables to the active branch', async () => {
+  const { adminToken } = await createTableSession(tenantA);
+  const updateState = (branchId, state) => authenticatedRequest(
+    adminToken,
+    `/api/branches/${branchId}/ordering-state`,
+    { method: 'PUT', body: JSON.stringify({ state }) },
+  );
+
+  const crossTenant = await updateState(tenantB.branchId, 'PAUSED');
+  assert.equal(crossTenant.status, 404);
+  assert.equal((await database.prisma.branch.findUnique({ where: { id: tenantB.branchId } })).ordering_state, 'OPEN');
+
+  await database.prisma.organizationUser.update({
+    where: {
+      organization_id_user_id: {
+        organization_id: tenantA.organization.id,
+        user_id: tenantA.user.id,
+      },
+    },
+    data: { role: 'STAFF' },
+  });
+  const staffDenied = await updateState(tenantA.branchId, 'PAUSED');
+  assert.equal(staffDenied.status, 403);
+
+  await database.prisma.organizationUser.update({
+    where: {
+      organization_id_user_id: {
+        organization_id: tenantA.organization.id,
+        user_id: tenantA.user.id,
+      },
+    },
+    data: { role: 'MANAGER' },
+  });
+  const changed = await updateState(tenantA.branchId, 'paused');
+  const changedBody = await changed.json();
+  assert.equal(changed.status, 200);
+  assert.equal(changedBody.state, 'PAUSED');
+
+  const loaded = await authenticatedRequest(
+    adminToken,
+    `/api/branches/${tenantA.branchId}/ordering-state`,
+  );
+  assert.equal(loaded.status, 200);
+  assert.equal((await loaded.json()).state, 'PAUSED');
+
+  const audit = await database.prisma.auditEvent.findFirst({
+    where: {
+      organization_id: tenantA.organization.id,
+      branch_id: tenantA.branchId,
+      action: 'ORDERING_STATE_CHANGED',
+    },
+  });
+  assert.equal(audit.actor_admin_id, tenantA.admin.id);
+  assert.deepEqual(audit.metadata, {
+    previousState: 'OPEN',
+    newState: 'PAUSED',
+    requestId: changed.headers.get('x-request-id'),
+  });
+
+  const repeated = await updateState(tenantA.branchId, 'PAUSED');
+  assert.equal(repeated.status, 200);
+  assert.equal(await database.prisma.auditEvent.count({ where: { action: 'ORDERING_STATE_CHANGED' } }), 1);
+
+  const createdTable = await authenticatedRequest(adminToken, '/api/tables', {
+    method: 'POST',
+    body: JSON.stringify({ code: 'A-02', capacity: 4 }),
+  });
+  const tableBody = await createdTable.json();
+  assert.equal(createdTable.status, 200);
+  assert.equal(tableBody.branch_id, tenantA.branchId);
+});
+
+test('public orders enforce branch and table states without breaking exact replay or mutating rejections', async () => {
+  const { adminToken, session } = await createTableSession(tenantA);
+  const firstKey = randomUUID();
+  const requestBody = JSON.stringify({
+    type: 'dine_in',
+    promotionCode: tenantA.promotion.code,
+    items: [{ menuId: tenantA.menu.id, quantity: 1 }],
+  });
+  const submit = key => authenticatedRequest(session.token, '/api/orders', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: requestBody,
+  });
+  const setState = state => authenticatedRequest(
+    adminToken,
+    `/api/branches/${tenantA.branchId}/ordering-state`,
+    { method: 'PUT', body: JSON.stringify({ state }) },
+  );
+  const telemetryEvents = [];
+  const originalRecord = rejectionTelemetry.record;
+  rejectionTelemetry.record = event => {
+    telemetryEvents.push(event);
+    return originalRecord(event);
+  };
+
+  const first = await submit(firstKey);
+  const firstBody = await first.json();
+  assert.equal(first.status, 201);
+  assert.equal(await setState('PAUSED').then(response => response.status), 200);
+
+  const replay = await submit(firstKey);
+  assert.equal(replay.status, 200);
+  assert.equal((await replay.json()).id, firstBody.id);
+
+  const expectations = [
+    ['PAUSED', 'RESTAURANT_PAUSED'],
+    ['CLOSED', 'RESTAURANT_CLOSED'],
+    ['OVERLOADED', 'RESTAURANT_OVERLOADED'],
+  ];
+  for (const [state, code] of expectations) {
+    assert.equal(await setState(state).then(response => response.status), 200);
+    const rejected = await submit(randomUUID());
+    const body = await rejected.json();
+    assert.equal(rejected.status, 409);
+    assert.equal(body.code, code);
+    assert.equal(body.requestId, rejected.headers.get('x-request-id'));
+  }
+
+  assert.equal(await setState('OPEN').then(response => response.status), 200);
+  await database.prisma.table.update({ where: { id: tenantA.table.id }, data: { status: 'reserved' } });
+  const tableRejectedKey = randomUUID();
+  const tableRejected = await submit(tableRejectedKey);
+  assert.equal(tableRejected.status, 409);
+  assert.equal((await tableRejected.json()).code, 'TABLE_UNAVAILABLE');
+  rejectionTelemetry.record = originalRecord;
+
+  assert.equal(await database.prisma.order.count({ where: { table_session_id: { not: null } } }), 1);
+  assert.equal(await database.prisma.publicOrderIdempotency.count(), 1);
+  assert.equal((await database.prisma.promotion.findUnique({ where: { id: tenantA.promotion.id } })).times_used, 1);
+  assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key: tableRejectedKey } }), 0);
+  assert.deepEqual(
+    telemetryEvents.map(event => event.reasonCode),
+    ['RESTAURANT_PAUSED', 'RESTAURANT_CLOSED', 'RESTAURANT_OVERLOADED', 'TABLE_UNAVAILABLE'],
+  );
+  assert.ok(telemetryEvents.every(event =>
+    Object.keys(event).every(key => [
+      'requestId',
+      'organizationId',
+      'branchId',
+      'tableId',
+      'reasonCode',
+      'counters',
+    ].includes(key))
+  ));
 });
 
 test('dine-in order creation requires a valid current table session before mutation', async () => {

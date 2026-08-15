@@ -42,6 +42,11 @@ at capacity returns `409 ORDER_LIMIT_REACHED` without mutation. Exact idempotenc
 successful at capacity; `served` and `cancelled` orders no longer consume a slot. See the
 [public order-capacity contract](order-capacity.md).
 
+Branch ordering availability is managed through tenant-scoped owner/manager GET/PUT endpoints.
+New orders return `409 RESTAURANT_PAUSED`, `409 RESTAURANT_CLOSED`,
+`409 RESTAURANT_OVERLOADED`, or `409 TABLE_UNAVAILABLE` before mutation. Exact replay remains
+available. See the [public order availability contract](public-order-availability.md).
+
 ## Authentication classes
 
 Restaurant endpoints require a verified `restaurant-session` token. SuperAdmin endpoints
@@ -69,5 +74,6 @@ authorization rules, and stable error codes before frontend consumption.
 Takeaway is disabled for Release 1. Dine-in now derives organization, restaurant, branch, and table
 identity from a database-revalidated table capability/session and ignores public request-body
 identity for authorization. Durable backend idempotency and per-session open-order capacity are
-implemented. Pause behavior, a production shared limiter, frontend key persistence, and
+implemented. Branch pause/closure/overload, table availability, and safe local rejection telemetry
+are also implemented. A production shared limiter, frontend state-control/key-persistence work, and
 real-backend E2E evidence remain launch blockers.

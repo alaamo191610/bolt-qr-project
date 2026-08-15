@@ -36,7 +36,7 @@ export const createRequestContextMiddleware = ({
       path: req.path,
       status: res.statusCode,
       durationMs: Math.max(0, clock() - startedAt),
-      tenantId: req.auth?.organizationId || req.user?.organizationId,
+      tenantId: req.auth?.organizationId || req.user?.organizationId || req.tableSession?.organizationId,
       userId: req.auth?.userId || req.user?.userId,
     }));
   });

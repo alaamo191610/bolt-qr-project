@@ -454,6 +454,36 @@ because they lack the new claim and expire within 30 minutes.
 Next Yazan point: publish and implement restaurant pause/closed/overloaded/table-unavailable
 enforcement and audit-safe rejection telemetry. The production shared limiter remains M3 work.
 
+## Tracking update — 15 August 2026 (ordering availability and telemetry started)
+
+The [public availability contract](contracts/public-order-availability.md) is published before
+implementation. Operational state is branch-scoped as `OPEN`, `PAUSED`, `CLOSED`, or `OVERLOADED`;
+only `available`/`occupied` tables may order. Owner/manager state changes are tenant-scoped and
+audited. New orders fail with stable `409` codes before business mutation, exact replay remains
+available during closure, and rejection telemetry is restricted to request/organization/branch/
+table IDs, reason code, and allowlisted counters.
+
+## Tracking update — 15 August 2026 (ordering availability and telemetry complete)
+
+Implemented durable branch `OPEN`/`PAUSED`/`CLOSED`/`OVERLOADED` state, timestamp and index, plus an
+ownership-consistent legacy table-branch backfill. New tables now require and inherit an active
+default branch. Tenant-scoped GET/PUT management requires owner/manager role; real changes and
+`ORDERING_STATE_CHANGED` audit events commit together under serializable isolation. Staff and
+cross-tenant requests fail closed.
+
+The locked public-order transaction resolves exact idempotency replay first, then rejects branch or
+table state before capacity, pricing, promotion, order, table, or socket mutation using stable
+`409 RESTAURANT_PAUSED`, `RESTAURANT_CLOSED`, `RESTAURANT_OVERLOADED`, or `TABLE_UNAVAILABLE`.
+Structured `public_order_rejected` telemetry includes only request/tenant/branch/table IDs, reason,
+and allowlisted counters; the generic request log now derives tenant identity from table sessions.
+Frontend error utilities consume every published code, while the admin state-control UI remains
+Alaa's handoff.
+
+Final verification passes ESLint, TypeScript, Prisma validation, production build, 30 unit tests,
+25 disposable-PostgreSQL integration tests, 41 frontend tests, and 8 desktop/mobile browser E2E
+tests. The next Yazan point is order/realtime integrity: authorized and versioned socket events,
+status/refetch authority, reconnect/server-restart behavior, and cross-tenant transition tests.
+
 ## Fair-split agreement
 
 Ownership is not a measure of effort. Each milestone is planned as an approximately equal
@@ -531,7 +561,7 @@ documentation, fixture, or regression task instead of waiting.
 |---|---|---|
 | QR/table capability | **Core backend/frontend integrated and re-reviewed 15 Aug at `1396b5f`:** secure generator, exchange, table bearer checkout, recovery states, and mocked desktop/mobile E2E pass. Legacy capability-less `TableManagement` QR and real-backend golden E2E remain. | Backend negatives and mocked browser paths pass; remove legacy QR and add real rotate/exchange/order/tracking evidence plus RTL. |
 | Idempotency | **Backend complete 15 Aug:** required safe key, capability-version/tenant/table scope, 24-hour durable record, atomic order/effects, exact replay, changed-payload conflict, rollback, and no duplicate socket emission. | 26 unit and 21 PostgreSQL integration tests include concurrent retry with one order/one promotion increment. Frontend reload/mobile-resume persistence remains. |
-| Abuse controls | **Capacity slice complete 15 Aug:** individual session identity/rate key and transactional three-open-order cap pass. Existing IP/capability/session/organization route limits remain local. Pause/closed/overload/table availability and safe rejection telemetry are next; shared limiting remains M3. | Boundary, replay-at-capacity, terminal release, rollback, session isolation, and concurrent unique-order integration tests pass. |
+| Abuse controls | **Local M2 controls complete 15 Aug:** individual session/organization/IP limits, transactional three-open-order cap, branch pause/closed/overload, fail-closed table availability, audited management, and redacted rejection telemetry pass. Shared limiting remains M3. | Capacity concurrency plus full state/role/tenant/no-mutation/replay/telemetry tests pass. Admin state-control UI remains Alaa's handoff. |
 | Order/realtime integrity | Transactional totals/promotions; authorized/versioned socket rooms/events; tracking credentials are minimal and scoped. | Socket/transition/cross-tenant tests; document authoritative refetch endpoint. |
 
 ### Y3 — M3 production infrastructure (Weeks 6–8)

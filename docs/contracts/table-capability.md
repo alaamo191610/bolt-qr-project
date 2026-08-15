@@ -84,6 +84,10 @@ order mutation.
 | 404 | `VALIDATION_ERROR` | Authenticated table rotation/revocation target does not exist in the tenant. |
 | 409 | `IDEMPOTENCY_CONFLICT` | The scoped key was already used for a different order payload. |
 | 409 | `ORDER_LIMIT_REACHED` | This table session already has three open orders. |
+| 409 | `RESTAURANT_PAUSED` | The branch temporarily paused new orders. |
+| 409 | `RESTAURANT_CLOSED` | The branch is closed or inactive. |
+| 409 | `RESTAURANT_OVERLOADED` | The branch cannot safely accept additional orders. |
+| 409 | `TABLE_UNAVAILABLE` | The table/branch assignment or table status is not orderable. |
 | 429 | `RATE_LIMITED` | Exchange limit exceeded; `Retry-After` is present. |
 
 All errors also contain `requestId`. Error responses and logs must not reveal whether a supplied

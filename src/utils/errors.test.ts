@@ -19,6 +19,18 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage(error)).toMatch(/maximum number of open orders/i);
   });
 
+  it('maps every public ordering availability code to a safe customer action', () => {
+    const cases: Array<[string, RegExp]> = [
+      ['RESTAURANT_PAUSED', /isn't accepting new orders/i],
+      ['RESTAURANT_CLOSED', /currently closed/i],
+      ['RESTAURANT_OVERLOADED', /temporarily unable/i],
+      ['TABLE_UNAVAILABLE', /table is not currently available/i],
+    ];
+    for (const [code, expected] of cases) {
+      expect(getErrorMessage(new ApiError({ message: 'internal', status: 409, code }))).toMatch(expected);
+    }
+  });
+
   it('returns a paused-restaurant message for RESTAURANT_PAUSED', () => {
     const error = new ApiError({ message: 'ordering paused', status: 403, code: 'RESTAURANT_PAUSED' });
     expect(getErrorMessage(error)).toMatch(/isn't accepting new orders/i);

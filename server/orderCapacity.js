@@ -18,10 +18,12 @@ export const enforcePublicOrderCapacity = async (db, {
   });
 
   if (openOrderCount >= PUBLIC_ORDER_OPEN_LIMIT) {
-    throw new ApiError('This table session already has the maximum number of open orders', {
+    const error = new ApiError('This table session already has the maximum number of open orders', {
       status: 409,
       code: ERROR_CODES.ORDER_LIMIT_REACHED,
     });
+    error.telemetryCounters = { openOrderCount, orderLimit: PUBLIC_ORDER_OPEN_LIMIT };
+    throw error;
   }
 
   return { openOrderCount, limit: PUBLIC_ORDER_OPEN_LIMIT };

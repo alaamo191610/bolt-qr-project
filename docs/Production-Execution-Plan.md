@@ -334,6 +334,30 @@ The database suite proves the boundary, replay, rollback, terminal release, inde
 and concurrent unique submissions. The next Yazan point is ordering
 pause/closed/overloaded/table-unavailable enforcement plus audit-safe rejection telemetry.
 
+## Implementation tracking — 15 August 2026 (ordering availability and telemetry started)
+
+The public availability/telemetry contract is published. Branches durably own
+`OPEN`/`PAUSED`/`CLOSED`/`OVERLOADED`; table status independently fails closed unless `available` or
+`occupied`. An owner/manager-only tenant-scoped endpoint and audit event govern transitions. Public
+enforcement will run after exact idempotency replay but before capacity or any business mutation,
+with stable `409` codes and structured rejection telemetry that excludes baskets, notes, promotion
+data, tokens, hashes, IPs, and raw errors.
+
+## Implementation tracking — 15 August 2026 (ordering availability and telemetry complete)
+
+Branches now durably store indexed `OPEN`/`PAUSED`/`CLOSED`/`OVERLOADED` state. The additive migration
+backfills only ownership-consistent default branches, and new tables require an active tenant
+default branch. Owner/manager GET/PUT state management is tenant-scoped; real changes and audit
+events use one serializable transaction. Staff and cross-tenant access fail closed.
+
+After exact replay resolution, the exclusively locked order transaction enforces branch and table
+state with stable `409` codes before every business mutation. Rejections roll back idempotency.
+Structured telemetry emits only correlation/scope IDs, reason, and allowlisted counters; customer
+messages consume all published codes. Final evidence passes ESLint, TypeScript, Prisma validation,
+production build, 30 unit tests, 25 PostgreSQL integration tests, 41 frontend tests, and 8
+desktop/mobile browser E2E tests. Admin control UI remains a frontend handoff. The next Yazan point
+is authorized/versioned order realtime and authoritative reconnect/refetch behavior.
+
 ## Outcome and planning rule
 
 Release a secure, observable, recoverable multi-tenant restaurant QR platform without
@@ -472,7 +496,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Foundation implemented | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, and cross-tenant negatives pass; staging verify/enforce remain. | — | 14 Aug 2026 |
-| M2 bounded order cycle | Core QR/session, backend idempotency, and transactional capacity integrated; remaining controls in progress | — | Three-open-order boundary and capability-scoped retry are concurrency-safe; 28 unit and 23 PostgreSQL integration tests pass. Legacy QR, frontend reload persistence, real-backend golden E2E, pause/telemetry/shared limiting remain. | Yazan + Alaa | 15 Aug 2026 |
+| M2 bounded order cycle | Core QR/session, idempotency, capacity, availability, and local rejection telemetry integrated; realtime integrity remains | — | Capability retry, capacity, operational states, tenant/role controls, audit, and no-mutation rejections pass; 30 unit and 25 PostgreSQL integration tests. Legacy QR, frontend controls/persistence, real-backend golden E2E, realtime integrity, and M3 shared limiting remain. | Yazan + Alaa | 15 Aug 2026 |
 | M3 production infrastructure | Not started | — | — | — | — |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |

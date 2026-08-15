@@ -35,6 +35,14 @@ const tableSessionSelection = {
       organization_id: true,
       branch_id: true,
       status: true,
+      branch: {
+        select: {
+          id: true,
+          organization_id: true,
+          active: true,
+          ordering_state: true,
+        },
+      },
       organization: { select: { id: true, active: true } },
       admin: { select: { id: true, organization_id: true, subscription_status: true } },
     },

@@ -1,7 +1,7 @@
 # ADR 0007: Public order entry and abuse policy
 
-Status: Option A and dine-in defaults selected by Yazan; capability, idempotency, and open-order
-capacity implemented by 15 August 2026; Alaa sign-off recorded — remaining M2 controls pending
+Status: Option A and dine-in defaults selected; capability, idempotency, capacity, availability, and
+safe rejection telemetry implemented by 15 August 2026; shared production limiting remains M3
 
 ## Recorded decision
 
@@ -12,17 +12,16 @@ verifies no order is created.
 
 Alaa recorded `Takeaway: A — disabled for Release 1; abuse defaults accepted` on 14 August 2026,
 agreeing with Yazan's selection and the mandatory dine-in controls below. This closes the joint
-decision for ADR 0007. Idempotency and open-order capacity are now implemented; pause/overload
-behavior, rejection telemetry, and the production shared limiter remain the separate M2/M3 work
-items listed under "Implementation evidence" below.
+decision for ADR 0007. Idempotency, capacity, branch pause/closure/overload, table availability, and
+safe rejection telemetry are implemented. The production shared limiter remains the separate M3
+work item listed under "Implementation evidence" below.
 
 ## Current risk
 
 The capability, idempotency, and capacity slices remove request-body tenant/table trust, disable
-anonymous takeaway, prevent duplicate retries, and bound open orders. The public write is not
-release-ready until ordering pause/overload behavior, rejection telemetry, and a production shared
-limiter are complete. The current in-process limiter cannot coordinate horizontally scaled
-instances.
+anonymous takeaway, prevent duplicate retries, bound open orders, and fail closed on operational
+state. The public write still requires the M3 shared limiter before horizontally scaled production;
+the current bounded in-process limiter cannot coordinate across instances.
 
 ## Mandatory controls for every option
 
@@ -105,6 +104,7 @@ Any changed limit or session lifetime must be written explicitly with the choice
 Durable idempotency and three-open-order enforcement are implemented. Each exchange issues a random
 session UUID, public orders persist it, and an exclusive capability lock serializes count plus
 insert. `pending`/`preparing`/`ready` consume the three slots; `served`/`cancelled` release them;
-capacity rejection is `409 ORDER_LIMIT_REACHED` and rolls back idempotency. Pause/closed/overload
-behavior, safe rejection telemetry, and the production shared limiter remain mandatory M2/M3
-points.
+capacity rejection is `409 ORDER_LIMIT_REACHED` and rolls back idempotency. Branch-scoped
+`OPEN`/`PAUSED`/`CLOSED`/`OVERLOADED`, fail-closed table availability, owner/manager audit events,
+and allowlisted structured rejection telemetry are also implemented and database-tested. The
+production shared limiter remains the mandatory M3 point.

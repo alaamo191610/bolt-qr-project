@@ -39,6 +39,11 @@ import {
   requireIdempotencyKey,
 } from './orderIdempotency.js';
 import { enforcePublicOrderCapacity } from './orderCapacity.js';
+import {
+  ORDERING_STATES,
+  assertPublicOrderAvailable,
+  createPublicOrderRejectionTelemetry,
+} from './publicOrderAvailability.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -97,6 +102,7 @@ const authenticate = createAuthenticate({
 
 const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
 const publicOrderIdempotency = createPublicOrderIdempotencyService();
+const publicOrderRejectionTelemetry = createPublicOrderRejectionTelemetry();
 
 const app = express();
 const server = createServer(app);
@@ -1257,6 +1263,12 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
           return { order: replayedOrder, replayed: true };
         }
 
+        assertPublicOrderAvailable({
+          branch: table.branch,
+          table,
+          organizationId: tableSession.organizationId,
+        });
+
         await enforcePublicOrderCapacity(tx, {
           organizationId: tableSession.organizationId,
           tableId: table.id,
@@ -1579,6 +1591,16 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     res.setHeader('Idempotency-Replayed', String(replayed));
     res.status(replayed ? 200 : 201).json({ ...presentedOrder, tracking_token: trackingToken });
   } catch (err) {
+    if (req.tableSession) {
+      publicOrderRejectionTelemetry.record({
+        requestId: req.requestId,
+        organizationId: req.tableSession.organizationId,
+        branchId: req.tableSession.table.branch_id,
+        tableId: req.tableSession.table.id,
+        reasonCode: err.code,
+        counters: err.telemetryCounters,
+      });
+    }
     if (!err.status || err.status >= 500) console.error('Error creating order:', logSafeError(err));
     sendError(res, req, err);
   }
@@ -1692,12 +1714,25 @@ app.post('/api/tables', authenticate, async (req, res) => {
       });
     }
 
+    const defaultBranch = req.auth.branchId && await prisma.branch.findFirst({
+      where: {
+        id: req.auth.branchId,
+        organization_id: req.auth.organizationId,
+        active: true,
+      },
+      select: { id: true },
+    });
+    if (!defaultBranch) {
+      return res.status(409).json({ error: 'An active default branch is required to create a table' });
+    }
+
     const table = await prisma.table.create({
       data: {
         code: tableCode,
         capacity: Number(capacity),
         admin_id,
         organization_id: req.auth.organizationId,
+        branch_id: defaultBranch.id,
       }
     });
     res.json(table);
@@ -1706,6 +1741,83 @@ app.post('/api/tables', authenticate, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get(
+  '/api/branches/:branchId/ordering-state',
+  authenticate,
+  requireOrganizationRole('OWNER', 'MANAGER'),
+  async (req, res) => {
+    const branchId = String(req.params.branchId || '');
+    if (!isUuid(branchId)) return res.status(400).json({ error: 'Valid branch is required' });
+    try {
+      const branch = await prisma.branch.findFirst({
+        where: { id: branchId, organization_id: req.auth.organizationId },
+        select: { id: true, ordering_state: true, ordering_state_updated_at: true },
+      });
+      if (!branch) return res.status(404).json({ error: 'Branch not found' });
+      res.json({
+        branchId: branch.id,
+        state: branch.ordering_state,
+        updatedAt: branch.ordering_state_updated_at,
+      });
+    } catch (error) {
+      sendError(res, req, error);
+    }
+  },
+);
+
+app.put(
+  '/api/branches/:branchId/ordering-state',
+  authenticate,
+  requireOrganizationRole('OWNER', 'MANAGER'),
+  async (req, res) => {
+    const branchId = String(req.params.branchId || '');
+    const state = String(req.body.state || '').toUpperCase();
+    if (!isUuid(branchId) || !ORDERING_STATES.includes(state)) {
+      return res.status(400).json({ error: 'Valid branch and ordering state are required' });
+    }
+
+    try {
+      const branch = await prisma.$transaction(async tx => {
+        const current = await tx.branch.findFirst({
+          where: { id: branchId, organization_id: req.auth.organizationId },
+          select: { id: true, organization_id: true, ordering_state: true, ordering_state_updated_at: true },
+        });
+        if (!current) throw Object.assign(new Error('Branch not found'), { status: 404 });
+        if (current.ordering_state === state) return current;
+
+        const updated = await tx.branch.update({
+          where: { id: current.id },
+          data: { ordering_state: state, ordering_state_updated_at: new Date() },
+          select: { id: true, organization_id: true, ordering_state: true, ordering_state_updated_at: true },
+        });
+        await tx.auditEvent.create({
+          data: {
+            organization_id: current.organization_id,
+            branch_id: current.id,
+            actor_admin_id: req.user.id,
+            action: 'ORDERING_STATE_CHANGED',
+            entity_type: 'Branch',
+            entity_id: current.id,
+            metadata: {
+              previousState: current.ordering_state,
+              newState: state,
+              requestId: req.requestId,
+            },
+          },
+        });
+        return updated;
+      }, { isolationLevel: 'Serializable' });
+      res.json({
+        branchId: branch.id,
+        state: branch.ordering_state,
+        updatedAt: branch.ordering_state_updated_at,
+      });
+    } catch (error) {
+      sendError(res, req, error);
+    }
+  },
+);
 
 app.put('/api/tables/:id', authenticate, async (req, res) => {
   const { code, capacity, status } = req.body;
@@ -2542,4 +2654,5 @@ export {
   tableExchangeCapabilityRateLimit,
   tableSessionOrderRateLimit,
   organizationOrderRateLimit,
+  publicOrderRejectionTelemetry,
 };
