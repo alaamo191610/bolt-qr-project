@@ -3,15 +3,31 @@ import type { OrderFlowRules, KDSPrefs } from '../order-admin/types';
 import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
 import { api } from './api';
 
-interface AnalyticsApiItem {
-  quantity: number;
-  menu?: { name_en?: string } | null;
-  menus?: { name_en?: string } | null;
+interface CursorPage<T> {
+  items: T[];
+  pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
 }
 
-interface AnalyticsApiOrder {
-  total?: number;
-  order_items?: AnalyticsApiItem[];
+export interface AnalyticsSummary {
+  range: { days: number; start: string; end: string; timezone: 'UTC' };
+  totals: {
+    totalRevenue: number;
+    totalOrders: number;
+    averageOrderValue: number;
+    servedOrders: number;
+  };
+  popularItems: Array<{
+    id?: number | null;
+    name_en?: string;
+    name_ar?: string | null;
+    count: number;
+    revenue: number;
+  }>;
+  topTables: Array<{ table: string; count: number; revenue: number }>;
+  statusData: Array<{ status: string; count: number; revenue: number }>;
+  revenueByStatus: Record<string, number>;
+  dailyTrend: Array<{ date: string; orders: number; revenue: number }>;
+  hourlyActivity: Array<{ day: number; hour: number; count: number }>;
 }
 
 export const adminService = {
@@ -58,32 +74,7 @@ export const adminService = {
   async getAnalytics(adminId: string | undefined, days: number = 30) {
     void adminId;
     try {
-      const orders = await api.get('/admin/analytics', { days: String(days) }) as AnalyticsApiOrder[];
-
-      const totalRevenue = orders?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
-      const totalOrders = orders?.length || 0;
-      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-      const itemCounts: Record<string, number> = {};
-      orders?.forEach((order: AnalyticsApiOrder) => {
-        (order.order_items || []).forEach((item: AnalyticsApiItem) => {
-          const itemName = item.menu?.name_en || item.menus?.name_en || 'Unknown Item';
-          itemCounts[itemName] = (itemCounts[itemName] || 0) + item.quantity;
-        });
-      });
-
-      const popularItems = Object.entries(itemCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 10)
-        .map(([name, count]) => ({ name, count }));
-
-      return {
-        totalRevenue,
-        totalOrders,
-        averageOrderValue,
-        popularItems,
-        orders: orders || [],
-      };
+      return await api.get<AnalyticsSummary>('/admin/analytics', { days: String(days) });
     } catch (error) {
       console.error('Error fetching analytics:', error);
       throw error;
@@ -125,8 +116,8 @@ export const adminService = {
   // -------- Promotions --------
   async listPromotions(adminId?: string): Promise<Promotion[]> {
     void adminId;
-    const data = await api.get('/promotions');
-    return (data || []) as Promotion[];
+    const data = await api.get<CursorPage<Promotion>>('/promotions', { limit: '100' });
+    return data.items || [];
   },
 
   async upsertPromotion(promo: Promotion, adminId?: string): Promise<Promotion> {
@@ -145,7 +136,7 @@ export const adminService = {
   // -------- User Management --------
   async getAllAdmins() {
     try {
-      return await api.get('/admins');
+      return (await api.get<CursorPage<Admin>>('/admins', { limit: '100' })).items;
     } catch (error) {
       console.error('Error fetching admins:', error);
       throw error;

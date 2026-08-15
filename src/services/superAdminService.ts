@@ -30,6 +30,11 @@ export interface Restaurant {
     };
 }
 
+export interface RestaurantPage {
+    items: Restaurant[];
+    pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
+}
+
 export interface SuperAdminMfaChallenge {
     mfaRequired: true;
     enrollmentRequired: boolean;
@@ -61,8 +66,22 @@ export const superAdminService = {
         await api.post('/super-admin/logout', {}, 'superAdmin');
     },
 
+    async getRestaurantsPage(input: {
+        cursor?: string;
+        limit?: number;
+        search?: string;
+        plan?: 'ALL' | SubscriptionPlan;
+    } = {}): Promise<RestaurantPage> {
+        return api.get<RestaurantPage>('/super-admin/restaurants', {
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+            ...(input.limit ? { limit: String(input.limit) } : {}),
+            ...(input.search ? { search: input.search } : {}),
+            ...(input.plan && input.plan !== 'ALL' ? { plan: input.plan } : {}),
+        }, 'superAdmin');
+    },
+
     async getRestaurants(): Promise<Restaurant[]> {
-        return api.get<Restaurant[]>('/super-admin/restaurants', undefined, 'superAdmin');
+        return (await this.getRestaurantsPage()).items;
     },
 
     async getStats(): Promise<SuperAdminStats> {

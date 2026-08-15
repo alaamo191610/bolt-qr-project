@@ -74,4 +74,24 @@ describe('OrderManagement status change', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(orders[0].status).toBe('preparing');
   });
+
+  it('loads the next bounded page and reports server-side history scope changes', async () => {
+    const user = userEvent.setup();
+    const loadMore = vi.fn();
+    const changeView = vi.fn();
+    render(
+      <OrderManagement
+        orders={[baseOrder]}
+        setOrders={vi.fn()}
+        hasMore
+        onLoadMore={loadMore}
+        onViewModeChange={changeView}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Load more orders' }));
+    expect(loadMore).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    expect(changeView).toHaveBeenCalledWith('history');
+  });
 });

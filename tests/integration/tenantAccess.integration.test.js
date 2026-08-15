@@ -8,6 +8,8 @@ import { createTestDatabase } from '../helpers/testDatabase.js';
 import { runTenantOwnershipVerification } from '../../server/prisma/verification/runTenantOwnershipVerification.js';
 import { totpCode } from '../../server/superAdminAuth.js';
 import { TOKEN_TYPES, issueToken } from '../../server/tokenPolicy.js';
+import { verifyQueryPlans } from '../../ops/bin/verify-query-plans.js';
+import { runCapacityCheck } from '../../ops/bin/run-capacity-check.js';
 
 let database;
 let applicationDatabase;
@@ -447,6 +449,10 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
 
   const stats = await cookieRequest(sessionCookie, '/api/super-admin/stats');
   assert.equal(stats.status, 200);
+  const statsBody = await stats.json();
+  assert.equal(statsBody.totalRestaurants, 2);
+  assert.equal(statsBody.activeRestaurants, 2);
+  assert.equal(statsBody.totalRevenue, 20);
 
   const planChange = await cookieRequest(
     sessionCookie,
@@ -1556,4 +1562,186 @@ test('read-only tenant verification command approves the clean deployment fixtur
 
   assert.equal(report.length, 7);
   assert.ok(report.every(root => root.enforcement_ready));
+});
+
+test('order cursor pagination is deterministic, bounded, and tenant-scoped', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token } = await login.json();
+  const tiedTimestamp = new Date(Date.now() - 60_000);
+  for (let index = 0; index < 4; index += 1) {
+    await database.prisma.order.create({
+      data: {
+        admin_id: tenantA.admin.id,
+        organization_id: tenantA.organization.id,
+        branch_id: tenantA.branchId,
+        table_id: tenantA.table.id,
+        total: index + 1,
+        status: 'pending',
+        created_at: tiedTimestamp,
+      },
+    });
+  }
+
+  const seen = new Set();
+  let cursor = null;
+  do {
+    const params = new URLSearchParams({ scope: 'active', limit: '2' });
+    if (cursor) params.set('cursor', cursor);
+    const response = await authenticatedRequest(token, `/api/orders?${params}`);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(body.items.length <= 2);
+    for (const order of body.items) {
+      assert.equal(order.organization_id, tenantA.organization.id);
+      assert.equal(seen.has(order.id), false);
+      seen.add(order.id);
+    }
+    cursor = body.pagination.nextCursor;
+    assert.equal(body.pagination.hasMore, Boolean(cursor));
+  } while (cursor);
+
+  assert.equal(seen.size, 5);
+  assert.equal(seen.has(tenantB.order.id), false);
+
+  const invalidLimit = await authenticatedRequest(token, '/api/orders?limit=101');
+  assert.equal(invalidLimit.status, 400);
+  const invalidCursor = await authenticatedRequest(token, '/api/orders?cursor=not+a+cursor');
+  assert.equal(invalidCursor.status, 400);
+});
+
+test('analytics uses a bounded tenant aggregate and exposes no order notes', async () => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token } = await login.json();
+  const served = await database.prisma.order.create({
+    data: {
+      admin_id: tenantA.admin.id,
+      organization_id: tenantA.organization.id,
+      branch_id: tenantA.branchId,
+      table_id: tenantA.table.id,
+      total: 20,
+      subtotal: 20,
+      status: 'served',
+      order_items: {
+        create: {
+          menu_id: tenantA.menu.id,
+          quantity: 2,
+          price_at_order: 10,
+          note: 'private kitchen note',
+          customizations: { ingredients: [{ ingredientId: tenantA.ingredient.id, action: 'extra' }] },
+        },
+      },
+    },
+  });
+  await database.prisma.order.create({
+    data: {
+      admin_id: tenantA.admin.id,
+      organization_id: tenantA.organization.id,
+      branch_id: tenantA.branchId,
+      table_id: tenantA.table.id,
+      total: 100,
+      status: 'served',
+      created_at: new Date(Date.now() - (100 * 24 * 60 * 60 * 1_000)),
+    },
+  });
+
+  const response = await authenticatedRequest(token, '/api/admin/analytics?days=30');
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.range.days, 30);
+  assert.equal(body.range.timezone, 'UTC');
+  assert.equal(body.totals.totalOrders, 2);
+  assert.equal(body.totals.totalRevenue, 30);
+  assert.equal(body.totals.servedOrders, 1);
+  assert.equal(body.popularItems[0].count, 2);
+  assert.equal(body.popularItems[0].revenue, 20);
+  assert.equal(body.topTables[0].count, 2);
+  assert.equal(body.dailyTrend.length, 7);
+  assert.equal(JSON.stringify(body).includes('private kitchen note'), false);
+  assert.equal(JSON.stringify(body).includes('ingredientId'), false);
+  assert.equal(body.statusData.some(item => item.status === 'served' && item.count === 1), true);
+  assert.ok(served.id);
+
+  const tooWide = await authenticatedRequest(token, '/api/admin/analytics?days=91');
+  const tooWideBody = await tooWide.json();
+  assert.equal(tooWide.status, 400);
+  assert.equal(tooWideBody.code, 'INVALID_ANALYTICS_RANGE');
+});
+
+test('production-shaped query plans use bounded indexes and the API meets pilot capacity limits', async t => {
+  const login = await postJson('/api/auth/login', {
+    email: tenantA.user.email,
+    password: tenantA.password,
+  });
+  const { token } = await login.json();
+
+  await database.prisma.$executeRawUnsafe(`
+    INSERT INTO orders (admin_id, organization_id, branch_id, table_id, total, subtotal, status, created_at, updated_at)
+    SELECT $1::uuid, $2::uuid, $3::uuid, $4::integer,
+      ((series % 5000) + 100)::numeric / 100,
+      ((series % 5000) + 100)::numeric / 100,
+      (ARRAY['pending', 'preparing', 'ready', 'served', 'cancelled'])[(series % 5) + 1],
+      CURRENT_TIMESTAMP - ((series % 40000) * interval '1 second'), CURRENT_TIMESTAMP
+    FROM generate_series(1, 10000) AS series
+  `, tenantA.admin.id, tenantA.organization.id, tenantA.branchId, tenantA.table.id);
+  await database.prisma.$executeRawUnsafe(`
+    INSERT INTO orders (admin_id, organization_id, branch_id, table_id, total, subtotal, status, created_at, updated_at)
+    SELECT $1::uuid, $2::uuid, $3::uuid, $4::integer,
+      ((series % 5000) + 100)::numeric / 100,
+      ((series % 5000) + 100)::numeric / 100,
+      (ARRAY['pending', 'preparing', 'ready', 'served', 'cancelled'])[(series % 5) + 1],
+      CURRENT_TIMESTAMP - ((series % 40000) * interval '1 second'), CURRENT_TIMESTAMP
+    FROM generate_series(1, 90000) AS series
+  `, tenantB.admin.id, tenantB.organization.id, tenantB.branchId, tenantB.table.id);
+  await database.prisma.$executeRawUnsafe(`
+    INSERT INTO promotions (id, admin_id, organization_id, branch_id, code, value, created_at)
+    SELECT md5('alpha-promotion-' || series)::uuid, $1::uuid, $2::uuid, $3::uuid,
+      'ALPHA-' || series, 5, CURRENT_TIMESTAMP - (series * interval '1 second')
+    FROM generate_series(1, 100) AS series
+  `, tenantA.admin.id, tenantA.organization.id, tenantA.branchId);
+  await database.prisma.$executeRawUnsafe(`
+    INSERT INTO promotions (id, admin_id, organization_id, branch_id, code, value, created_at)
+    SELECT md5('beta-promotion-' || series)::uuid, $1::uuid, $2::uuid, $3::uuid,
+      'BETA-' || series, 5, CURRENT_TIMESTAMP - (series * interval '1 second')
+    FROM generate_series(1, 10000) AS series
+  `, tenantB.admin.id, tenantB.organization.id, tenantB.branchId);
+  await database.prisma.$executeRawUnsafe(`
+    INSERT INTO admins (id, email, restaurant_name, subscription_plan, subscription_status, created_at)
+    SELECT md5('load-admin-' || series)::uuid,
+      'load-admin-' || series || '@example.test', 'Load restaurant ' || series,
+      (ARRAY['STANDARD', 'BASIC', 'PRO'])[(series % 3) + 1],
+      CASE WHEN series % 10 = 0 THEN 'ACTIVE' ELSE 'CANCELLED' END,
+      CURRENT_TIMESTAMP - (series * interval '1 second')
+    FROM generate_series(1, 10000) AS series
+  `);
+  await database.prisma.$executeRawUnsafe('ANALYZE orders, promotions, admins');
+
+  const queryPlanReport = await verifyQueryPlans({
+    databaseUrl: database.databaseUrl,
+    organizationId: tenantA.organization.id,
+    maxExecutionMs: 250,
+    requireIndexScan: true,
+  });
+  t.diagnostic(`query-plan-report=${JSON.stringify(queryPlanReport)}`);
+  assert.equal(queryPlanReport.passed, true);
+
+  const capacityReport = await runCapacityCheck({
+    baseUrl: new URL(baseUrl),
+    paths: ['/api/health/ready', '/api/orders?scope=active&limit=50', '/api/admin/analytics?days=30'],
+    authToken: token,
+    requests: 300,
+    concurrency: 10,
+    timeoutMs: 5_000,
+    p95LimitMs: 250,
+    p99LimitMs: 750,
+    maxErrorRate: 0.01,
+    minRequestsPerSecond: 5,
+  });
+  t.diagnostic(`capacity-report=${JSON.stringify(capacityReport)}`);
+  assert.equal(capacityReport.passed, true);
 });

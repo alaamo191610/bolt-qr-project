@@ -786,6 +786,61 @@ synthetic event and two-destination alert receipt, plus an externally observed i
 recovery. The next local Yazan M3 point is pagination/bounded analytics and query-plan/capacity
 evidence; VPS/TLS and hosted-provider execution remain environment work.
 
+## Tracking update — 16 August 2026 (M3 pagination and capacity started)
+
+Started the final local Yazan M3 performance point. The inventory identified three unbounded
+growth paths: restaurant order history, restaurant analytics, and the SuperAdmin restaurant list.
+Menu, table, and organization-member lists remain bounded by subscription limits. This point will
+add deterministic cursor pagination and hard server-side limits without trusting client values,
+replace raw analytics-history loading with bounded database aggregates and a fixed reporting
+window, and preserve tenant-derived filtering on every query.
+
+Query-plan review will use production-shaped PostgreSQL fixtures and `EXPLAIN (ANALYZE, BUFFERS,
+FORMAT JSON)` to justify only the composite indexes required by pagination and analytics. A
+repeatable HTTP load harness will publish concurrency, request count, p50/p95/p99, throughput, and
+error rate against explicit pilot thresholds. Local measurements are implementation evidence;
+final capacity acceptance must still be rerun on the selected VPS with production Node 22, nginx,
+PostgreSQL, and representative data volume.
+
+## Tracking update — 16 August 2026 (M3 pagination and capacity implemented)
+
+The implementation is now complete and in final regression. The
+[pagination/analytics contract](contracts/pagination-and-analytics.md) fixes opaque cursor seek
+semantics, hard page limits, tenant-derived scope, the default 30-day/maximum 90-day UTC analytics
+window, minimized reporting fields, additive migration order, and rollback compatibility. Orders,
+analytics export, promotions, SuperAdmin restaurants, and the legacy admin list are paginated;
+order management and SuperAdmin UI provide bounded load-more flows. The dashboard now consumes one
+database aggregate instead of downloading and processing raw order history.
+
+Migration `20260816090000_bounded_pagination_indexes` adds the reviewed order, promotion, and
+restaurant-list indexes. `npm run verify:query-plans` checks that all required migration indexes
+exist and fails slow or base-table sequential plans. `npm run test:capacity` provides a repeatable,
+authenticated, secret-safe p50/p95/p99, throughput, status, and error-rate gate. Unit, component,
+tenant-isolation, aggregate-SQL, production-shaped EXPLAIN, and local capacity focused tests pass.
+
+[Local evidence](operations/pagination-capacity-evidence.md) used 100,002 orders, 10,102 promotions,
+and 10,002 restaurant records. Seven reviewed plans used indexes with no base-table sequential scan;
+the slowest query was 3.430 ms. A mixed 300-request run at concurrency 10 measured p95 81.25 ms,
+p99 89.49 ms, 343.33 requests/second, and 0% errors against 250 ms, 750 ms, 5 requests/second,
+and 1% limits. This is direct-loopback Node 24 local evidence only; the selected-VPS Node 22,
+HTTPS/nginx and resource-observation rerun remains a pilot Go gate. Full regression is in progress.
+
+## Tracking update — 16 August 2026 (M3 pagination and capacity locally complete)
+
+Final regression is green: 74 backend unit/configuration/security/performance tests, 35
+disposable-PostgreSQL integration/migration tests, 60 frontend tests, and 11 browser tests pass
+with one intentional mobile real-backend golden skip. TypeScript, ESLint, Prisma validation,
+production build, script syntax, diff checks, no-public-source-map inspection, and the production
+dependency audit pass; the audit reports zero production vulnerabilities. Cursor pages are
+tenant-scoped and duplicate-free, analytics SQL is bounded and reporting-minimized, and stale UI
+responses cannot overwrite a newer order scope or SuperAdmin filter.
+
+This Yazan implementation point is locally complete. Deployment-Done is intentionally still open
+for applying the additive migration and rerunning query plans/load on the selected Node 22 VPS
+through HTTPS/nginx with representative data and CPU/memory/disk/PostgreSQL observation. Hosted
+backup/restore, Sentry/uptime notification proof, and VPS/TLS evidence remain separate M3 pilot
+gates; none is claimed by this local result.
+
 ## Fair-split agreement
 
 Ownership is not a measure of effort. Each milestone is planned as an approximately equal
@@ -877,7 +932,9 @@ documentation, fixture, or regression task instead of waiting.
   build-only source-map upload/removal, and host-only readiness/synthetic-alert validation.
 - Add deployment scripts/configuration, TLS renewal, firewall/SSH/service hardening, secret
   permissions, release rollback, log rotation, disk/database/process alerts, and runbooks.
-- Keep pagination/bounded analytics filters and query-plan/load evidence before pilot.
+- **Locally complete 16 Aug:** bounded cursor pages, aggregate analytics, reviewed indexes,
+  production-shaped EXPLAIN verification, and a repeatable p95/p99/error-rate capacity gate.
+  Rerun and retain the same evidence on the selected Node 22 VPS through nginx before pilot Go.
 - Add automated encrypted off-VPS PostgreSQL/upload backup, retention monitoring, and timed restore
   rehearsal before real restaurant data; manual-only remains a blocker.
 - Defer managed object storage, Redis/shared limiting, managed PostgreSQL, and high availability to

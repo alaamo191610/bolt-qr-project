@@ -187,6 +187,9 @@ model Admin {
 
   @@index([organization_id])
   @@index([default_branch_id])
+  @@index([created_at, id])
+  @@index([subscription_status, subscription_plan])
+  @@index([subscription_plan, created_at, id])
   @@map("admins")
 }
 
@@ -457,6 +460,8 @@ model Order {
   @@index([admin_id, status, created_at])
   @@index([table_id, created_at])
   @@index([organization_id, table_id, table_session_id, status])
+  @@index([organization_id, created_at, id])
+  @@index([organization_id, status, created_at, id])
   @@map("orders")
 }
 
@@ -513,6 +518,7 @@ model Promotion {
   @@index([admin_id, active])
   @@index([branch_id, active])
   @@index([organization_id])
+  @@index([organization_id, created_at, id])
   @@map("promotions")
 }
 

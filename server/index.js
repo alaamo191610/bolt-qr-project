@@ -52,6 +52,13 @@ import {
 import { resolveRuntimeConfig } from './runtimeConfig.js';
 import { createSuperAdminAuthService, resolveMfaEncryptionKey } from './superAdminAuth.js';
 import { captureServerException, flushServerTelemetry } from './telemetry.js';
+import {
+  PaginationError,
+  cursorWhere,
+  presentPage,
+  resolveCursorPagination,
+} from './pagination.js';
+import { createAnalyticsService, resolveAnalyticsRange } from './analytics.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -128,6 +135,7 @@ const superAdminAuth = createSuperAdminAuthService({
 });
 
 const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
+const analyticsService = createAnalyticsService({ database: prisma });
 const publicOrderIdempotency = createPublicOrderIdempotencyService();
 const publicOrderRejectionTelemetry = createPublicOrderRejectionTelemetry();
 const orderRealtime = createOrderRealtimeService({
@@ -1105,9 +1113,31 @@ app.post('/api/ingredients', authenticate, async (req, res) => {
 // --- Orders ---
 app.get('/api/orders', authenticate, async (req, res) => {
   try {
-    const orders = await prisma.order.findMany({
-      where: { admin_id: req.user.id },
-      orderBy: { created_at: 'desc' },
+    const { limit, cursor } = resolveCursorPagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 100,
+      idType: 'integer',
+    });
+    const scope = String(req.query.scope || 'all');
+    const status = req.query.status == null ? null : String(req.query.status);
+    if (!['all', 'active', 'history'].includes(scope) || (status && !ORDER_STATUSES.has(status))) {
+      throw new PaginationError('Order pagination filter is invalid');
+    }
+    const statusFilter = status
+      ? { status }
+      : scope === 'active'
+        ? { status: { in: ['pending', 'preparing', 'ready'] } }
+        : scope === 'history'
+          ? { status: { in: ['served', 'cancelled'] } }
+          : {};
+    const rows = await prisma.order.findMany({
+      where: {
+        organization_id: req.auth.organizationId,
+        ...statusFilter,
+        ...cursorWhere(cursor),
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       include: {
         table: true,
         order_items: {
@@ -1115,6 +1145,8 @@ app.get('/api/orders', authenticate, async (req, res) => {
         }
       }
     });
+    const page = presentPage(rows, limit);
+    const orders = page.items;
 
     const ingredientIds = new Set();
     const optionIds = new Set();
@@ -1152,7 +1184,7 @@ app.get('/api/orders', authenticate, async (req, res) => {
     const optionMap = new Map(options.map(item => [item.id, item]));
     const comboMenuMap = new Map(comboMenus.map(item => [item.id, item]));
 
-    res.json(orders.map(order => ({
+    const items = orders.map(order => ({
       ...order,
       order_items: order.order_items.map(item => {
         const customizations = item.customizations && typeof item.customizations === 'object' ? item.customizations : {};
@@ -1177,8 +1209,13 @@ app.get('/api/orders', authenticate, async (req, res) => {
           },
         };
       }),
-    })));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    }));
+    res.json({ ...page, items });
+  } catch (err) {
+    if (err instanceof PaginationError) return sendError(res, req, err);
+    console.error('Order pagination failed:', logSafeError(err));
+    return sendError(res, req, err);
+  }
 });
 
 const publicOrderInclude = {
@@ -2098,12 +2135,22 @@ app.get('/api/admin/profile', authenticate, async (req, res) => {
 // --- User Management (Super Admin) ---
 app.get('/api/admins', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const admins = await prisma.admin.findMany({
-      orderBy: { created_at: 'desc' },
-      select: publicAdminSelect
+    const { limit, cursor } = resolveCursorPagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 100,
+      idType: 'uuid',
     });
-    res.json(admins);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const admins = await prisma.admin.findMany({
+      where: cursorWhere(cursor),
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: publicAdminSelect,
+    });
+    res.json(presentPage(admins, limit));
+  } catch (err) {
+    if (err instanceof PaginationError) return sendError(res, req, err);
+    return sendError(res, req, err);
+  }
 });
 
 app.post('/api/admins', authRateLimit, async (req, res) => {
@@ -2210,25 +2257,57 @@ app.put('/api/admin/profile', authenticate, async (req, res) => {
 });
 
 app.get('/api/admin/analytics', authenticate, async (req, res) => {
-  const { days } = req.query;
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - (Number(days) || 30));
-
   try {
-    const orders = await prisma.order.findMany({
-      where: {
-        admin_id: req.user.id,
-        created_at: { gte: startDate }
-      },
-      orderBy: { created_at: 'desc' },
-      include: {
-        order_items: {
-          include: { menu: true }
-        }
-      }
+    res.json(await analyticsService.summarize({
+      organizationId: req.auth.organizationId,
+      query: req.query,
+    }));
+  } catch (err) {
+    if (err?.status === 400) return sendError(res, req, err);
+    console.error('Analytics summary failed:', logSafeError(err));
+    return sendError(res, req, err);
+  }
+});
+
+app.get('/api/admin/analytics/orders', authenticate, async (req, res) => {
+  try {
+    const { limit, cursor } = resolveCursorPagination(req.query, {
+      defaultLimit: 100,
+      maxLimit: 200,
+      idType: 'integer',
     });
-    res.json(orders);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const { start, end, days, timezone } = resolveAnalyticsRange(req.query);
+    const rows = await prisma.order.findMany({
+      where: {
+        organization_id: req.auth.organizationId,
+        created_at: { gte: start, lt: end },
+        ...cursorWhere(cursor),
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: {
+        id: true,
+        table_id: true,
+        status: true,
+        total: true,
+        created_at: true,
+        table: { select: { code: true } },
+        order_items: {
+          where: { status: 'ACTIVE' },
+          select: {
+            quantity: true,
+            price_at_order: true,
+            menu: { select: { name_en: true, name_ar: true } },
+          },
+        },
+      },
+    });
+    res.json({ ...presentPage(rows, limit), range: { days, timezone } });
+  } catch (err) {
+    if (err?.status === 400) return sendError(res, req, err);
+    console.error('Analytics export page failed:', logSafeError(err));
+    return sendError(res, req, err);
+  }
 });
 
 app.get('/api/admin/monetary', authenticate, async (req, res) => {
@@ -2305,12 +2384,24 @@ app.put('/api/admin/billing', authenticate, async (req, res) => {
 // --- Promotions ---
 app.get('/api/promotions', authenticate, async (req, res) => {
   try {
-    const promos = await prisma.promotion.findMany({
-      where: { admin_id: req.user.id },
-      orderBy: { created_at: 'desc' }
+    const { limit, cursor } = resolveCursorPagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 100,
+      idType: 'uuid',
     });
-    res.json(promos);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const promos = await prisma.promotion.findMany({
+      where: {
+        organization_id: req.auth.organizationId,
+        ...cursorWhere(cursor),
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+    res.json(presentPage(promos, limit));
+  } catch (err) {
+    if (err instanceof PaginationError) return sendError(res, req, err);
+    return sendError(res, req, err);
+  }
 });
 
 app.post('/api/promotions', authenticate, async (req, res) => {
@@ -2541,8 +2632,30 @@ app.post('/api/super-admin/logout', authenticate, requireSuperAdmin, async (req,
 // Get all restaurants with subscription info
 app.get('/api/super-admin/restaurants', authenticate, requireSuperAdmin, async (req, res) => {
   try {
+    const { limit, cursor } = resolveCursorPagination(req.query, {
+      defaultLimit: 25,
+      maxLimit: 100,
+      idType: 'uuid',
+    });
+    const search = String(req.query.search || '').trim();
+    const plan = String(req.query.plan || 'ALL').toUpperCase();
+    if (search.length > 100 || /[\u0000-\u001F\u007F]/u.test(search) ||
+      !['ALL', 'STANDARD', 'BASIC', 'PRO'].includes(plan)) {
+      throw new PaginationError('Restaurant pagination filter is invalid');
+    }
+    const filters = {
+      ...(plan === 'ALL' ? {} : { subscription_plan: plan }),
+      ...(search ? {
+        OR: [
+          { email: { contains: search, mode: 'insensitive' } },
+          { restaurant_name: { contains: search, mode: 'insensitive' } },
+        ],
+      } : {}),
+    };
     const restaurants = await prisma.admin.findMany({
-      orderBy: { created_at: 'desc' },
+      where: { AND: [filters, cursorWhere(cursor)] },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       select: {
         id: true,
         email: true,
@@ -2565,37 +2678,33 @@ app.get('/api/super-admin/restaurants', authenticate, requireSuperAdmin, async (
       }
     });
 
-    res.json(restaurants);
+    res.json(presentPage(restaurants, limit));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err instanceof PaginationError) return sendError(res, req, err);
+    console.error('Restaurant pagination failed:', logSafeError(err));
+    return sendError(res, req, err);
   }
 });
 
 // Get platform stats
 app.get('/api/super-admin/stats', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const totalRestaurants = await prisma.admin.count();
-    const activeRestaurants = await prisma.admin.count({
-      where: { subscription_status: 'ACTIVE' }
-    });
-
-    // Calculate MRR (Monthly Recurring Revenue)
-    const restaurants = await prisma.admin.findMany({
-      where: { subscription_status: 'ACTIVE' },
-      select: { subscription_plan: true }
-    });
-
-    const planPrices = { STANDARD: 10, BASIC: 29, PRO: 79 };
-    const totalRevenue = restaurants.reduce((sum, r) => {
-      return sum + (planPrices[r.subscription_plan] || 0);
-    }, 0);
-
-    // Growth calculation (simplified - compare last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentSignups = await prisma.admin.count({
-      where: { created_at: { gte: thirtyDaysAgo } }
-    });
+    const [totalRestaurants, activeRestaurants, activePlans, recentSignups] = await Promise.all([
+      prisma.admin.count(),
+      prisma.admin.count({ where: { subscription_status: 'ACTIVE' } }),
+      prisma.admin.groupBy({
+        by: ['subscription_plan'],
+        where: { subscription_status: 'ACTIVE' },
+        _count: { _all: true },
+      }),
+      prisma.admin.count({ where: { created_at: { gte: thirtyDaysAgo } } }),
+    ]);
+    const planPrices = { STANDARD: 10, BASIC: 29, PRO: 79 };
+    const totalRevenue = activePlans.reduce((sum, plan) => (
+      sum + ((planPrices[plan.subscription_plan] || 0) * plan._count._all)
+    ), 0);
     const growth = totalRestaurants > 0 ? Math.round((recentSignups / totalRestaurants) * 100) : 0;
 
     res.json({

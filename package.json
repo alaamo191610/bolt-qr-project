@@ -30,6 +30,8 @@
     "test:e2e:install": "playwright install chromium",
     "test:all": "npm run test:unit && npm run test:frontend && npm run test:e2e",
     "verify:tenant-ownership": "node server/prisma/verification/runTenantOwnershipVerification.js",
+    "verify:query-plans": "node ops/bin/verify-query-plans.js",
+    "test:capacity": "node ops/bin/run-capacity-check.js",
     "typecheck": "tsc -b",
     "preview": "vite preview"
   },
