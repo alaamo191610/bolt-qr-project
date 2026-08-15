@@ -23,8 +23,13 @@ import {
   Settings,
   Users,
   Link2,
-  Smartphone
+  Smartphone,
+  RefreshCw,
+  Ban,
+  AlertTriangle
 } from 'lucide-react';
+import { tableService } from '../../services/tableService';
+import { getErrorMessage } from '../../utils/errors';
 
 interface Table {
   id: number;
@@ -36,6 +41,11 @@ interface Table {
 
 interface QRGeneratorProps {
   tables: Table[];
+}
+
+interface GeneratedCapability {
+  capability: string;
+  version: number;
 }
 
 const COLORS = [
@@ -64,18 +74,30 @@ const CORNER_STYLES: { label: string; value: CornerSquareType }[] = [
   { label: 'Extra Rounded', value: 'extra-rounded' },
 ];
 
+// The QR encodes a rotatable, revocable capability secret rather than the
+// predictable table/restaurant identity — see docs/contracts/table-capability.md.
+// `restaurant`/`table` stay in the link too so the menu can load/display before
+// the capability exchange resolves; only `cap` authorizes placing an order.
+const buildMenuUrl = (tableCode: string, adminId: string, capability: string) => {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams({ table: tableCode, restaurant: adminId, cap: capability });
+  return `${window.location.origin}/menu?${params.toString()}`;
+};
+
 // Helper component for rendering a single QR
 const SingleQRCode = ({
-  tableNumber,
+  tableCode,
   adminId,
+  capability,
   size,
   color,
   dotStyle,
   cornerStyle,
   logo
 }: {
-  tableNumber: string;
+  tableCode: string;
   adminId: string;
+  capability: string;
   size: number;
   color: { value: string; gradient: string[] };
   dotStyle: DotType;
@@ -86,8 +108,7 @@ const SingleQRCode = ({
   const qrCodeRef = useRef<QRCodeStyling | null>(null);
 
   useEffect(() => {
-    const baseURL = window.location.origin;
-    const menuURL = `${baseURL}/menu?table=${encodeURIComponent(tableNumber)}&restaurant=${encodeURIComponent(adminId)}`;
+    const menuURL = buildMenuUrl(tableCode, adminId, capability);
 
     const qrOptions: Partial<Options> = {
       width: size,
@@ -140,7 +161,7 @@ const SingleQRCode = ({
     } else {
       qrCodeRef.current.update(qrOptions);
     }
-  }, [tableNumber, adminId, size, color, dotStyle, cornerStyle, logo]);
+  }, [tableCode, adminId, capability, size, color, dotStyle, cornerStyle, logo]);
 
   return <div ref={ref} className="qr-container" />;
 };
@@ -154,10 +175,60 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
   const [copiedTable, setCopiedTable] = useState<string>('');
   const [showPreview, setShowPreview] = useState<Table | null>(null);
 
+  // Session-only: the raw capability secret is returned once by the rotate
+  // endpoint and is never retrievable again, so it only ever lives in memory
+  // here — never persisted. Losing it on refresh is intentional.
+  const [capabilities, setCapabilities] = useState<Record<number, GeneratedCapability>>({});
+  const [pendingGenerate, setPendingGenerate] = useState<Table | null>(null);
+  const [pendingRevoke, setPendingRevoke] = useState<Table | null>(null);
+  const [generatingId, setGeneratingId] = useState<number | null>(null);
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+
+  const generateCapability = async (table: Table) => {
+    setPendingGenerate(null);
+    setGeneratingId(table.id);
+    try {
+      const result = await tableService.rotateCapability(table.id);
+      setCapabilities((prev) => ({
+        ...prev,
+        [table.id]: { capability: result.capability, version: result.version },
+      }));
+      setShowPreview(table);
+      toast.success('New QR code generated. Print or share it now — it will not be shown again.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not generate a new QR code.'));
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const revokeCapability = async (table: Table) => {
+    setPendingRevoke(null);
+    setRevokingId(table.id);
+    try {
+      await tableService.revokeCapability(table.id);
+      setCapabilities((prev) => {
+        const next = { ...prev };
+        delete next[table.id];
+        return next;
+      });
+      setShowPreview((current) => (current?.id === table.id ? null : current));
+      toast.success('Ordering disabled for this table until a new QR code is generated.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not disable this table right now.'));
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
   // For the actual download method, we instantiate a temporary QR logic
   const downloadQRCode = async (table: Table, format: 'png' | 'svg' = 'png') => {
-    const baseURL = window.location.origin;
-    const menuURL = `${baseURL}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`;
+    const capability = capabilities[table.id]?.capability;
+    if (!capability) {
+      toast.error('Generate a QR code for this table first.');
+      return;
+    }
+    const menuURL = buildMenuUrl(table.number, table.adminId, capability);
 
     const qr = new QRCodeStyling({
       width: 1000, // High res
@@ -192,8 +263,12 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
   };
 
   const copyToClipboard = async (table: Table) => {
-    const baseURL = window.location.origin;
-    const menuURL = `${baseURL}/menu?table=${encodeURIComponent(table.number)}&restaurant=${encodeURIComponent(table.adminId)}`;
+    const capability = capabilities[table.id]?.capability;
+    if (!capability) {
+      toast.error('Generate a QR code for this table first.');
+      return;
+    }
+    const menuURL = buildMenuUrl(table.number, table.adminId, capability);
 
     try {
       // Try modern clipboard API first
@@ -316,109 +391,153 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
       {/* --- Grid View --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-        {tables.map((table) => (
-          <div
-            key={table.id}
-            className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
-          >
+        {tables.map((table) => {
+          const generated = capabilities[table.id];
+          const isGenerating = generatingId === table.id;
+          const isRevoking = revokingId === table.id;
+
+          return (
             <div
-              className="h-1.5 w-full"
-              style={{ background: `linear-gradient(90deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
-            />
+              key={table.id}
+              className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
+            >
+              <div
+                className="h-1.5 w-full"
+                style={{ background: `linear-gradient(90deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
+              />
 
-            <div className="p-5 sm:p-6">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="p-5 sm:p-6">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold text-white shadow-md"
+                      style={{ background: `linear-gradient(135deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
+                    >
+                      {table.number}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Dining table</p>
+                      <h3 className="truncate text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        Table {table.number}
+                      </h3>
+                    </div>
+                  </div>
+                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${getTableStatusStyles(table.status)}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {table.status || 'available'}
+                  </span>
+                </div>
+
+                <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50">
                   <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold text-white shadow-md"
-                    style={{ background: `linear-gradient(135deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
-                  >
-                    {table.number}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Dining table</p>
-                    <h3 className="truncate text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                      Table {table.number}
-                    </h3>
-                  </div>
-                </div>
-                <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${getTableStatusStyles(table.status)}`}>
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                  {table.status || 'available'}
-                </span>
-              </div>
-
-              <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50">
-                <div
-                  className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-10 blur-2xl"
-                  style={{ backgroundColor: accentColor.value }}
-                />
-                <div
-                  className="pointer-events-none absolute -bottom-20 -left-16 h-40 w-40 rounded-full opacity-10 blur-2xl"
-                  style={{ backgroundColor: accentColor.gradient[1] }}
-                />
-                <div className="relative mx-auto flex w-fit items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-transform duration-300 group-hover:scale-[1.015]">
-                  <SingleQRCode
-                    tableNumber={table.number}
-                    adminId={table.adminId}
-                    size={Math.min(qrSize * 0.76, 220)}
-                    color={accentColor}
-                    dotStyle={dotStyle}
-                    cornerStyle={cornerStyle}
+                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-10 blur-2xl"
+                    style={{ backgroundColor: accentColor.value }}
                   />
+                  <div
+                    className="pointer-events-none absolute -bottom-20 -left-16 h-40 w-40 rounded-full opacity-10 blur-2xl"
+                    style={{ backgroundColor: accentColor.gradient[1] }}
+                  />
+                  {generated ? (
+                    <>
+                      <div className="relative mx-auto flex w-fit items-center justify-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-transform duration-300 group-hover:scale-[1.015]">
+                        <SingleQRCode
+                          tableCode={table.number}
+                          adminId={table.adminId}
+                          capability={generated.capability}
+                          size={Math.min(qrSize * 0.76, 220)}
+                          color={accentColor}
+                          dotStyle={dotStyle}
+                          cornerStyle={cornerStyle}
+                        />
+                      </div>
+                      <div className="relative mt-4 flex items-center justify-center gap-2 text-center">
+                        <Smartphone className="h-4 w-4 text-slate-400" />
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Scan to view menu &amp; order</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="relative flex flex-col items-center justify-center gap-3 py-10 text-center">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-200/70 dark:bg-slate-700/60">
+                        <QrCode className="h-7 w-7 text-slate-400" />
+                      </div>
+                      <p className="max-w-[16rem] text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Generate a QR code to preview, print, or share it for this table
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="relative mt-4 flex items-center justify-center gap-2 text-center">
-                  <Smartphone className="h-4 w-4 text-slate-400" />
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Scan to view menu &amp; order</p>
-                </div>
-              </div>
 
-              <div className="my-5 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
-                  <div className="mb-1 flex items-center gap-1.5 text-slate-400">
-                    <Users className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Capacity</span>
+                <div className="my-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
+                    <div className="mb-1 flex items-center gap-1.5 text-slate-400">
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Capacity</span>
+                    </div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{table.capacity} guests</p>
                   </div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{table.capacity} guests</p>
-                </div>
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
-                  <div className="mb-1 flex items-center gap-1.5 text-slate-400">
-                    <Link2 className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Menu link</span>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 dark:border-slate-700 dark:bg-slate-700/40">
+                    <div className="mb-1 flex items-center gap-1.5 text-slate-400">
+                      <Link2 className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Menu link</span>
+                    </div>
+                    <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">Table {table.number}</p>
                   </div>
-                  <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">Table {table.number}</p>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setShowPreview(table)}
-                  className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                >
-                  <Eye className="h-4 w-4" />
-                  Preview table card
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  {generated && (
+                    <>
+                      <button
+                        onClick={() => setShowPreview(table)}
+                        className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        <Eye className="h-4 w-4" />
+                        Preview table card
+                      </button>
 
-                <button
-                  onClick={() => copyToClipboard(table)}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-200 active:scale-[0.98] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
-                >
-                  {copiedTable === table.number ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                  {copiedTable === table.number ? 'Copied' : 'Copy'}
-                </button>
+                      <button
+                        onClick={() => copyToClipboard(table)}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-200 active:scale-[0.98] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                      >
+                        {copiedTable === table.number ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                        {copiedTable === table.number ? 'Copied' : 'Copy'}
+                      </button>
 
-                <button
-                  onClick={() => downloadQRCode(table)}
-                  className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
-                  style={{ background: `linear-gradient(135deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
-                >
-                  <Download className="h-4 w-4" />
-                  Download
-                </button>
+                      <button
+                        onClick={() => downloadQRCode(table)}
+                        className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
+                        style={{ background: `linear-gradient(135deg, ${accentColor.gradient[0]}, ${accentColor.gradient[1]})` }}
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    onClick={() => setPendingGenerate(table)}
+                    disabled={isGenerating}
+                    className={`${generated ? '' : 'col-span-2'} flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700`}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                    {isGenerating ? 'Generating…' : 'Generate new QR code'}
+                  </button>
+
+                  {generated && (
+                    <button
+                      onClick={() => setPendingRevoke(table)}
+                      disabled={isRevoking}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600 transition-all hover:bg-rose-100 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed dark:border-rose-900/50 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/30"
+                    >
+                      <Ban className="h-4 w-4" />
+                      {isRevoking ? 'Disabling…' : 'Disable ordering'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* --- Preview & Print Modal --- */}
@@ -439,7 +558,12 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
               </button>
             </div>
 
-            <div className="p-8 bg-slate-100 dark:bg-black/50 overflow-y-auto flex-1 flex flex-col items-center justify-center">
+            <div className="p-8 bg-slate-100 dark:bg-black/50 overflow-y-auto flex-1 flex flex-col items-center justify-center gap-4">
+
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/25 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>This code is shown once. Print, download, or copy the link now — regenerating replaces it and any older printed code stops working immediately.</span>
+              </div>
 
               {/* Print Card Simulation */}
               <div id="printable-card" className="bg-white text-slate-900 w-[300px] shadow-2xl rounded-2xl relative overflow-hidden flex flex-col items-center border border-slate-200 aspect-[3/4]">
@@ -462,14 +586,21 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
 
                 <div className="flex-1 w-full flex flex-col items-center justify-center p-8 -mt-10 relative z-10">
                   <div className="bg-white p-4 rounded-2xl shadow-xl mb-6">
-                    <SingleQRCode
-                      tableNumber={showPreview.number}
-                      adminId={showPreview.adminId}
-                      size={180}
-                      color={accentColor}
-                      dotStyle={dotStyle}
-                      cornerStyle={cornerStyle}
-                    />
+                    {capabilities[showPreview.id] ? (
+                      <SingleQRCode
+                        tableCode={showPreview.number}
+                        adminId={showPreview.adminId}
+                        capability={capabilities[showPreview.id].capability}
+                        size={180}
+                        color={accentColor}
+                        dotStyle={dotStyle}
+                        cornerStyle={cornerStyle}
+                      />
+                    ) : (
+                      <div className="flex h-[180px] w-[180px] items-center justify-center text-center text-xs font-semibold text-slate-400">
+                        Code no longer available — generate a new one
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-1">Scan to Order</p>
                   <p className="text-xs text-slate-400">Bon Appétit</p>
@@ -491,10 +622,75 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
               </button>
               <button
                 onClick={() => downloadQRCode(showPreview)}
-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${accentColor.class}`}
+                disabled={!capabilities[showPreview.id]}
+                className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${accentColor.class}`}
               >
                 <Download className="w-5 h-5" />
                 Download PNG
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Generate confirmation --- */}
+      {pendingGenerate && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-scale-in text-center">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <RefreshCw className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              Generate a new QR code?
+            </h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+              This creates a new code for Table {pendingGenerate.number} and immediately invalidates
+              any QR code currently printed or shared for this table.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingGenerate(null)}
+                className="flex-1 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => generateCapability(pendingGenerate)}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-500/30 transition-all"
+              >
+                Generate it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Revoke confirmation --- */}
+      {pendingRevoke && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-scale-in text-center">
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Ban className="w-8 h-8 text-rose-600 dark:text-rose-400" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              Disable ordering for this table?
+            </h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+              Customers won't be able to order from Table {pendingRevoke.number} until you generate
+              a new QR code.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingRevoke(null)}
+                className="flex-1 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+              >
+                Keep it
+              </button>
+              <button
+                onClick={() => revokeCapability(pendingRevoke)}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/30 transition-all"
+              >
+                Disable it
               </button>
             </div>
           </div>

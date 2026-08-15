@@ -1,8 +1,10 @@
 # D1 Decision Log
 
 **Companion to:** `Production-Execution-Plan.md`, `Gap-Analysis-and-Plan-Corrections.md`
-**Status:** Decided by Alaa on 14 August 2026. Awaiting Yazan's sign-off before M1 closes
-(both owners must accept per `Gap-Analysis-and-Plan-Corrections.md` Part 6, step 0).
+**Status:** Decided by Alaa on 14 August 2026; Alaa's own sign-off recorded the same day.
+D1.3 is superseded — see that section. Awaiting Yazan's sign-off on the remaining decisions
+before M1 closes (both owners must accept per `Gap-Analysis-and-Plan-Corrections.md` Part 6,
+step 0).
 
 These are the four decisions the gap analysis flagged as missing from the plan's original
 pre-M1 decision list (D1). Recording them here unblocks step 0 and step 8 of the execution
@@ -64,13 +66,23 @@ starting template for a takeaway-specific design.
 
 ## D1.3 — QR code stability and the table-session-token design
 
-**Decision:** The physical QR code stays permanent. It continues to encode only the table's
-static `code` (e.g. printed once, never regenerated for a restaurant to reprint stickers).
-The 6-hour lifetime from D1.1 applies to the **session token minted when that QR is
-scanned**, not to the QR code or its URL.
+**Superseded 14 August 2026.** The design below (static permanent code, `GET
+/api/tables/public/:code` exchange) was never implemented. Yazan instead built and Alaa
+accepted the stronger design in [ADR 0007](adr/0007-public-order-entry-and-abuse-policy.md)
+and [`table-capability.md`](contracts/table-capability.md): the QR encodes a rotatable
+256-bit capability secret (only its SHA-256 hash is stored), exchanged via `POST
+/api/public/table-session` for a 30-minute session, with authenticated rotate/revoke
+endpoints. That is now the authoritative design; treat this section as historical context
+only. `Gap-Analysis-and-Plan-Corrections.md` step 8's reference to "the signed table-session
+design selected in step 0" means the capability contract, not the text below.
 
-**Reasoning:** Restaurant owners set up a table's QR once; forcing them to reprint it
-periodically is an operational cost with no security benefit, since the code itself
+**Original (superseded) decision:** The physical QR code stays permanent. It continues to
+encode only the table's static `code` (e.g. printed once, never regenerated for a
+restaurant to reprint stickers). The 6-hour lifetime from D1.1 applies to the **session
+token minted when that QR is scanned**, not to the QR code or its URL.
+
+**Original reasoning:** Restaurant owners set up a table's QR once; forcing them to reprint
+it periodically is an operational cost with no security benefit, since the code itself
 (`server/index.js:1687`) is not a secret — it's a table label. The actual fix for G1 is
 already designed this way in the gap analysis: `GET /api/tables/public/:code` (existing,
 `server/index.js:1735`) issues a signed, short-lived token bound to `{adminId, tableId}` at
@@ -78,7 +90,8 @@ scan time; `POST /api/orders` requires that token and derives the restaurant/tab
 from it rather than trusting the request body. The QR/table code stays exactly as it is
 today. Only the order-creation flow changes.
 
-**Owner:** Yazan. This is the implementation detail for G1/step 8, now unblocked by D1.2.
+**Owner:** Yazan implemented the superseding design. Alaa owns the frontend QR/exchange/
+recovery handoff against `table-capability.md` (in progress).
 
 ---
 
@@ -161,7 +174,7 @@ questions the analytics need to answer (input to what gets tracked).
 
 | Owner | Accepts these decisions | Date |
 |---|---|---|
-| Alaa | | |
+| Alaa | Yes (D1.1, D1.2, D1.4, D1.5 as written; D1.3 superseded by the shipped capability design) | 14 August 2026 |
 | Yazan | | |
 
 Once both sign, update `Gap-Analysis-and-Plan-Corrections.md` Part 6 step 0 from

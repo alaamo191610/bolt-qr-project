@@ -15,6 +15,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { menuService } from "../services/menuService";
 import { orderService } from "../services/orderService";
 import { tableService } from "../services/tableService";
+import { ApiError } from "../services/api";
 import { trackMenuEvents } from "../lib/firebase";
 import LanguageToggle from "../components/common/LanguageToggle";
 import CartDrawer, { type CartItem as DrawerCartItem } from "../components/ui/CartDrawer";
@@ -29,7 +30,6 @@ import toast from "react-hot-toast";
 import { useAdminMonetary } from "../hooks/useAdminMonetary";
 import { formatPrice } from "../pricing/usePrice";
 import { socket, joinMenuRoom } from "../services/socket";
-import { LandingPage } from '../components/ui/LandingPage';
 import { getErrorMessage } from "../utils/errors";
 
 interface Ingredient {
@@ -90,17 +90,28 @@ type OverlayPos = { top: number; left?: number; right?: number };
 // scoped cart key per table
 const cartKeyFor = (table: string, adminId = "") =>
   `qr-cart-v2:${adminId || "unknown-restaurant"}:${table || "unknown"}`;
-const orderTypeKeyFor = (table: string) => `qr-order-type-v1:${table || "unknown"}`;
 const activeOrderKeyFor = (adminId: string, table: string) =>
   `qr-active-order-v1:${adminId}:${table || "unknown"}`;
 const ACTIVE_ORDER_TTL_MS = 24 * 60 * 60 * 1000;
+// Refresh the 30-minute table-session this many ms before it actually
+// expires, so an in-progress checkout never races the expiry.
+const TABLE_SESSION_REFRESH_SKEW_MS = 15_000;
+const tableSessionKeyFor = (table: string) => `qr-table-session-v1:${table || "unknown"}`;
+
+type TableSessionState =
+  | { status: 'missing' }
+  | { status: 'exchanging' }
+  | { status: 'ready'; token: string; expiresAt: number }
+  | { status: 'invalid' }
+  | { status: 'error' };
 
 const getTrackingContextFromUrl = () => {
-  if (typeof window === 'undefined') return { adminId: '', table: '' };
+  if (typeof window === 'undefined') return { adminId: '', table: '', capability: '' };
   const params = new URLSearchParams(window.location.search);
   return {
     adminId: params.get('restaurant') || '',
     table: (params.get('table') || '').trim().toUpperCase(),
+    capability: params.get('cap') || '',
   };
 };
 
@@ -123,13 +134,6 @@ const restoreActiveOrderFromUrl = (): ActiveOrder | null => {
   }
 };
 
-const restoreOrderTypeFromUrl = (): 'dine_in' | 'take_away' | null => {
-  if (typeof window === 'undefined') return null;
-  const table = getTrackingContextFromUrl().table;
-  if (!table) return null;
-  const saved = sessionStorage.getItem(orderTypeKeyFor(table));
-  return saved === 'dine_in' || saved === 'take_away' ? saved : null;
-};
 
 const variantKey = (item: Partial<MenuItem>) =>
   JSON.stringify({
@@ -146,6 +150,27 @@ const isSameVariant = (a: Partial<MenuItem>, b: Partial<MenuItem>) =>
 
 const unit = (item: CartItem) => (item.price || 0) + (item.price_delta || 0);
 const line = (item: CartItem) => unit(item) * (item.quantity || 0);
+
+// Fingerprints exactly what a checkout submits (lines + promo + tip) so the
+// same idempotency key is only reused for a retry of the identical attempt;
+// any real change to the order gets a fresh key, matching ADR 0007's
+// same-key-same-payload policy.
+const checkoutFingerprint = (
+  cart: CartItem[],
+  checkout: { promotionCode?: string; tipPercent: number }
+) =>
+  JSON.stringify({
+    lines: cart.map((item) => `${variantKey(item)}|${item.quantity}|${item.notes || ""}`),
+    promotionCode: checkout.promotionCode || null,
+    tipPercent: checkout.tipPercent,
+  });
+
+const generateIdempotencyKey = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
@@ -176,8 +201,18 @@ const CustomerMenu: React.FC = () => {
   // state
   const [loading, setLoading] = useState(true);
   const [isOrdering, setIsOrdering] = useState(false);
-  const [orderType, setOrderType] = useState<'dine_in' | 'take_away' | null>(restoreOrderTypeFromUrl);
+  // Takeaway is disabled for Release 1 (D1.2/ADR 0007 Option A) and every
+  // customer entry point is a scanned dine-in table QR, so there is no
+  // choice to make; the old take_away landing-page option is retired.
+  const [orderType] = useState<'dine_in' | 'take_away'>('dine_in');
   const [error, setError] = useState<{ code: string; params?: Record<string, string> } | null>(null);
+  // The table-session bearer token exchanged from the QR capability. Dine-in
+  // order creation requires this; see docs/contracts/table-capability.md.
+  const [tableSession, setTableSession] = useState<TableSessionState>({ status: 'missing' });
+  const tableSessionRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Reused across a retry of the exact same checkout attempt; regenerated
+  // whenever the cart/promo/tip actually changes, or after a successful order.
+  const idempotencyKeyRef = useRef<{ key: string; fingerprint: string } | null>(null);
   // NEW: Store the full active order, not just a boolean
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(restoreActiveOrderFromUrl);
 
@@ -279,8 +314,10 @@ const CustomerMenu: React.FC = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const table = (urlParams.get("table") || "").trim().toUpperCase();
     const restaurantId = urlParams.get("restaurant");
+    const capability = urlParams.get("cap") || "";
     setTableNumber(table);
     loadMenuItems(table, restaurantId);
+    initTableSession(table, capability);
 
     // optional: first view analytics at initial language
     if (table) trackMenuEvents.menuViewed(table, language);
@@ -290,11 +327,6 @@ const CustomerMenu: React.FC = () => {
     if (!tableNumber) return;
     trackMenuEvents.menuViewed(tableNumber, language);
   }, [language, tableNumber]);
-
-  useEffect(() => {
-    if (!tableNumber || !orderType) return;
-    sessionStorage.setItem(orderTypeKeyFor(tableNumber), orderType);
-  }, [orderType, tableNumber]);
 
   // load selected category per table
   useEffect(() => {
@@ -424,7 +456,87 @@ const CustomerMenu: React.FC = () => {
     }
   };
 
+  // Exchange the QR capability for a table-session bearer token. Menu
+  // browsing never depends on this — only dine-in checkout does — so a
+  // failure here degrades ordering, not the whole page.
+  const exchangeCapability = useCallback(
+    async (capability: string, table: string, opts: { silent?: boolean } = {}) => {
+      if (!opts.silent) setTableSession({ status: "exchanging" });
+      try {
+        const result = await tableService.exchangeTableSession(capability);
+        const expiresAt = Date.now() + result.expiresIn * 1000;
+        try {
+          sessionStorage.setItem(
+            tableSessionKeyFor(table),
+            JSON.stringify({ capability, token: result.token, expiresAt })
+          );
+        } catch {
+          /* ignore storage failures, session still works for this tab */
+        }
+        setTableSession({ status: "ready", token: result.token, expiresAt });
+        if (tableSessionRefreshTimer.current) clearTimeout(tableSessionRefreshTimer.current);
+        const delay = Math.max(0, expiresAt - Date.now() - TABLE_SESSION_REFRESH_SKEW_MS);
+        tableSessionRefreshTimer.current = setTimeout(() => {
+          void exchangeCapability(capability, table, { silent: true });
+        }, delay);
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          setTableSession({ status: "invalid" });
+        } else {
+          setTableSession({ status: "error" });
+        }
+      }
+    },
+    []
+  );
 
+  const initTableSession = useCallback(
+    (table: string, capability: string) => {
+      if (!capability) {
+        setTableSession({ status: "missing" });
+        return;
+      }
+      try {
+        const saved = sessionStorage.getItem(tableSessionKeyFor(table));
+        if (saved) {
+          const parsed = JSON.parse(saved) as {
+            capability?: string;
+            token?: string;
+            expiresAt?: number;
+          };
+          if (
+            parsed.capability === capability &&
+            parsed.token &&
+            parsed.expiresAt &&
+            parsed.expiresAt - Date.now() > TABLE_SESSION_REFRESH_SKEW_MS
+          ) {
+            setTableSession({ status: "ready", token: parsed.token, expiresAt: parsed.expiresAt });
+            const delay = Math.max(
+              0,
+              parsed.expiresAt - Date.now() - TABLE_SESSION_REFRESH_SKEW_MS
+            );
+            if (tableSessionRefreshTimer.current) clearTimeout(tableSessionRefreshTimer.current);
+            tableSessionRefreshTimer.current = setTimeout(() => {
+              void exchangeCapability(capability, table, { silent: true });
+            }, delay);
+            return;
+          }
+          sessionStorage.removeItem(tableSessionKeyFor(table));
+        }
+      } catch {
+        /* ignore malformed/unavailable storage, fall through to a fresh exchange */
+      }
+      void exchangeCapability(capability, table);
+    },
+    [exchangeCapability]
+  );
+
+  useEffect(
+    () => () => {
+      if (tableSessionRefreshTimer.current) clearTimeout(tableSessionRefreshTimer.current);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!adminId || !tableNumber || activeOrder) return;
@@ -617,10 +729,29 @@ const CustomerMenu: React.FC = () => {
   }, []);
 
   const placeOrder = async (checkout: { promotionCode?: string; tipPercent: number }) => {
+    if (tableSession.status !== "ready") {
+      toast.error(
+        tableSession.status === "invalid"
+          ? t("status.tableSessionInvalid")
+          : t("status.tableSessionMissing")
+      );
+      return;
+    }
+
     setIsOrdering(true);
 
     // Track order started
     trackMenuEvents.orderStarted(tableNumber, totalItems, totalPrice);
+
+    // Reuse the key from a previous failed attempt only if nothing about
+    // the order actually changed since then - otherwise this is a
+    // different order and needs a fresh key.
+    const fingerprint = checkoutFingerprint(cart, checkout);
+    const idempotencyKey =
+      idempotencyKeyRef.current?.fingerprint === fingerprint
+        ? idempotencyKeyRef.current.key
+        : generateIdempotencyKey();
+    idempotencyKeyRef.current = { key: idempotencyKey, fingerprint };
 
     try {
       const orderItems = cart.map((item) => ({
@@ -637,9 +768,11 @@ const CustomerMenu: React.FC = () => {
         table_code: tableNumber,
         items: orderItems,
         admin_id: adminId || undefined,
-        type: orderType || 'dine_in', // Pass the selected order type
+        type: "dine_in",
         promotion_code: checkout.promotionCode,
         tip_percent: checkout.tipPercent,
+        table_session_token: tableSession.token,
+        idempotency_key: idempotencyKey,
       });
 
       // Track successful order
@@ -650,16 +783,45 @@ const CustomerMenu: React.FC = () => {
       setShowCart(false);
       setCart([]);
       sessionStorage.removeItem(cartKeyFor(tableNumber, adminId || getTrackingContextFromUrl().adminId)); // clear persisted cart
+      idempotencyKeyRef.current = null; // next order starts a fresh attempt
     } catch (err) {
       // Stay on the cart/checkout view so the customer can retry without
       // losing their place - a failed checkout is recoverable, unlike a
       // failed menu load, so it must not trigger the full-page error state.
       console.error("Error placing order:", err);
-      toast.error(getErrorMessage(err, t("status.failedToPlaceOrder")));
+      if (
+        err instanceof ApiError &&
+        (err.code === "TABLE_SESSION_REQUIRED" || err.code === "TABLE_SESSION_INVALID")
+      ) {
+        // The capability was rotated/revoked mid-visit, or the session
+        // token failed re-derivation server-side despite looking fresh
+        // locally - stop trusting it and require a rescan.
+        setTableSession({ status: "invalid" });
+        toast.error(t("status.tableSessionInvalid"));
+      } else {
+        toast.error(getErrorMessage(err, t("status.failedToPlaceOrder")));
+      }
     } finally {
       setIsOrdering(false);
     }
   };
+
+  const retryTableSession = useCallback(() => {
+    const context = getTrackingContextFromUrl();
+    if (!context.capability) return;
+    void exchangeCapability(context.capability, tableNumber || context.table);
+  }, [exchangeCapability, tableNumber]);
+
+  const orderingDisabledMessage =
+    tableSession.status === "missing"
+      ? t("status.tableSessionMissing")
+      : tableSession.status === "invalid"
+        ? t("status.tableSessionInvalid")
+        : tableSession.status === "error"
+          ? t("status.tableSessionError")
+          : tableSession.status === "exchanging"
+            ? t("status.tableSessionVerifying")
+            : undefined;
 
   // REMOVED: Auto-hide timeout for order confirmation
   // useEffect(() => {
@@ -812,11 +974,6 @@ const CustomerMenu: React.FC = () => {
         </div>
       </div>
     );
-  }
-
-  // Show landing page if no order type is selected yet
-  if (!orderType) {
-    return <LandingPage onSelect={setOrderType} />;
   }
 
   return (
@@ -1131,9 +1288,12 @@ const CustomerMenu: React.FC = () => {
           onClose={() => setShowCart(false)}
           onAdd={addToCart}
           onRemove={removeFromCart}
-          orderType={orderType || 'dine_in'}
+          orderType={orderType}
           onPlaceOrder={placeOrder}
           onClearCart={handleClearCart}
+          orderingDisabled={tableSession.status !== "ready"}
+          orderingDisabledMessage={orderingDisabledMessage}
+          onRetryOrdering={tableSession.status === "error" ? retryTableSession : undefined}
           validatePromo={async (code) => {
             if (!adminId) return null;
             return await orderService.validatePromotion({

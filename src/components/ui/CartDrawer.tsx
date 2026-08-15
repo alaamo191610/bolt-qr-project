@@ -26,6 +26,13 @@ interface Props {
   onEditItem?: (item: CartItem) => void;                 // open modifiers editor for this line
   onClearCart?: () => void;                              // clear all items
   validatePromo?: (code: string) => Promise<Promotion | null>; // optional async promo validator
+
+  /** Table-session gating: true while the QR capability exchange hasn't
+   * produced a usable order-authorization token yet (missing/verifying/
+   * invalid/errored). Disables checkout without hiding the cart itself. */
+  orderingDisabled?: boolean;
+  orderingDisabledMessage?: string;
+  onRetryOrdering?: () => void;
 }
 
 // helpers aware of extras (price_delta)
@@ -45,6 +52,9 @@ const CartDrawer: React.FC<Props> = ({
   onEditItem,
   onClearCart,
   validatePromo,
+  orderingDisabled,
+  orderingDisabledMessage,
+  onRetryOrdering,
 }) => {
   const { t } = useLanguage();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -598,7 +608,24 @@ const CartDrawer: React.FC<Props> = ({
         <div className="fixed inset-x-0 bottom-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-t border-slate-200 dark:border-slate-800">
           <div className="mx-auto max-w-5xl px-4 py-3">
             {cart.length > 0 ? (
-              <div className={`flex ${isRTL ? 'flex-row-reverse' : ''} items-center justify-between gap-3`}>
+              <div className="space-y-2">
+                {orderingDisabled && orderingDisabledMessage && (
+                  <div
+                    role="status"
+                    className={`flex ${isRTL ? 'flex-row-reverse' : ''} items-center justify-between gap-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/60 px-3 py-2 text-xs text-amber-800 dark:text-amber-300`}
+                  >
+                    <span>{orderingDisabledMessage}</span>
+                    {onRetryOrdering && (
+                      <button
+                        onClick={onRetryOrdering}
+                        className="shrink-0 font-semibold underline underline-offset-2 hover:no-underline"
+                      >
+                        {t('status.tryAgain')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className={`flex ${isRTL ? 'flex-row-reverse' : ''} items-center justify-between gap-3`}>
                 <div className={`flex ${isRTL ? 'flex-row-reverse' : ''} items-center gap-2`}>
                   {/* Clear cart */}
                   {cart.length > 0 && onClearCart && (
@@ -626,12 +653,13 @@ const CartDrawer: React.FC<Props> = ({
                       promotionCode: appliedPromo?.code,
                       tipPercent,
                     })}
-                    disabled={isOrdering || cart.length === 0 || moneyLoading}
+                    disabled={isOrdering || cart.length === 0 || moneyLoading || orderingDisabled}
                     className="rounded-xl bg-primary text-white py-4 px-6 font-bold text-lg shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                     title={t('menu.placeOrder')}
                   >
                     {isOrdering ? (t('status.placingOrder') || 'Placing…') : `🚀 ${t('menu.placeOrder')}`}
                   </button>
+                </div>
                 </div>
               </div>
             ) : (

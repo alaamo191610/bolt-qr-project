@@ -1,5 +1,5 @@
 // orderService.ts
-import { api } from './api'
+import { api, ApiError } from './api'
 import { getErrorMessage } from '../utils/errors'
 
 // ---------------- Types (kept compatible) ----------------
@@ -122,6 +122,18 @@ export const orderService = {
     type?: 'dine_in' | 'take_away' // Added type
     promotion_code?: string
     tip_percent?: number
+    /** Required for type: 'dine_in'. The 30-minute table-session bearer
+     * token obtained by exchanging the scanned QR capability. See
+     * docs/contracts/table-capability.md — the server derives restaurant/
+     * table identity from this token and ignores table_code/admin_id. */
+    table_session_token?: string
+    /** Client-generated key so a retried checkout (e.g. timeout-after-commit)
+     * returns the original order instead of creating a duplicate. ADR 0007
+     * commits to this policy but the wire format isn't published yet — sent
+     * as an `Idempotency-Key` header (Stripe/GitHub convention) as a
+     * best-effort default. Confirm the real field name with Yazan; the
+     * server ignores unknown headers, so this is harmless until then. */
+    idempotency_key?: string
   }) {
     try {
       // Build function payload items
@@ -149,14 +161,35 @@ export const orderService = {
         }
       })
 
-      // Call Backend API instead of Edge Function
-      return await api.post('/orders', {
-        tableCode: orderData.table_code,
-        adminId: orderData.admin_id,
+      const body = {
         items,
         type: orderData.type,
         promotionCode: orderData.promotion_code,
         tipPercent: orderData.tip_percent ?? 0,
+      };
+
+      const idempotencyHeaders = orderData.idempotency_key
+        ? { 'Idempotency-Key': orderData.idempotency_key }
+        : undefined;
+
+      if (orderData.type === 'dine_in') {
+        if (!orderData.table_session_token) {
+          throw new ApiError({
+            message: 'A valid table session is required to place a dine-in order.',
+            status: 401,
+            code: 'TABLE_SESSION_REQUIRED',
+          });
+        }
+        // Dine-in identity comes from the table-session bearer token, not
+        // from body tableCode/adminId — the server ignores the latter.
+        return await api.postWithToken('/orders', body, orderData.table_session_token, idempotencyHeaders);
+      }
+
+      // Call Backend API instead of Edge Function
+      return await api.post('/orders', {
+        ...body,
+        tableCode: orderData.table_code,
+        adminId: orderData.admin_id,
       });
     } catch (error) {
       console.error('Order submission failed:', getErrorMessage(error));

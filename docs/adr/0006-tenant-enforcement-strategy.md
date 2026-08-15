@@ -1,6 +1,7 @@
 # ADR 0006: Release 1 tenant enforcement strategy
 
-Status: Option B selected by Yazan on 14 August 2026 — Alaa sign-off and staging evidence pending
+Status: Option B selected by Yazan on 14 August 2026; Alaa sign-off recorded 14 August 2026 —
+staging evidence pending
 
 ## Recorded decision
 
@@ -8,6 +9,10 @@ Yazan selected **Option B: Release 1 constraints and compensating controls; RLS 
 work**. Constraint implementation may proceed locally, but production enforcement remains blocked
 until Alaa signs off and `npm run verify:tenant-ownership` returns seven ready roots with zero issues
 against the staging copy of target data.
+
+Alaa recorded `Tenant enforcement: B — constraints now, RLS after runtime-role work` on 14 August
+2026, agreeing with Yazan's selection and its invariants below. This closes the joint decision;
+the only remaining gate before enforcement is the zero-issue staging report.
 
 ## Options considered
 

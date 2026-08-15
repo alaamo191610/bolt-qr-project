@@ -14,6 +14,16 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage(error)).not.toContain('relation');
   });
 
+  it('returns a wait-and-retry message for ORDER_LIMIT_REACHED', () => {
+    const error = new ApiError({ message: 'too many open orders', status: 403, code: 'ORDER_LIMIT_REACHED' });
+    expect(getErrorMessage(error)).toMatch(/maximum number of open orders/i);
+  });
+
+  it('returns a paused-restaurant message for RESTAURANT_PAUSED', () => {
+    const error = new ApiError({ message: 'ordering paused', status: 403, code: 'RESTAURANT_PAUSED' });
+    expect(getErrorMessage(error)).toMatch(/isn't accepting new orders/i);
+  });
+
   it('passes the real message through unchanged for other ApiError codes', () => {
     const error = new ApiError({ message: 'Email is already registered', status: 409, code: 'CONFLICT' });
     expect(getErrorMessage(error)).toBe('Email is already registered');
