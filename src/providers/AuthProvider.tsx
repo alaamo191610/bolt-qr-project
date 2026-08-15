@@ -27,7 +27,7 @@ type AuthCtxType = {
   organizations: OrganizationMembership[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, restaurantName?: string) => Promise<void>;
   switchOrganization: (organizationId: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -114,13 +114,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, restaurantName?: string) => {
     try {
-      // Try to create the first admin (backend will block if admins already exist)
       await adminService.createAdmin({
         email,
         password,
-        restaurant_name: email.split("@")[0],
+        restaurant_name: restaurantName?.trim() || email.split("@")[0],
       });
       // Auto login after sign up
       await signIn(email, password);

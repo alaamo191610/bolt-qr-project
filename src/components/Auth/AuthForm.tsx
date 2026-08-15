@@ -16,18 +16,24 @@ const AuthForm: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [restaurantName, setRestaurantName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  // const { signIn, signUp } = useAuth();
+
+  const passwordTooShort = isSignUp && password.length > 0 && password.length < 8;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSignUp && password.length < 8) {
+      setError(t("auth.passwordTooShort"));
+      return;
+    }
     setLoading(true);
     setError("");
 
     try {
       if (isSignUp) {
-        await signUp(email, password);
+        await signUp(email, password, restaurantName);
       } else {
         await signIn(email, password);
       }
@@ -67,11 +73,29 @@ const AuthForm: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isSignUp && (
+            <div>
+              <label htmlFor="auth-restaurant-name" className="block text-sm font-medium text-slate-700 mb-2">
+                {t("auth.restaurantName")}
+              </label>
+              <input
+                id="auth-restaurant-name"
+                type="text"
+                value={restaurantName}
+                onChange={(e) => setRestaurantName(e.target.value)}
+                required
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                placeholder={t("auth.restaurantNamePlaceholder")}
+              />
+            </div>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label htmlFor="auth-email" className="block text-sm font-medium text-slate-700 mb-2">
               {t("auth.email")}
             </label>
             <input
+              id="auth-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -82,17 +106,33 @@ const AuthForm: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label htmlFor="auth-password" className="block text-sm font-medium text-slate-700 mb-2">
               {t("auth.password")}
             </label>
             <input
+              id="auth-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              minLength={isSignUp ? 8 : undefined}
+              aria-invalid={passwordTooShort || undefined}
+              aria-describedby={isSignUp ? "password-hint" : undefined}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                passwordTooShort
+                  ? "border-red-300 focus:ring-red-500"
+                  : "border-slate-200 focus:ring-emerald-500"
+              }`}
               placeholder={t("auth.passwordPlaceholder")}
             />
+            {isSignUp && (
+              <p
+                id="password-hint"
+                className={`mt-1.5 text-xs ${passwordTooShort ? "text-red-600" : "text-slate-500"}`}
+              >
+                {t("auth.passwordHint")}
+              </p>
+            )}
           </div>
 
           {error && (
