@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings } from 'lucide-react';
 import { superAdminService, type Restaurant, type SubscriptionPlan } from '../../services/superAdminService';
@@ -16,16 +16,28 @@ const SuperAdminDashboard: React.FC = () => {
     const [selectedPlan, setSelectedPlan] = useState<'ALL' | 'STANDARD' | 'BASIC' | 'PRO'>('ALL');
     const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const restaurantRequestRevision = useRef(0);
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (requestRevision: number) => {
         try {
             const [statsData, restaurantsData] = await Promise.all([
                 superAdminService.getStats(),
-                superAdminService.getRestaurants(),
+                superAdminService.getRestaurantsPage({
+                    limit: 25,
+                    search: searchTerm.trim() || undefined,
+                    plan: selectedPlan,
+                }),
             ]);
+            if (requestRevision !== restaurantRequestRevision.current) return;
             setStats(statsData);
-            setRestaurants(restaurantsData);
+            setRestaurants(restaurantsData.items);
+            setNextCursor(restaurantsData.pagination.nextCursor);
+            setHasMore(restaurantsData.pagination.hasMore);
         } catch (error) {
+            if (requestRevision !== restaurantRequestRevision.current) return;
             console.error('Error loading data:', error);
             if (isUnauthenticatedError(error)) {
                 toast.error('Your session expired. Please sign in again.');
@@ -34,13 +46,38 @@ const SuperAdminDashboard: React.FC = () => {
                 toast.error('Could not load dashboard data. Please try again.');
             }
         } finally {
-            setLoading(false);
+            if (requestRevision === restaurantRequestRevision.current) setLoading(false);
         }
-    }, [navigate]);
+    }, [navigate, searchTerm, selectedPlan]);
 
     useEffect(() => {
-        loadData();
+        const requestRevision = ++restaurantRequestRevision.current;
+        const timeout = window.setTimeout(() => void loadData(requestRevision), 250);
+        return () => window.clearTimeout(timeout);
     }, [loadData]);
+
+    const loadMore = async () => {
+        if (!nextCursor || loadingMore) return;
+        const requestRevision = restaurantRequestRevision.current;
+        setLoadingMore(true);
+        try {
+            const page = await superAdminService.getRestaurantsPage({
+                cursor: nextCursor,
+                limit: 25,
+                search: searchTerm.trim() || undefined,
+                plan: selectedPlan,
+            });
+            if (requestRevision !== restaurantRequestRevision.current) return;
+            setRestaurants(current => [...current, ...page.items]);
+            setNextCursor(page.pagination.nextCursor);
+            setHasMore(page.pagination.hasMore);
+        } catch (error) {
+            if (requestRevision !== restaurantRequestRevision.current) return;
+            toast.error(getErrorMessage(error, 'Could not load more restaurants'));
+        } finally {
+            if (requestRevision === restaurantRequestRevision.current) setLoadingMore(false);
+        }
+    };
 
     const handleLogout = async () => {
         await superAdminService.logout().catch(() => undefined);
@@ -50,7 +87,8 @@ const SuperAdminDashboard: React.FC = () => {
     const handleUpgradePlan = async (restaurantId: string, newPlan: string, status?: string, endDate?: string) => {
         try {
             await superAdminService.updateRestaurantPlan(restaurantId, newPlan, status, endDate);
-            loadData(); // Reload data
+            const requestRevision = ++restaurantRequestRevision.current;
+            void loadData(requestRevision);
         } catch (error) {
             if (isUnauthenticatedError(error)) {
                 toast.error('For security, please sign in with MFA again.');
@@ -61,13 +99,7 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
-    const filteredRestaurants = restaurants.filter(r => {
-        const matchesSearch = !searchTerm ||
-            r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            r.restaurant_name?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesPlan = selectedPlan === 'ALL' || r.subscription_plan === selectedPlan;
-        return matchesSearch && matchesPlan;
-    });
+    const filteredRestaurants = restaurants;
 
     const getPlanColor = (plan: string) => {
         switch (plan) {
@@ -256,6 +288,16 @@ const SuperAdminDashboard: React.FC = () => {
                                         </div>
                                     </div>
                                 ))}
+                                {hasMore && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadMore()}
+                                        disabled={loadingMore}
+                                        className="w-full rounded-lg border border-purple-200 px-4 py-3 font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-60"
+                                    >
+                                        {loadingMore ? 'Loading…' : 'Load more restaurants'}
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

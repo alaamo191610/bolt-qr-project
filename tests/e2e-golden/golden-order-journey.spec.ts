@@ -62,8 +62,13 @@ test('QR capability exchanges for a real session and creates a real order', asyn
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(ordersResponse.ok()).toBeTruthy();
-  const orders = (await ordersResponse.json()) as Array<{ id: number; type?: string }>;
-  const created = orders.find((order) => String(order.id) === orderId);
+  // GET /api/orders returns a cursor-paginated envelope, not a bare array -
+  // see docs/contracts/pagination-and-analytics.md.
+  const { items } = (await ordersResponse.json()) as {
+    items: Array<{ id: number; type?: string }>;
+    pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
+  };
+  const created = items.find((order) => String(order.id) === orderId);
   expect(created).toBeTruthy();
   expect(created?.type).toBe('dine_in');
 });

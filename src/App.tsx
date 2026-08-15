@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useEffect, useMemo, useCallback } from "react";
+import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import {
   QrCode,
@@ -14,7 +14,7 @@ import { useLanguage } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
-import { adminService } from "./services/adminService";
+import { adminService, type AnalyticsSummary } from "./services/adminService";
 import { tableService } from "./services/tableService";
 import { menuService } from "./services/menuService";
 import { orderService } from "./services/orderService";
@@ -134,6 +134,24 @@ interface ApiMenuItem {
   image_url?: string;
 }
 
+const mapApiOrder = (order: ApiOrder): Order => ({
+  id: order.id,
+  order_number: order.order_number,
+  tableNumber: String(order.table?.code ?? order.table_id ?? ''),
+  items: order.order_items?.map((item: ApiOrderItem) => ({
+    name: item.menu?.name_en || "Unknown Item",
+    price: item.price_at_order,
+    quantity: item.quantity,
+    note: item.note,
+    customizationDetails: item.customization_details,
+  })) || [],
+  total: order.total || 0,
+  status: order.status || "pending",
+  version: order.version || 1,
+  timestamp: new Date(order.created_at),
+  type: order.type,
+});
+
 function App() {
   const { user, loading } = useAuth();
 
@@ -233,8 +251,16 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("qr-generator");
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [orderScope, setOrderScope] = useState<'active' | 'history'>('active');
+  const [orderNextCursor, setOrderNextCursor] = useState<string | null>(null);
+  const [orderHasMore, setOrderHasMore] = useState(false);
+  const [ordersLoadingMore, setOrdersLoadingMore] = useState(false);
+  const orderRequestRevision = useRef(0);
   const [, setMenuItems] = useState<MenuItem[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
+  const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [switchingOrganizationId, setSwitchingOrganizationId] = useState<string | null>(null);
 
@@ -282,34 +308,47 @@ const AdminDashboard: React.FC = () => {
     }
   }, [user]);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (
+    scope: 'active' | 'history' = orderScope,
+    cursor?: string,
+    append = false,
+  ) => {
     if (!user) return;
+    const requestRevision = ++orderRequestRevision.current;
+    if (append) setOrdersLoadingMore(true);
     try {
-      const adminOrders = await orderService.getOrders(user.id) as unknown as ApiOrder[];
-      setOrders(
-        adminOrders.map((order: ApiOrder) => ({
-          id: order.id,
-          order_number: order.order_number,
-          tableNumber: String(order.table?.code ?? order.table_id ?? ''),
-          items:
-            order.order_items?.map((item: ApiOrderItem) => ({
-              name: item.menu?.name_en || "Unknown Item",
-              price: item.price_at_order,
-              quantity: item.quantity,
-              note: item.note,
-              customizationDetails: item.customization_details,
-            })) || [],
-          total: order.total || 0,
-          status: order.status || "pending",
-          version: order.version || 1,
-          timestamp: new Date(order.created_at),
-          type: order.type,
-        }))
-      );
+      const page = await orderService.getOrdersPage(user.id, { scope, limit: 50, cursor }) as unknown as {
+        items: ApiOrder[];
+        pagination: { nextCursor: string | null; hasMore: boolean };
+      };
+      if (requestRevision !== orderRequestRevision.current) return;
+      const mapped = page.items.map(mapApiOrder);
+      setOrders(previous => append
+        ? [...previous, ...mapped.filter(order => !previous.some(existing => existing.id === order.id))]
+        : mapped);
+      setOrderNextCursor(page.pagination.nextCursor);
+      setOrderHasMore(page.pagination.hasMore);
     } catch (e) {
+      if (requestRevision !== orderRequestRevision.current) return;
       console.error("Error fetching orders:", e);
+    } finally {
+      if (append && requestRevision === orderRequestRevision.current) setOrdersLoadingMore(false);
     }
-  }, [user]);
+  }, [user, orderScope]);
+
+  const loadMoreOrders = useCallback(async () => {
+    if (!orderNextCursor || ordersLoadingMore) return;
+    await fetchOrders(orderScope, orderNextCursor, true);
+  }, [fetchOrders, orderNextCursor, orderScope, ordersLoadingMore]);
+
+  const handleOrderScopeChange = useCallback((scope: 'active' | 'history') => {
+    orderRequestRevision.current += 1;
+    setOrderScope(scope);
+    setOrders([]);
+    setOrderNextCursor(null);
+    setOrderHasMore(false);
+    setOrdersLoadingMore(false);
+  }, []);
 
   const fetchMenuItems = useCallback(async () => {
     if (!user) return;
@@ -329,6 +368,20 @@ const AdminDashboard: React.FC = () => {
       );
     } catch (e) {
       console.error("Error fetching menu items:", e);
+    }
+  }, [user]);
+
+  const fetchAnalytics = useCallback(async () => {
+    if (!user) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      setAnalyticsSummary(await adminService.getAnalytics(user.id, 30));
+    } catch (error) {
+      console.error('Error fetching bounded analytics:', error);
+      setAnalyticsError('Could not load analytics. Please try again.');
+    } finally {
+      setAnalyticsLoading(false);
     }
   }, [user]);
 
@@ -356,7 +409,7 @@ const AdminDashboard: React.FC = () => {
         fetchTables();
         break;
       case 'analytics':
-        fetchOrders();
+        fetchAnalytics();
         break;
       case 'admin':
         fetchMenuItems();
@@ -364,7 +417,7 @@ const AdminDashboard: React.FC = () => {
       // 'menu' loads its own data internally
       // 'users' (future)
     }
-  }, [activeTab, user, fetchTables, fetchOrders, fetchMenuItems]);
+  }, [activeTab, user, fetchTables, fetchOrders, fetchMenuItems, fetchAnalytics]);
 
   // Real-time Orders
   useEffect(() => {
@@ -378,6 +431,7 @@ const AdminDashboard: React.FC = () => {
       // network blip until the page is refreshed.
       joinAdminRoom();
       void fetchOrders();
+      if (activeTab === 'analytics') void fetchAnalytics();
     };
 
     const handleNewOrder = (event: OrderRealtimeEvent<ApiOrder>) => {
@@ -387,29 +441,14 @@ const AdminDashboard: React.FC = () => {
         void fetchOrders();
         return;
       }
-      const transformedOrder: Order = {
-        id: order.id,
-        order_number: order.order_number,
-        tableNumber: String(order.table?.code ?? order.table_id ?? ''),
-        items: order.order_items?.map((item: ApiOrderItem) => ({
-          name: item.menu?.name_en || "Unknown Item",
-          price: item.price_at_order,
-          quantity: item.quantity,
-          note: item.note,
-          customizationDetails: item.customization_details,
-        })) || [],
-        total: order.total || 0,
-        status: order.status || "pending",
-        version: event.order.version,
-        timestamp: new Date(order.created_at),
-        type: order.type,
-      };
+      const transformedOrder: Order = { ...mapApiOrder(order), version: event.order.version };
 
       setOrders((prev) => prev.some(existing => existing.id === transformedOrder.id)
         ? prev.map(existing => existing.id === transformedOrder.id ? transformedOrder : existing)
         : [transformedOrder, ...prev]);
       toast.success(`New Order #${order.order_number || order.id} received!`);
       void fetchOrders();
+      if (activeTab === 'analytics') void fetchAnalytics();
     };
 
     const handleStatusUpdate = (event: OrderRealtimeEvent) => {
@@ -431,7 +470,7 @@ const AdminDashboard: React.FC = () => {
       socket.off("order.created.v1", handleNewOrder);
       socket.off("order.status.v1", handleStatusUpdate);
     };
-  }, [user, fetchOrders]);
+  }, [user, fetchOrders, fetchAnalytics, activeTab]);
 
   // Simple tab change handler
   const handleTabChange = (tabId: string) => {
@@ -481,6 +520,10 @@ const AdminDashboard: React.FC = () => {
             <OrderManagement
               orders={orders}
               setOrders={setOrders}
+              hasMore={orderHasMore}
+              loadingMore={ordersLoadingMore}
+              onLoadMore={loadMoreOrders}
+              onViewModeChange={handleOrderScopeChange}
               onStatusChange={async (orderId, newStatus) => {
                 try {
                   await orderService.updateOrderStatus(String(orderId), newStatus);
@@ -505,7 +548,7 @@ const AdminDashboard: React.FC = () => {
           />
         );
       case "analytics":
-        return <Analytics orders={orders} />;
+        return <Analytics summary={analyticsSummary} loading={analyticsLoading} error={analyticsError} onRetry={fetchAnalytics} />;
       case "team":
         return <TeamManagement />;
       case "admin":

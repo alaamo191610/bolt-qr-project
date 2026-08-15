@@ -48,11 +48,23 @@ interface OrderManagementProps {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   onStatusChange?: (orderId: number, newStatus: Order['status']) => void | Promise<void>;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void | Promise<void>;
+  onViewModeChange?: (mode: 'active' | 'history') => void;
 }
 
 // --- Components ---
 
-const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, onStatusChange }) => {
+const OrderManagement: React.FC<OrderManagementProps> = ({
+  orders,
+  setOrders,
+  onStatusChange,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onViewModeChange,
+}) => {
   const { formatPrice } = useCurrency();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -111,6 +123,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
   const handleViewModeChange = (mode: 'active' | 'history') => {
     setViewMode(mode);
     setSelectedStatus('all');
+    onViewModeChange?.(mode);
   };
 
   // --- Actions ---
@@ -338,6 +351,19 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, on
           </div>
         )}
       </div>
+
+      {hasMore && onLoadMore && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => void onLoadMore()}
+            disabled={loadingMore}
+            className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900"
+          >
+            {loadingMore ? 'Loading orders…' : 'Load more orders'}
+          </button>
+        </div>
+      )}
 
       {/* --- Modals --- */}
 

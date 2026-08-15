@@ -11,7 +11,7 @@ interface ItemData {
   revenue: number;
   name?: string;     // fallback
   name_en?: string;  // ✅ english
-  name_ar?: string;  // ✅ arabic
+  name_ar?: string | null;  // ✅ arabic
 }
 
 interface Props {

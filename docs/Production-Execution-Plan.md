@@ -791,6 +791,60 @@ uptime failure/recovery notifications. The next local M3 implementation is pagin
 analytics plus query-plan/load/capacity evidence. Actual VPS/TLS, off-VPS restore, and hosted
 monitor execution remain pilot gates.
 
+## Implementation tracking — 16 August 2026 (M3 pagination and capacity started)
+
+The final local M3 performance slice has started. Current inventory identifies unbounded order
+history, raw analytics history, and SuperAdmin restaurant listing as the material growth paths;
+catalog, table, and member collections have subscription ceilings. The implementation will apply
+tenant-scoped deterministic cursor pagination with hard maximum page sizes, move analytics to
+database aggregation over a validated bounded date range, and avoid returning customer notes or
+raw baskets for reporting.
+
+Composite indexes will be accepted only with production-shaped PostgreSQL `EXPLAIN (ANALYZE,
+BUFFERS, FORMAT JSON)` evidence. A repeatable authenticated HTTP capacity harness will record
+latency percentiles, throughput, and error rate and fail when the agreed pilot thresholds are not
+met. Local results cannot substitute for the final selected-VPS run through nginx; both evidence
+sets will be retained separately.
+
+## Implementation tracking — 16 August 2026 (M3 pagination and capacity implemented)
+
+The bounded-query implementation is complete and final regression has started. The published
+[pagination/analytics contract](contracts/pagination-and-analytics.md) defines deterministic opaque
+cursor pages, hard endpoint maxima, tenant-session scope, aggregate field semantics, the default
+30-day and maximum 90-day UTC window, safe errors, deployment compatibility, and rollback. Orders,
+the bounded analytics export, promotions, SuperAdmin restaurants, and the legacy admin route now
+return page envelopes. The admin analytics screen consumes server aggregates and both order and
+SuperAdmin lists expose bounded continuation UX.
+
+Migration `20260816090000_bounded_pagination_indexes` is additive and provides the reviewed
+tenant/date/status/tie-break and restaurant-list indexes. The query-plan verifier requires every
+migration index and rejects slow expected paths, missing indexed alternatives, and base-table
+sequential scans. The capacity harness enforces explicit p95, p99, error-rate, throughput, timeout,
+concurrency, and request-count settings without logging the bearer token.
+
+[Retained local evidence](operations/pagination-capacity-evidence.md) covers 100,002 orders, 10,102
+promotions, and 10,002 restaurant rows. All seven EXPLAIN paths were indexed with no base-table
+sequential scan; slowest execution was 3.430 ms. The 300-request/concurrency-10 mixed API run
+measured p95 81.25 ms, p99 89.49 ms, 343.33 requests/second, and 0% errors, passing the fixed
+250 ms/750 ms/5 requests-per-second/1% pilot limits. Because the local host used direct loopback
+and Node 24, this does not replace the required production Node 22 public HTTPS/nginx rerun with
+VPS resource observation. Full regression is in progress.
+
+## Implementation tracking — 16 August 2026 (M3 pagination and capacity locally complete)
+
+Final regression passes 74 backend unit/configuration/security/performance tests, 35
+disposable-PostgreSQL integration and migration tests, 60 frontend tests, and 11 browser tests with
+one intentional mobile real-backend golden skip. TypeScript, ESLint, Prisma validation, the
+production build, script syntax, diff checks, no-public-source-map inspection, and the production
+dependency audit pass; the audit reports zero production vulnerabilities. Request-revision guards
+also prevent an older page response from replacing a newer order scope or SuperAdmin search/filter.
+
+The local pagination/bounded-analytics/query-plan/capacity point is complete. Production-Done still
+requires migration deployment and the same query/load gates on the selected Node 22 VPS through
+public HTTPS/nginx with representative data and retained resource observations. Actual VPS/TLS,
+off-VPS restore, hosted Sentry/uptime notification, and provider-policy evidence remain open M3/M5
+environment gates and are not implied by these local results.
+
 ## Required test evidence
 
 | Layer | Minimum evidence | Required at |
@@ -814,7 +868,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Local implementation complete; final enforcement staging-gated | ADR 0009 | Request context, safe errors, limiter, token/session revocation, SuperAdmin MFA/HttpOnly session, organization/member contract, expand/backfill, upload ownership, cross-tenant negatives, and clean/corrupt final-enforcement rehearsal pass; staging zero-issue verify/enforce and TLS enrollment remain. | Yazan | 15 Aug 2026 |
 | M2 bounded order cycle | Local joint implementation accepted; staging/release evidence remains | `01b5c45` | QR/session, durable and reload-safe idempotency, capacity, admin availability control, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, secure QR routing, real-backend desktop golden E2E, and mocked mobile recovery pass. | Yazan + Alaa | 15 Aug 2026 |
-| M3 Phase 1 pilot infrastructure | In progress — runtime/security/recovery/observability automation locally complete | ADRs 0008–0011 | Final local regression: 64 unit/config/security/recovery, 32 PostgreSQL integration, 57 frontend, 11 standard browser plus one separate golden E2E pass; lint, TypeScript, Prisma, build, no-public-map, and production dependency audit pass. Hosted backup/restore, Sentry/uptime notifications, real VPS/TLS, pagination/analytics, and capacity evidence remain. | Yazan | 15 Aug 2026 |
+| M3 Phase 1 pilot infrastructure | In progress — runtime, security, recovery, observability, and bounded-performance automation locally complete | ADRs 0008–0011; pagination/analytics contract | Final local regression: 74 unit/config/security/performance, 35 PostgreSQL integration/migration, 60 frontend, and 11 browser passes with one intentional mobile golden skip; lint, TypeScript, Prisma, build, no-public-map, production dependency audit, seven indexed EXPLAIN paths, and a 300-request capacity gate pass. Hosted backup/restore, Sentry/uptime notifications, real VPS/TLS, and Node 22/nginx capacity rerun remain. | Yazan | 16 Aug 2026 |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |
 | M6 launch | Not started | — | — | — | — |

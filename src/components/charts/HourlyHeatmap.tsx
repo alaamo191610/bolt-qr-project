@@ -9,7 +9,7 @@ interface HourlyData {
 }
 
 interface HourlyHeatmapProps {
-  orders: Array<{ timestamp?: Date | string; created_at?: Date | string }>;
+  periods: HourlyData[];
 }
 
 const formatHour = (hour: number) => {
@@ -18,7 +18,7 @@ const formatHour = (hour: number) => {
   return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
 };
 
-const HourlyHeatmap: React.FC<HourlyHeatmapProps> = ({ orders }) => {
+const HourlyHeatmap: React.FC<HourlyHeatmapProps> = ({ periods }) => {
   const { t } = useLanguage();
   const dayNames = useMemo(() => [
     t('common.sunday') || 'Sun',
@@ -31,23 +31,10 @@ const HourlyHeatmap: React.FC<HourlyHeatmapProps> = ({ orders }) => {
   ], [t]);
 
   const busiestPeriods = useMemo(() => {
-    const counts = new Map<string, number>();
-
-    for (const order of orders) {
-      const date = new Date(order.timestamp || order.created_at || '');
-      if (Number.isNaN(date.getTime())) continue;
-      const key = `${date.getDay()}-${date.getHours()}`;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-
-    return Array.from(counts.entries())
-      .map(([key, count]): HourlyData => {
-        const [day, hour] = key.split('-').map(Number);
-        return { day, hour, count };
-      })
+    return [...periods]
       .sort((a, b) => b.count - a.count || a.day - b.day || a.hour - b.hour)
       .slice(0, 4);
-  }, [orders]);
+  }, [periods]);
 
   const peakCount = busiestPeriods[0]?.count || 1;
   const peak = busiestPeriods[0];

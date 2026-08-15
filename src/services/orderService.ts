@@ -84,6 +84,15 @@ interface ApiOrder {
   order_items?: ApiOrderItem[]
 }
 
+export interface CursorPage<T> {
+  items: T[];
+  pagination: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+}
+
 // ---------------- Helpers ----------------
 function mergeNotes(a?: string, b?: string) {
   const A = (a ?? '').trim()
@@ -209,12 +218,22 @@ export const orderService = {
   },
 
   // Get orders for admin (raw, with nested menus; unchanged columns)
-  async getOrders(adminId: string, status?: string) {
+  async getOrdersPage(adminId: string, options: {
+    status?: string;
+    scope?: 'all' | 'active' | 'history';
+    limit?: number;
+    cursor?: string;
+  } = {}): Promise<CursorPage<ApiOrder>> {
     try {
       const params: Record<string, string> = { adminId };
-      if (status) params.status = status;
-      const orders = await api.get('/orders', params) as ApiOrder[];
-      return (orders || []).map((o) => ({
+      if (options.status) params.status = options.status;
+      if (options.scope) params.scope = options.scope;
+      if (options.limit) params.limit = String(options.limit);
+      if (options.cursor) params.cursor = options.cursor;
+      const page = await api.get<CursorPage<ApiOrder>>('/orders', params);
+      return {
+        ...page,
+        items: (page.items || []).map((o) => ({
         ...o,
         total: Number(o.total) || 0,
         order_items: (o.order_items || []).map((oi) => ({
@@ -222,17 +241,22 @@ export const orderService = {
           price_at_order: Number(oi.price_at_order) || 0,
           menu: oi.menu ? { ...oi.menu, price: Number(oi.menu.price) || 0 } : null
         }))
-      }));
+        })),
+      };
     } catch (error) {
       console.error('Error fetching orders:', error)
       throw error
     }
   },
 
+  async getOrders(adminId: string, status?: string) {
+    return (await this.getOrdersPage(adminId, { status, limit: 50 })).items;
+  },
+
   // Cleaned, mapped shape for Analytics (unit price already includes extras)
   async getOrdersForAnalytics(adminId: string): Promise<AnalyticsOrder[]> {
     // Reuse the getOrders API or create a specific analytics endpoint
-    const data = await api.get('/orders', { adminId }) as ApiOrder[];
+    const data = (await this.getOrdersPage(adminId, { limit: 100 })).items;
     return (data ?? []).map((o) => ({
       id: o.id,
       tableNumber: String(o.table_id ?? ''), // join tables for code if you want the code instead of id
