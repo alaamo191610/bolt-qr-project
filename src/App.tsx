@@ -7,6 +7,7 @@ import {
   Settings,
   Users,
   BarChart3,
+  UserCog,
 } from "lucide-react";
 import { useAuth } from "./providers/AuthProvider";
 import { useLanguage } from "./contexts/LanguageContext";
@@ -35,6 +36,7 @@ const OrderingStatusControl = React.lazy(() => import("./components/orders/Order
 const TableManagement = React.lazy(() => import("./components/tables/TableManagement"));
 const Analytics = React.lazy(() => import("./components/Analytics"));
 const AdminPanel = React.lazy(() => import("./components/admin/AdminPanel"));
+const TeamManagement = React.lazy(() => import("./components/team/TeamManagement"));
 const CustomerMenu = React.lazy(() => import("./pages/CustomerMenu"));
 const SuperAdminLogin = React.lazy(() => import("./components/super-admin/SuperAdminLogin"));
 const SuperAdminDashboard = React.lazy(() => import("./components/super-admin/SuperAdminDashboard"));
@@ -443,9 +445,14 @@ const AdminDashboard: React.FC = () => {
       { id: "orders", name: t("nav.orders"), icon: ShoppingCart },
       { id: "tables", name: t("nav.tables"), icon: Users },
       { id: "analytics", name: t("nav.analytics"), icon: BarChart3 },
+      // Only OWNER/MANAGER can even load this screen (GET /api/organization/members
+      // requires that role); STAFF would just see it 403 on open, so hide it instead.
+      ...(user?.role === "OWNER" || user?.role === "MANAGER"
+        ? [{ id: "team", name: t("nav.team"), icon: UserCog }]
+        : []),
       { id: "admin", name: t("nav.admin"), icon: Settings },
     ],
-    [t]
+    [t, user?.role]
   );
 
   if (!isLoaded) {
@@ -499,6 +506,8 @@ const AdminDashboard: React.FC = () => {
         );
       case "analytics":
         return <Analytics orders={orders} />;
+      case "team":
+        return <TeamManagement />;
       case "admin":
         return <AdminPanel adminId={user?.id || ''} />;
       default:

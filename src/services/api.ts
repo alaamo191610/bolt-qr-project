@@ -214,6 +214,16 @@ export const api = {
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async patch<T = any>(endpoint: string, body: unknown, namespace: TokenNamespace = 'restaurant'): Promise<T> {
+    return request<T>(`${API_URL}${endpoint}`, {
+      method: 'PATCH',
+      headers: getHeaders(namespace),
+      credentials: namespaceCredentials(namespace),
+      body: JSON.stringify(body),
+    });
+  },
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async delete<T = any>(endpoint: string, namespace: TokenNamespace = 'restaurant'): Promise<T> {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'DELETE',

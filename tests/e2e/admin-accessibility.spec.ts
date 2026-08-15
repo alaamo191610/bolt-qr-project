@@ -89,6 +89,54 @@ test.describe('Restaurant admin accessibility', () => {
     expect(accessibility.violations).toEqual([]);
   });
 
+  test('Team has no violations', async ({ page }) => {
+    const fixture = await readFixture();
+    await signIn(page, fixture);
+    await navigateTo(page, 'Team');
+    await expect(page.getByRole('heading', { name: 'Team' })).toBeVisible();
+    await expect(page.getByRole('main').getByText(fixture.email)).toBeVisible();
+
+    await freezeAnimations(page);
+    const accessibility = await new AxeBuilder({ page }).analyze();
+    expect(accessibility.violations).toEqual([]);
+  });
+
+  test('Team member add and status dialogs have no violations', async ({ page }, testInfo) => {
+    const fixture = await readFixture();
+    await signIn(page, fixture);
+    await navigateTo(page, 'Team');
+    await expect(page.getByRole('main').getByText(fixture.email)).toBeVisible();
+
+    // The chromium and mobile-chrome projects share one backend/database
+    // (see globalSetup.js), so a hardcoded email here would 409-conflict
+    // between projects; scope it to the running project instead.
+    const memberName = `A11y Team Member ${testInfo.project.name}`;
+    const memberEmail = `a11y-team-member-${testInfo.project.name}@example.com`;
+
+    // The seeded admin is its own row's OWNER, and self-suspension is
+    // blocked, so a second member is added here to reach the suspend-confirm
+    // dialog on a row that actually offers it.
+    await page.getByRole('button', { name: 'Add member' }).click();
+    const addDialog = page.getByRole('dialog');
+    await expect(addDialog).toBeVisible();
+    await freezeAnimations(page);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+    await addDialog.getByLabel('Email').fill(memberEmail);
+    await addDialog.getByLabel('Name').fill(memberName);
+    await addDialog.getByLabel('Password').fill('A11y-Team-Member-1!');
+    await addDialog.getByRole('button', { name: 'Add member' }).click();
+    await expect(addDialog).not.toBeVisible();
+    await expect(page.getByText(memberName)).toBeVisible();
+
+    await page.getByLabel(`Change status for ${memberName}`).selectOption('SUSPENDED');
+    const suspendDialog = page.getByRole('dialog');
+    await expect(suspendDialog).toBeVisible();
+    await freezeAnimations(page);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await suspendDialog.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('Analytics has no violations', async ({ page }) => {
     const fixture = await readFixture();
     await signIn(page, fixture);
