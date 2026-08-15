@@ -30,6 +30,7 @@ import {
 const QRGenerator = React.lazy(() => import("./components/tables/QRGenerator"));
 const DigitalMenu = React.lazy(() => import("./components/menu/DigitalMenu"));
 const OrderManagement = React.lazy(() => import("./components/orders/OrderManagement"));
+const OrderingStatusControl = React.lazy(() => import("./components/orders/OrderingStatusControl"));
 const TableManagement = React.lazy(() => import("./components/tables/TableManagement"));
 const Analytics = React.lazy(() => import("./components/Analytics"));
 const AdminPanel = React.lazy(() => import("./components/admin/AdminPanel"));
@@ -451,21 +452,24 @@ const AdminDashboard: React.FC = () => {
         return <DigitalMenu />;
       case "orders":
         return (
-          <OrderManagement
-            orders={orders}
-            setOrders={setOrders}
-            onStatusChange={async (orderId, newStatus) => {
-              try {
-                await orderService.updateOrderStatus(String(orderId), newStatus);
-                toast.success(`Order #${orderId} marked as ${newStatus}`);
-              } catch (error) {
-                console.error("Failed to update status:", error);
-                toast.error("Failed to update status");
-                // Revert local state if needed (or reload data)
-                fetchOrders();
-              }
-            }}
-          />
+          <div className="space-y-6">
+            <OrderingStatusControl />
+            <OrderManagement
+              orders={orders}
+              setOrders={setOrders}
+              onStatusChange={async (orderId, newStatus) => {
+                try {
+                  await orderService.updateOrderStatus(String(orderId), newStatus);
+                  toast.success(`Order #${orderId} marked as ${newStatus}`);
+                } catch (error) {
+                  console.error("Failed to update status:", error);
+                  toast.error("Failed to update status");
+                  // Revert local state if needed (or reload data)
+                  fetchOrders();
+                }
+              }}
+            />
+          </div>
         );
       case "tables":
         return (
