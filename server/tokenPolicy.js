@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 export const TOKEN_TYPES = Object.freeze({
   RESTAURANT_SESSION: 'restaurant-session',
   SUPER_ADMIN_SESSION: 'super-admin-session',
+  SUPER_ADMIN_MFA_CHALLENGE: 'super-admin-mfa-challenge',
   ORDER_TRACKING: 'order-tracking',
   TABLE_SESSION: 'table-session',
 });
@@ -15,7 +16,11 @@ const tokenDefinitions = Object.freeze({
   },
   [TOKEN_TYPES.SUPER_ADMIN_SESSION]: {
     audience: 'super-admin-api',
-    expiresIn: '24h',
+    expiresIn: '30m',
+  },
+  [TOKEN_TYPES.SUPER_ADMIN_MFA_CHALLENGE]: {
+    audience: 'super-admin-mfa',
+    expiresIn: '5m',
   },
   [TOKEN_TYPES.ORDER_TRACKING]: {
     audience: 'order-tracking',

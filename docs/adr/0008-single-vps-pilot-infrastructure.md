@@ -50,7 +50,8 @@ with real orders or uploads.
 Before a real pilot, the minimum addition is an automated daily PostgreSQL dump plus upload backup
 copied off the VPS, encrypted, retained for at least seven days, monitored for success, and restored
 in a rehearsal. Yazan accepted RPO 24 hours and RTO 4 hours on 15 August 2026. Manual backups may
-supplement but cannot be the only control.
+supplement but cannot be the only control. ADR 0010 supplies the local automation and recovery
+contract; real remote backup and timed VPS restore evidence remain required.
 
 ## Growth triggers
 

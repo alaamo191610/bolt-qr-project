@@ -45,10 +45,10 @@ export class ApiError extends Error {
 }
 
 // Restaurant-admin and SuperAdmin are deliberately separate session
-// lifecycles (separate storage key, separate expiry/logout), not a shared
-// login. This namespace only lets both reuse the same fetch/error/retry
-// transport mechanics - it must never be widened into a single shared
-// token. See docs/Gap-Analysis-and-Plan-Corrections.md G9.
+// lifecycles. Restaurant auth uses its compatibility bearer; SuperAdmin auth
+// uses an HttpOnly cookie that this client cannot read. The namespace only
+// selects transport behavior and must never attach the restaurant token to a
+// platform request. See ADR 0009.
 export type TokenNamespace = 'restaurant' | 'superAdmin';
 
 const TOKEN_STORAGE_KEYS: Record<TokenNamespace, string> = {
@@ -58,23 +58,27 @@ const TOKEN_STORAGE_KEYS: Record<TokenNamespace, string> = {
 
 export const tokenStore = {
   get(namespace: TokenNamespace): string | null {
-    return localStorage.getItem(TOKEN_STORAGE_KEYS[namespace]);
+    return namespace === 'superAdmin' ? null : localStorage.getItem(TOKEN_STORAGE_KEYS[namespace]);
   },
   set(namespace: TokenNamespace, token: string): void {
-    localStorage.setItem(TOKEN_STORAGE_KEYS[namespace], token);
+    if (namespace !== 'superAdmin') localStorage.setItem(TOKEN_STORAGE_KEYS[namespace], token);
   },
   clear(namespace: TokenNamespace): void {
     localStorage.removeItem(TOKEN_STORAGE_KEYS[namespace]);
+    if (namespace === 'superAdmin') sessionStorage.removeItem(TOKEN_STORAGE_KEYS[namespace]);
   },
 };
 
 const getHeaders = (namespace: TokenNamespace = 'restaurant') => {
-  const token = tokenStore.get(namespace);
+  const token = namespace === 'superAdmin' ? null : tokenStore.get(namespace);
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
 };
+
+const namespaceCredentials = (namespace: TokenNamespace): RequestCredentials | undefined =>
+  namespace === 'superAdmin' ? 'include' : undefined;
 
 const fallbackErrorCode = (status: number): ApiErrorCode => {
   if (status === 401) return 'AUTHENTICATION_REQUIRED';
@@ -142,7 +146,10 @@ export const api = {
   async get<T = any>(endpoint: string, params?: Record<string, string>, namespace: TokenNamespace = 'restaurant'): Promise<T> {
     const url = new URL(`${API_URL}${endpoint}`);
     if (params) Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-    return request<T>(url.toString(), { headers: getHeaders(namespace) });
+    return request<T>(url.toString(), {
+      headers: getHeaders(namespace),
+      credentials: namespaceCredentials(namespace),
+    });
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,6 +187,7 @@ export const api = {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: getHeaders(namespace),
+      credentials: namespaceCredentials(namespace),
       body: JSON.stringify(body),
     });
   },
@@ -190,6 +198,7 @@ export const api = {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: endpoint.startsWith('/super-admin/') ? 'include' : undefined,
       body: JSON.stringify(body),
     });
   },
@@ -199,6 +208,7 @@ export const api = {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'PUT',
       headers: getHeaders(namespace),
+      credentials: namespaceCredentials(namespace),
       body: JSON.stringify(body),
     });
   },
@@ -208,6 +218,7 @@ export const api = {
     return request<T>(`${API_URL}${endpoint}`, {
       method: 'DELETE',
       headers: getHeaders(namespace),
+      credentials: namespaceCredentials(namespace),
     });
   },
 

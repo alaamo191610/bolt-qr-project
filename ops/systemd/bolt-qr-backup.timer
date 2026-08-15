@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Bolt QR encrypted off-VPS backup twice daily
+
+[Timer]
+OnCalendar=*-*-* 02,14:00:00 UTC
+Persistent=true
+AccuracySec=1m
+Unit=bolt-qr-backup.service
+
+[Install]
+WantedBy=timers.target

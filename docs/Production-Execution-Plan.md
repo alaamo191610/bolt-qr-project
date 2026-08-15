@@ -485,11 +485,11 @@ related work from being correctly implemented.
 | Log retention, contents, and access control | Both | Day 3 | Required before structured production logs contain user/organization IDs. |
 | 12-week schedule and pilot/launch dates | Both | Day 1 | Establishes the release commitment and scope-control baseline. |
 | Phase 1 infrastructure: **single VPS/local storage/local PostgreSQL/in-memory limiter/nginx/systemd/Sentry/uptime selected in ADR 0008** | Yazan | Selected 15 Aug | Fixes the pilot deployment topology; managed providers defer to growth triggers. |
-| Browser session-storage strategy and threat model | Both | Day 3 | Sets the security controls for restaurant and SuperAdmin sessions. |
+| Browser session strategy and threat model — SuperAdmin uses ADR 0009 HttpOnly SameSite cookie; restaurant compatibility bearer remains separately bounded | Both | Platform complete 15 Aug | Removes JavaScript access to the platform credential; restaurant-session review remains separate. |
 | PostgreSQL RLS adoption or compensating controls **(Yazan selected ADR 0006 B)** | Both | Alaa/staging sign-off pending | Release 1 uses constraints/controls; RLS follows safe runtime-role work. |
-| Backup/RPO/RTO: automated encrypted off-VPS backup required; **RPO 24h/RTO 4h accepted** | Yazan | Accepted 15 Aug | Implementation and timed restore rehearsal remain before M5. |
+| Backup/RPO/RTO: encrypted restic off-VPS; **RPO 24h/RTO 4h accepted** | Yazan | ADR 0010/local automation 15 Aug | Selected remote repository and real timed restore evidence remain before M5. |
 | Restaurant ordering pause and capacity behaviour | Both | Day 5 | Defines safe operation during overload or kitchen closure. |
-| SuperAdmin MFA/re-authentication and session duration | Both | Day 5 | Sets the platform-admin security bar before external production use. |
+| SuperAdmin MFA/re-authentication and session duration — ADR 0009 implemented locally | Yazan, reviewed with Alaa client boundary | Complete locally 15 Aug | Mandatory TOTP, 30-minute revocable HttpOnly session, and 10-minute recent-auth write gate; staging/TLS evidence remains. |
 
 ## M0 baseline record — updated 14 August 2026
 
@@ -604,6 +604,193 @@ PostgreSQL/fixture/authentication harness and production-shaped migration rehear
   mobile flow. The capability-less `TableManagement` QR image was removed; the table card now
   routes operators to QR Studio for capability-backed generation.
 
+## Implementation tracking — 15 August 2026 (post-merge acceptance and regression)
+
+Reviewed merged `main` at `01b5c45` and accepted Alaa's local M2 handoff. The merged client now
+persists checkout idempotency identity across reload/mobile resume, exposes the tenant-scoped
+restaurant ordering-state control, routes table operators only to capability-backed QR Studio,
+and passes the real backend QR → exchange → order → tracking → rotation-denial journey on desktop
+while the merged mocked capability/reload suite covers mobile. The separate single-worker
+real-backend golden suite also passes on desktop.
+
+Merged regression passes 44 backend unit/configuration tests, 31 disposable-PostgreSQL integration
+tests, 53 frontend tests, 11 standard browser tests with one intentional duplicate-mobile skip,
+one separate real-backend golden test, ESLint, TypeScript, Prisma validation, and production build.
+This closes the known local Release 1 order/business-logic and previously identified upload/token/
+socket/legacy-QR security gaps. M2 is still not production-Done because staging, final device/RTL,
+and joint release evidence remain.
+
+The remaining backend boundary is explicit: apply final tenant enforcement only after a zero-issue
+staging report, and complete pagination/bounded analytics plus the D1.5 aggregate analytics design.
+SuperAdmin MFA/session policy and the organization/member API contract are now complete locally in
+ADR 0009 and the published contracts. The next implementation point remains M3 encrypted off-VPS
+backup and timed isolated restore for RPO 24 hours/RTO 4 hours.
+
+## Implementation tracking — 15 August 2026 (SuperAdmin policy and member contract started)
+
+Two local security/contract points started before the backup slice. SuperAdmin authentication is
+being upgraded from a password-only 24-hour bearer to mandatory password + RFC 6238 TOTP,
+encrypted seed storage, hashed one-time recovery codes, database session-version revocation, a
+non-refreshable 30-minute session held in an HttpOnly SameSite cookie, and a 10-minute recent-MFA gate
+for platform-changing writes. A first-login enrollment flow will bootstrap existing SuperAdmins
+without allowing a password-only platform session.
+
+The organization/member API contract is being published against the already tenant-scoped runtime
+and PostgreSQL integration harness. It will fix request/response fields, OWNER/MANAGER/STAFF rules,
+member limits, last-owner/self-suspension protections, organization switching, error codes, and
+HTTP/socket revocation behavior. Both points require focused negative tests and full regression
+before their status changes from started.
+
+## Implementation tracking — 15 August 2026 (SuperAdmin and member contract implemented)
+
+ADR 0009 and the SuperAdmin authentication contract are implemented. Password-only login no
+longer creates a platform session: it issues a five-minute MFA challenge and first-login TOTP
+enrollment. The implementation uses encrypted seeds, replay-resistant RFC 6238 verification,
+hashed one-time recovery codes, account-level attempt locking, serializable recovery/enrollment,
+30-minute non-refreshable HttpOnly-cookie sessions, database session-version checks,
+revoking logout, and a 10-minute recent-MFA requirement for platform-changing writes. Production
+now requires a separate 64-hex-character MFA encryption key. The subscription response was also
+restricted so it cannot expose the restaurant credential hash.
+
+The organization/member contract is published and linked from the HTTP baseline. Runtime now
+rejects empty membership updates, and the PostgreSQL suite proves organization switching, member
+list/create/update, manager/owner boundaries, duplicate and plan-safe conflicts, self-suspension
+and last-owner protection, cross-tenant non-disclosure, plus immediate HTTP/socket revocation.
+
+Focused verification passes Prisma generation/validation, 52 backend unit/security tests, 54
+frontend tests, 32 PostgreSQL integration tests, ESLint, and TypeScript. Full E2E, production build,
+and final regression are still running; the milestone register is unchanged until they pass.
+
+## Implementation tracking — 15 August 2026 (SuperAdmin and member-contract final test complete)
+
+The final security review replaced JavaScript SuperAdmin token storage with a 30-minute HttpOnly,
+SameSite=Strict platform cookie (`Secure` in production). The shared transport sends cookie
+credentials only for the SuperAdmin namespace and never sends the restaurant bearer there.
+Concurrent failed-factor counting is atomic, TOTP/recovery replay fails closed, session versions
+are checked on every platform request, and logout revokes all outstanding sessions.
+
+Final regression passes 52 backend unit/security/configuration tests, 32 disposable-PostgreSQL
+integration tests, 55 frontend tests, 11 standard browser tests with one intentional duplicate
+mobile skip, one separate real-backend golden test, ESLint, TypeScript, Prisma validation, and
+production build. The organization/member contract and ADR 0009 are accepted locally. Staging
+migration, TLS enrollment, and release evidence remain before production-Done.
+
+Deployment must set an independently generated 64-hex-character
+`SUPER_ADMIN_MFA_ENCRYPTION_KEY`, apply
+`20260815150000_super_admin_mfa_session_policy`, and have every existing SuperAdmin enroll TOTP and
+save the one-time recovery codes. The next implementation point is M3 encrypted off-VPS backup and
+timed isolated restore for the accepted RPO 24 hours/RTO 4 hours.
+
+## Implementation tracking — 15 August 2026 (M3 backup and restore started)
+
+The M3 recovery point has started with a provider-neutral encrypted `restic` repository, allowing
+an S3-compatible or SFTP off-VPS destination without embedding a vendor API in the application.
+Each snapshot will stage a PostgreSQL custom-format dump, uploads, and a non-secret integrity
+manifest before encrypted transfer. Repository credentials, restic password, environment secrets,
+and the SuperAdmin MFA encryption key are explicitly excluded from the payload.
+
+Planned operational controls are a hardened one-shot systemd service and twice-daily timer, overlap locking,
+seven daily/four weekly/six monthly retention defaults, repository integrity checks, stale/failure
+visibility for external monitoring, and a restore command that refuses the configured production
+database/upload targets and requires an empty isolated destination plus explicit confirmation. The
+local rehearsal will test the complete command contract and emit elapsed-time evidence against RPO
+24 hours/RTO 4 hours; selected remote storage execution remains VPS deployment evidence.
+
+## Implementation tracking — 15 August 2026 (M3 backup and restore implemented)
+
+Implemented provider-neutral encrypted recovery automation. The locked backup command rejects
+upload symlinks, stages only a no-owner/no-privilege PostgreSQL custom dump, uploads, and a
+versioned checksum manifest, then performs `restic` backup, seven-daily/four-weekly/six-monthly
+retention pruning, repository checking, atomic success-state publication, and dead-man start/
+success/failure pings. A dedicated repository-init unit, least-privilege backup service, and
+persistent 02:00/14:00 UTC timer provide retry margin inside RPO 24 hours. Separate Unix identities
+and a shared upload-only group prevent the backup service from reading the application environment;
+repository/database passwords use systemd credentials.
+
+The restore command refuses the configured production upload target and matching resolved database
+fingerprint, requires explicit isolated confirmation and empty targets, validates payload version,
+checksum, and symlink safety, restores without ownership/privilege statements, verifies application
+tables, and writes elapsed-time evidence against RTO 4 hours. ADR 0010 and the deployment runbook
+cover provider separation/versioning, credentials, initialization, alerting, rehearsal, and growth.
+Seven focused recovery tests and four pilot-infrastructure tests pass, including controlled complete
+backup/restore orchestration, stale backup detection, destructive-guard rejection, and shell syntax.
+Full regression is in progress. The selected remote repository, actual encrypted transfer, and a
+timed VPS isolated restore remain M5-gating environment evidence.
+
+## Implementation tracking — 15 August 2026 (M3 backup and restore locally complete)
+
+Final evidence passes 59 backend unit/configuration/security/recovery tests, 32 disposable-
+PostgreSQL integration tests, 55 frontend tests, 11 standard browser tests with one intentional
+mobile golden skip, and one separate real-backend golden test. ESLint, TypeScript, Prisma
+validation, production build, shell syntax, and diff checks pass. The existing large frontend
+chunk warning remains. One overloaded four-worker browser attempt timed out without assertion
+regressions; the suite shares a mutable real-backend fixture, so its checked-in configuration now
+runs one worker and the default command passes all runnable cases deterministically.
+
+ADR 0010 and recovery automation are locally complete. Backup manifests now capture the resolved
+source database fingerprint, allowing the destructive restore guard to work even when the live VPS
+database is unavailable. M5 remains blocked until the selected off-VPS repository records an actual
+encrypted snapshot and an isolated VPS rehearsal proves restored-data age below 24 hours and
+end-to-end recovery below four hours. The next local M3 point is Sentry application telemetry plus
+external uptime and synthetic alert evidence.
+
+## Implementation tracking — 15 August 2026 (M3 Sentry and uptime started)
+
+The M3 observability slice has started with separate server/browser Sentry projects, validated
+release/environment tags, and explicit data-minimization controls. Default PII, request bodies,
+authorization/cookie headers, replay, local variables, customer baskets, and notes are excluded;
+the final event/breadcrumb scrubbers redact credentials, email addresses, and sensitive URL query
+parameters. Request IDs and pseudonymous organization IDs remain the only application correlation
+identifiers.
+
+Node telemetry will initialize before Express, capture unhandled and 5xx failures, and flush on
+graceful shutdown. React telemetry will cover the existing customer/admin error boundaries and
+global failures. Authenticated production builds may upload hidden source maps and remove local map
+artifacts after upload. External monitoring targets public HTTPS readiness, while a local
+operator-only command checks readiness and emits a tagged synthetic exception without adding a
+production HTTP attack surface. Hosted alert receipt, retention/access review, and monitor outage
+evidence remain deployment tasks.
+
+## Implementation tracking — 15 August 2026 (M3 Sentry and uptime implemented)
+
+The application-side observability slice is implemented. Sentry loads before the Node API, reports
+uncaught/5xx failures once, ignores health-probe failures, and flushes during graceful shutdown.
+React initializes before application lazy imports and reports global plus customer/admin render-
+boundary failures. Server and browser projects use the same validated immutable release but
+separate DSNs. Both disable PII, users, cookies, headers, bodies, query data, database values, local
+variables, replay, and default tracing; final scrubbers remove credentials, email, notes, sensitive
+keys/query values, and oversized context.
+
+The deployment build can upload hidden source maps using a root-only build token and removes map
+artifacts afterward. A host-only command checks HTTPS readiness, PostgreSQL status and release,
+then emits a per-release tagged synthetic Sentry issue and flushes locally. No public alert trigger
+was introduced. ADR 0011 and the pilot runbook fix the external monitor at a 60-second interval,
+10-second timeout, two consecutive failures/two recoveries, and two independently routed alert
+destinations; they also define restricted MFA-protected Sentry access, short retention, provider
+receipt verification, and a non-disruptive induced 404/recovery rehearsal.
+
+Nine focused backend/infrastructure tests and four frontend telemetry/error-boundary tests pass,
+with TypeScript and ESLint clean. Full regression is in progress. Hosted event receipt, actual
+Sentry notification, external uptime failure/recovery notification, and access/retention evidence
+remain environment-dependent M3/M5 gates and are not claimed by local SDK transport acceptance.
+
+## Implementation tracking — 15 August 2026 (M3 Sentry and uptime locally complete)
+
+Final regression passes 64 backend unit/configuration/security/recovery/telemetry tests, 32
+disposable-PostgreSQL integration tests, 57 frontend tests, 11 standard browser tests with one
+intentional mobile golden skip, and one separate real-backend golden flow. ESLint, TypeScript,
+Prisma validation, production build, script/executable and diff checks, and an instrumented
+production-start-path readiness smoke pass. The default deployed build has no source-map files.
+The production dependency audit is clean; five existing Vite/Vitest-only development advisories
+require a separately tested major toolchain upgrade and do not ship as a public runtime service.
+
+ADR 0011 and application-side observability are locally complete. Environment evidence is still
+mandatory: create both Sentry projects, restrict access and retention, upload one release's hidden
+maps, correlate the validator event ID, prove two-destination Sentry delivery, and prove external
+uptime failure/recovery notifications. The next local M3 implementation is pagination/bounded
+analytics plus query-plan/load/capacity evidence. Actual VPS/TLS, off-VPS restore, and hosted
+monitor execution remain pilot gates.
+
 ## Required test evidence
 
 | Layer | Minimum evidence | Required at |
@@ -625,9 +812,9 @@ recorded in the completion register. “Code is written” is not a completion s
 |---|---|---|---|---|---|
 | D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
-| M1 safety baseline | Foundation implemented; final enforcement gated | — | Request context, safe errors, limiter, tokens, expand/backfill, compatibility writes, 7-root local verification, auth/tenant extraction, upload ownership, cross-tenant negatives, and local final-enforcement rehearsal pass; staging zero-issue verify/enforce remains. | — | 15 Aug 2026 |
-| M2 bounded order cycle | Yazan local backend complete; joint/frontend/staging closure remains | — | QR/session, idempotency, capacity, availability, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, authoritative recovery, secure TableManagement QR routing, and real-backend golden E2E pass. Alaa handoff and staging evidence remain. | Yazan + Alaa | 15 Aug 2026 |
-| M3 Phase 1 pilot infrastructure | In progress — runtime baseline locally complete | ADR 0008 | 44 unit/config, 26 PostgreSQL integration, 45 frontend, and 8 browser E2E tests plus production runtime smoke pass. Backup/restore, Sentry, real VPS/TLS execution, and capacity evidence remain. | Yazan | 15 Aug 2026 |
+| M1 safety baseline | Local implementation complete; final enforcement staging-gated | ADR 0009 | Request context, safe errors, limiter, token/session revocation, SuperAdmin MFA/HttpOnly session, organization/member contract, expand/backfill, upload ownership, cross-tenant negatives, and clean/corrupt final-enforcement rehearsal pass; staging zero-issue verify/enforce and TLS enrollment remain. | Yazan | 15 Aug 2026 |
+| M2 bounded order cycle | Local joint implementation accepted; staging/release evidence remains | `01b5c45` | QR/session, durable and reload-safe idempotency, capacity, admin availability control, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, secure QR routing, real-backend desktop golden E2E, and mocked mobile recovery pass. | Yazan + Alaa | 15 Aug 2026 |
+| M3 Phase 1 pilot infrastructure | In progress — runtime/security/recovery/observability automation locally complete | ADRs 0008–0011 | Final local regression: 64 unit/config/security/recovery, 32 PostgreSQL integration, 57 frontend, 11 standard browser plus one separate golden E2E pass; lint, TypeScript, Prisma, build, no-public-map, and production dependency audit pass. Hosted backup/restore, Sentry/uptime notifications, real VPS/TLS, pagination/analytics, and capacity evidence remain. | Yazan | 15 Aug 2026 |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |
 | M6 launch | Not started | — | — | — | — |

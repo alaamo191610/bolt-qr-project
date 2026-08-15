@@ -8,7 +8,8 @@
    npm install
    ```
 
-2. Copy `.env.example` to `.env`, then set `DATABASE_URL` and a private `JWT_SECRET`.
+2. Copy `.env.example` to `.env`, then set `DATABASE_URL`, a private `JWT_SECRET`, and an
+   independent `SUPER_ADMIN_MFA_ENCRYPTION_KEY` (`openssl rand -hex 32`).
 
 3. Synchronize the local database schema:
 
@@ -30,7 +31,8 @@
 
 Open [the super-admin login](http://localhost:5175/super-admin/login?lang=en).
 
-For the Phase 1 VPS topology, deployment, security boundaries, and rollback procedure, see the
+For the Phase 1 VPS topology, deployment, security boundaries, encrypted off-VPS backup, isolated
+restore rehearsal, Sentry/uptime validation, and rollback procedure, see the
 [single-VPS pilot runbook](docs/operations/single-vps-pilot-runbook.md).
 
 The API runs at `http://localhost:3000/api`. For local development, `.env` should include:

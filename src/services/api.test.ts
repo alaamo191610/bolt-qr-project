@@ -4,6 +4,7 @@ import { ApiError, api, handleResponse, isUnauthenticatedError, tokenStore } fro
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe('ApiError response contract', () => {
@@ -66,14 +67,15 @@ describe('isUnauthenticatedError', () => {
 });
 
 describe('token namespaces (G9: shared transport, separate session lifecycles)', () => {
-  it('keeps restaurant and superAdmin tokens in separate storage keys', () => {
+  it('keeps the restaurant bearer in local storage and never stores a SuperAdmin bearer', () => {
     tokenStore.set('restaurant', 'restaurant-token');
     tokenStore.set('superAdmin', 'super-admin-token');
 
     expect(localStorage.getItem('auth_token')).toBe('restaurant-token');
-    expect(localStorage.getItem('superAdminToken')).toBe('super-admin-token');
+    expect(localStorage.getItem('superAdminToken')).toBeNull();
+    expect(sessionStorage.getItem('superAdminToken')).toBeNull();
     expect(tokenStore.get('restaurant')).toBe('restaurant-token');
-    expect(tokenStore.get('superAdmin')).toBe('super-admin-token');
+    expect(tokenStore.get('superAdmin')).toBeNull();
   });
 
   it('clearing one namespace does not touch the other', () => {
@@ -100,7 +102,7 @@ describe('token namespaces (G9: shared transport, separate session lifecycles)',
     expect(headers.Authorization).toBe('Bearer restaurant-token');
   });
 
-  it('api.get with the superAdmin namespace sends the superAdmin token, not the restaurant token', async () => {
+  it('api.get with the superAdmin namespace uses credentials without any JavaScript bearer', async () => {
     tokenStore.set('restaurant', 'restaurant-token');
     tokenStore.set('superAdmin', 'super-admin-token');
 
@@ -111,6 +113,7 @@ describe('token namespaces (G9: shared transport, separate session lifecycles)',
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer super-admin-token');
+    expect(headers.Authorization).toBeUndefined();
+    expect(init.credentials).toBe('include');
   });
 });

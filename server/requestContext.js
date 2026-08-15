@@ -13,6 +13,7 @@ export const getRequestId = value => {
 export const createRequestContextMiddleware = ({
   logger = process.env.NODE_ENV === 'test' ? () => {} : line => console.info(line),
   clock = () => Date.now(),
+  onServerError = () => {},
 } = {}) => (req, res, next) => {
   const startedAt = clock();
   req.requestId = getRequestId(req.get('X-Request-Id'));
@@ -39,6 +40,18 @@ export const createRequestContextMiddleware = ({
       tenantId: req.auth?.organizationId || req.user?.organizationId || req.tableSession?.organizationId,
       userId: req.auth?.userId || req.user?.userId,
     }));
+    if (
+      res.statusCode >= 500
+      && !req.telemetryCaptured
+      && !req.path.startsWith('/api/health')
+    ) {
+      onServerError(new Error(`HTTP ${res.statusCode} response`), {
+        requestId: req.requestId,
+        organizationId: req.auth?.organizationId || req.user?.organizationId || req.tableSession?.organizationId,
+        method: req.method,
+        path: req.path,
+      });
+    }
   });
 
   next();

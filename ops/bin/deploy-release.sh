@@ -41,10 +41,13 @@ printf 'RELEASE_VERSION=%s\n' "$release_id" > "$release_directory/.release.env"
 chmod 0644 "$release_directory/.release.env"
 
 cd "$release_directory"
-npm ci
-npm run prisma:generate
+env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm ci
+env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run prisma:generate
+SENTRY_RELEASE="$release_id" \
+VITE_RELEASE_VERSION="$release_id" \
+VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-${SENTRY_ENVIRONMENT:-pilot}}" \
 npm run build
-npm run migrate:deploy
+env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run migrate:deploy
 
 current_target=""
 if [[ -L "$current_link" ]]; then
@@ -70,4 +73,3 @@ fi
 systemctl restart bolt-qr.service
 curl --fail --silent --show-error --retry 12 --retry-delay 2 "$health_url" >/dev/null
 echo "Deployed release $release_id"
-

@@ -22,6 +22,7 @@ import {
   assertCatalogOwnership,
   createAuthenticate,
   requireOrganizationRole,
+  requireRecentSuperAdmin,
   requireSuperAdmin,
 } from './accessControl.js';
 import { createRateLimiter } from './rateLimit.js';
@@ -49,6 +50,8 @@ import {
   createOrderRealtimeService,
 } from './orderRealtime.js';
 import { resolveRuntimeConfig } from './runtimeConfig.js';
+import { createSuperAdminAuthService, resolveMfaEncryptionKey } from './superAdminAuth.js';
+import { captureServerException, flushServerTelemetry } from './telemetry.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -92,8 +95,18 @@ const corsOptions = {
     return callback(new Error('Origin not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  credentials: true,
   exposedHeaders: ['X-Request-Id', 'Idempotency-Replayed'],
 };
+
+const superAdminSessionCookie = (token, maxAge = 30 * 60) => [
+  `boltqr_superadmin=${token || ''}`,
+  'HttpOnly',
+  'SameSite=Strict',
+  'Path=/api/super-admin',
+  `Max-Age=${maxAge}`,
+  ...(isProduction ? ['Secure'] : []),
+].join('; ');
 
 const {
   resolveTenantSession,
@@ -106,6 +119,12 @@ const authenticate = createAuthenticate({
   db: prisma,
   tokenSecret: JWT_SECRET,
   resolveTenantClaims,
+});
+
+const superAdminAuth = createSuperAdminAuthService({
+  db: prisma,
+  tokenSecret: JWT_SECRET,
+  encryptionKey: resolveMfaEncryptionKey({ jwtSecret: JWT_SECRET }),
 });
 
 const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
@@ -168,7 +187,7 @@ const hasImageSignature = (buffer, mimetype) => {
 };
 
 app.disable('x-powered-by');
-app.use(createRequestContextMiddleware());
+app.use(createRequestContextMiddleware({ onServerError: captureServerException }));
 app.use((req, res, next) => {
   const requestHost = req.get('x-forwarded-host') || req.get('host');
   cors({
@@ -564,7 +583,7 @@ app.patch(
     const userId = String(req.params.userId || '');
     const role = req.body.role ? String(req.body.role).toUpperCase() : undefined;
     const status = req.body.status ? String(req.body.status).toUpperCase() : undefined;
-    if (!isUuid(userId) || (role && !ORGANIZATION_ROLES.includes(role)) ||
+    if (!isUuid(userId) || (!role && !status) || (role && !ORGANIZATION_ROLES.includes(role)) ||
       (status && !MEMBERSHIP_STATUSES.includes(status))) {
       return res.status(400).json({ error: 'Invalid membership update' });
     }
@@ -2489,33 +2508,33 @@ app.delete('/api/upload/:filename', authenticate, async (req, res) => {
 app.post('/api/super-admin/login', authRateLimit, async (req, res) => {
   const { email, password } = req.body;
   try {
-    const superAdmin = await prisma.superAdmin.findUnique({ where: { email } });
-
-    if (!superAdmin) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    if (!(await bcrypt.compare(password, superAdmin.password))) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Update last login
-    await prisma.superAdmin.update({
-      where: { id: superAdmin.id },
-      data: { last_login: new Date() }
-    });
-
-    const token = issueToken(
-      TOKEN_TYPES.SUPER_ADMIN_SESSION,
-      { id: superAdmin.id, email: superAdmin.email, role: 'SUPER_ADMIN' },
-      JWT_SECRET,
-    );
-
-    res.json({
-      token,
-      user: { id: superAdmin.id, email: superAdmin.email, name: superAdmin.name, role: 'SUPER_ADMIN' }
-    });
+    res.json(await superAdminAuth.beginLogin({ email, password }));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, req, err);
+  }
+});
+
+app.post('/api/super-admin/mfa/verify', authRateLimit, async (req, res) => {
+  try {
+    const { token, ...response } = await superAdminAuth.completeLogin({
+      challengeToken: req.body.challengeToken,
+      code: req.body.code,
+      recoveryCode: req.body.recoveryCode,
+    });
+    res.setHeader('Set-Cookie', superAdminSessionCookie(token));
+    res.json(response);
+  } catch (err) {
+    sendError(res, req, err);
+  }
+});
+
+app.post('/api/super-admin/logout', authenticate, requireSuperAdmin, async (req, res) => {
+  try {
+    await superAdminAuth.revokeSessions(req.user.id);
+    res.setHeader('Set-Cookie', superAdminSessionCookie('', 0));
+    res.json({ success: true });
+  } catch (err) {
+    sendError(res, req, err);
   }
 });
 
@@ -2591,7 +2610,12 @@ app.get('/api/super-admin/stats', authenticate, requireSuperAdmin, async (req, r
 });
 
 // Update restaurant subscription plan
-app.put('/api/super-admin/restaurants/:id/plan', authenticate, requireSuperAdmin, async (req, res) => {
+app.put(
+  '/api/super-admin/restaurants/:id/plan',
+  authenticate,
+  requireSuperAdmin,
+  requireRecentSuperAdmin(),
+  async (req, res) => {
   const { plan, status, subscription_end } = req.body;
   const restaurantId = req.params.id;
   const allowedPlans = new Set(['STANDARD', 'BASIC', 'PRO']);
@@ -2617,14 +2641,24 @@ app.put('/api/super-admin/restaurants/:id/plan', authenticate, requireSuperAdmin
         subscription_status: status || 'ACTIVE',
         subscription_end: subscription_end ? new Date(subscription_end) : null,
         ...limits
-      }
+      },
+      select: {
+        id: true,
+        subscription_plan: true,
+        subscription_status: true,
+        subscription_end: true,
+        max_tables: true,
+        max_menu_items: true,
+        max_staff_accounts: true,
+      },
     });
 
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+  },
+);
 
 if (isProduction) {
   const clientDist = path.resolve(process.cwd(), 'dist');
@@ -2654,6 +2688,13 @@ app.use((err, req, res, next) => {
     return sendError(res, req, Object.assign(err, { status: 403 }));
   }
   if (!err?.status || err.status >= 500) {
+    req.telemetryCaptured = true;
+    captureServerException(err, {
+      requestId: req.requestId,
+      organizationId: req.auth?.organizationId || req.user?.organizationId || req.tableSession?.organizationId,
+      method: req.method,
+      path: req.path,
+    });
     console.error('Unhandled request error:', logSafeError(err));
   }
   return sendError(res, req, err);
@@ -2683,6 +2724,7 @@ if (process.env.NODE_ENV !== 'test') {
     io.close(async () => {
       try {
         await prisma.$disconnect();
+        await flushServerTelemetry(2_000);
         clearTimeout(forceExit);
         console.info(JSON.stringify({ event: 'server_shutdown_complete', signal }));
         process.exit(0);

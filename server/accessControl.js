@@ -9,12 +9,19 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
 
   return async (req, res, next) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+    const cookieToken = String(req.headers.cookie || '')
+      .split(';')
+      .map(value => value.trim())
+      .find(value => value.startsWith('boltqr_superadmin='))
+      ?.slice('boltqr_superadmin='.length);
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : cookieToken;
+    if (!token) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
     try {
-      const token = authHeader.slice('Bearer '.length).trim();
       const claims = verifyAuthToken(token, tokenSecret);
       if (!claims?.id && !claims?.sub) {
         return res.status(403).json({ error: 'Invalid token' });
@@ -23,9 +30,13 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
       if (claims.role === 'SUPER_ADMIN') {
         const superAdmin = await db.superAdmin.findUnique({
           where: { id: claims.id },
-          select: { id: true },
+          select: { id: true, active: true, session_version: true, mfa_enabled_at: true },
         });
-        if (!superAdmin) return res.status(403).json({ error: 'Invalid token' });
+        if (!superAdmin?.active || !superAdmin.mfa_enabled_at || claims.mfa !== true
+          || !Number.isInteger(claims.sessionVersion)
+          || claims.sessionVersion !== superAdmin.session_version) {
+          return res.status(403).json({ error: 'Invalid token' });
+        }
         req.user = claims;
       } else {
         const session = await resolveTenantClaims(claims);
@@ -60,6 +71,20 @@ export const requireSuperAdmin = (req, res, next) => {
   }
   next();
 };
+
+export const requireRecentSuperAdmin = (maxAgeSeconds = 10 * 60, clock = () => Date.now()) =>
+  (req, res, next) => {
+    const authenticatedAt = Number(req.user?.authTime);
+    const ageSeconds = Math.floor(clock() / 1000) - authenticatedAt;
+    if (req.user?.role !== 'SUPER_ADMIN' || !Number.isInteger(authenticatedAt)
+      || ageSeconds < -60 || ageSeconds > maxAgeSeconds) {
+      return res.status(401).json({
+        error: 'Recent SuperAdmin authentication is required',
+        code: 'SUPER_ADMIN_REAUTH_REQUIRED',
+      });
+    }
+    next();
+  };
 
 export const requireOrganizationRole = (...roles) => (req, res, next) => {
   if (!req.auth?.membershipRole || !roles.includes(req.auth.membershipRole)) {

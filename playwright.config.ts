@@ -2,7 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+  // This suite includes one shared mutable real-backend fixture. Serial execution prevents the
+  // mocked desktop journeys from competing with its database/Vite startup and makes the default
+  // local command match CI's deterministic isolation.
+  fullyParallel: false,
+  workers: 1,
   reporter: 'html',
   use: {
     baseURL: 'http://127.0.0.1:4173',

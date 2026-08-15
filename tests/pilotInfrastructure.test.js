@@ -10,6 +10,7 @@ test('systemd service runs one hardened unprivileged process with persistent upl
 
   assert.match(service, /^User=boltqr$/m);
   assert.match(service, /^Group=boltqr$/m);
+  assert.match(service, /^SupplementaryGroups=boltqruploads$/m);
   assert.match(service, /^EnvironmentFile=\/etc\/bolt-qr\/bolt-qr\.env$/m);
   assert.match(service, /^EnvironmentFile=-\/opt\/bolt-qr\/current\/\.release\.env$/m);
   assert.match(service, /^ExecStartPre=\/usr\/bin\/npm run migrate:deploy$/m);
@@ -44,7 +45,7 @@ test('deployment scripts pass shell syntax checks and exclude mutable or secret 
   const deploy = await read('ops/bin/deploy-release.sh');
   assert.match(deploy, /--exclude '\.env'/);
   assert.match(deploy, /--exclude 'uploads'/);
-  assert.match(deploy, /npm ci/);
+  assert.match(deploy, /env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm ci/);
   assert.match(deploy, /npm run migrate:deploy/);
   assert.match(deploy, /mv -Tf "\$next_link" "\$current_link"/);
   assert.match(deploy, /curl --fail/);
@@ -62,5 +63,43 @@ test('production environment template uses loopback and keeps uploads outside re
   assert.match(environment, /^TRUST_PROXY_HOPS=1$/m);
   assert.match(environment, /^UPLOAD_DIR=\/var\/lib\/bolt-qr\/uploads$/m);
   assert.match(environment, /^JWT_SECRET=REPLACE_/m);
+  assert.match(environment, /^SUPER_ADMIN_MFA_ENCRYPTION_KEY=REPLACE_WITH_64_HEX_CHARACTERS$/m);
   assert.doesNotMatch(environment, /development-only-change-me/);
+});
+
+test('Sentry starts before the API and production source maps are uploaded then removed', async () => {
+  const packageJson = JSON.parse(await read('package.json'));
+  const deploy = await read('ops/bin/deploy-release.sh');
+  const vite = await read('vite.config.ts');
+  const applicationEnvironment = await read('ops/env/bolt-qr.env.example');
+  const buildEnvironment = await read('ops/env/bolt-qr-sentry-build.env.example');
+
+  assert.equal(packageJson.scripts['start:server'], 'node --import ./server/instrumentation.js server/index.js');
+  assert.match(packageJson.scripts.server, /--import \.\/server\/instrumentation\.js/);
+  assert.match(deploy, /SENTRY_RELEASE="\$release_id"/);
+  assert.match(deploy, /VITE_RELEASE_VERSION="\$release_id"/);
+  assert.match(deploy, /env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run migrate:deploy/);
+  assert.match(vite, /sourcemap: sentrySourceMapsEnabled \? 'hidden' : false/);
+  assert.match(vite, /filesToDeleteAfterUpload: \['\.\/dist\/\*\*\/\*\.map'\]/);
+  assert.match(applicationEnvironment, /^SENTRY_DSN=https:\/\//m);
+  assert.match(applicationEnvironment, /^SENTRY_TRACES_SAMPLE_RATE=0$/m);
+  assert.match(buildEnvironment, /^SENTRY_AUTH_TOKEN=REPLACE_/m);
+  assert.match(buildEnvironment, /^VITE_SENTRY_DSN=https:\/\//m);
+});
+
+test('operator synthetic validation checks HTTPS readiness and has no public trigger route', async () => {
+  const validatorPath = new URL('../ops/bin/verify-observability.js', import.meta.url).pathname;
+  const validator = await read('ops/bin/verify-observability.js');
+  const server = await read('server/index.js');
+  const telemetry = await read('server/telemetry.js');
+  const syntax = spawnSync(process.execPath, ['--check', validatorPath], { encoding: 'utf8' });
+
+  assert.equal(syntax.status, 0, syntax.stderr);
+  assert.match(validator, /UPTIME_HEALTH_URL must use HTTPS/);
+  assert.match(validator, /health\?\.status !== 'ready'/);
+  assert.match(validator, /health\?\.database !== 'ok'/);
+  assert.match(validator, /captureSyntheticAlert\(\)/);
+  assert.match(validator, /flushServerTelemetry\(10_000\)/);
+  assert.match(telemetry, /\['bolt-qr-observability-validation', telemetryRelease\]/);
+  assert.doesNotMatch(server, /synthetic(?:-|_)alert/iu);
 });

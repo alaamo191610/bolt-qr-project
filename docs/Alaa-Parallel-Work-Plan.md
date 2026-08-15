@@ -115,15 +115,16 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
 5. ~~Consolidate the SuperAdmin/session boundary per G9~~ — **Done**
    (`codex/api-response-typing` @ `828c46c`). `superAdminService.ts` no longer duplicates
    `api.ts`'s fetch/error logic by hand; it now calls `api.get`/`api.put` with a
-   `TokenNamespace` (`'restaurant' | 'superAdmin'`) backed by a `tokenStore` abstraction.
-   Restaurant admin and SuperAdmin still use separate storage keys, expiry, and logout paths
+   `TokenNamespace` (`'restaurant' | 'superAdmin'`) transport boundary. ADR 0009 supersedes
+   SuperAdmin browser token storage: platform sessions now use an HttpOnly SameSite cookie and
+   frontend JavaScript never receives that bearer.
+   Restaurant admin and SuperAdmin still use separate credential, expiry, and logout paths
    — only the transport mechanics are shared, per the constraint above. All ~54 existing
    restaurant-admin call sites default to the `'restaurant'` namespace and are unaffected.
    Covered by new tests in `src/services/api.test.ts` and
-   `src/services/superAdminService.test.ts` proving token isolation (a SuperAdmin token is
-   never sent on a default request and vice versa). Needs Yazan's review before merge to
-   main, per the plan's session/security PR checklist item, even though it's built and
-   tested.
+   `src/services/superAdminService.test.ts` proving credential isolation (the restaurant bearer is
+   never sent on a platform request, and platform cookie mode is not used by default restaurant
+   requests). Yazan's ADR 0009 review is complete.
 
 **Found and fixed after the original five (still highest-risk-first):**
 

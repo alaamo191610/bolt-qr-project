@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { captureReactError } from '../../telemetry';
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -28,7 +29,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Hosted error reporting is added in M3. Do not send user data or component props here.
+    captureReactError(error, {
+      scope: this.props.scope,
+      componentStack: errorInfo.componentStack,
+    });
     console.error('React render failure', {
       scope: this.props.scope,
       message: error.message,
