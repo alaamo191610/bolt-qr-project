@@ -93,7 +93,15 @@ export const superAdminService = {
         plan: string,
         status?: string,
         subscription_end?: string
-    ) {
+    ): Promise<{
+        id: string
+        subscription_plan: SubscriptionPlan
+        subscription_status: string
+        subscription_end: string | null
+        max_tables: number
+        max_menu_items: number
+        max_staff_accounts: number
+    }> {
         return api.put(`/super-admin/restaurants/${restaurantId}/plan`, { plan, status, subscription_end }, 'superAdmin');
     },
 };

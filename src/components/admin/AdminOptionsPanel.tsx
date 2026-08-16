@@ -90,16 +90,49 @@ export default function AdminOptionsPanel({
   };
   const [combo, setCombo] = useState<ComboGroup>({ items: [] });
 
-  type OptionsResponse = {
-    allIngredients: Array<{ id: string; name_en: string | null; name_ar: string | null; extra_price: number | null }>;
-    allMenus: Array<{ id: string; name_en: string | null; price: number | null }>;
-    menuIngredients: IngCfg[];
-    menuModifierGroups: Array<{ modifier_group: ModGroup & { modifier_options?: ModOption[] } }>;
+  // GET /api/menus/:id/options (server/index.js) - raw wire shape. All ids
+  // are Postgres Int (menus/ingredients/modifier_groups/modifier_options/
+  // combo_groups/combo_group_items are all `Int @id`), not the strings this
+  // component's own state types use - coerced below, same rule as
+  // menuService.ts.
+  type RawOptionsResponse = {
+    allIngredients: Array<{ id: number; name_en: string | null; name_ar: string | null; extra_price: number | null }>;
+    allMenus: Array<{ id: number; name_en: string | null; price: number | string | null }>;
+    menuIngredients: Array<{
+      ingredient_id: number;
+      removable?: boolean;
+      extra_available?: boolean;
+      max_extra?: number | null;
+      extra_price_override?: number | string | null;
+    }>;
+    menuModifierGroups: Array<{
+      modifier_group: {
+        id: number;
+        name_en: string | null;
+        name_ar: string | null;
+        selection_type: string | null;
+        min_select: number | null;
+        max_select: number | null;
+        required: boolean | null;
+        modifier_options?: Array<{
+          id: number;
+          name_en: string | null;
+          name_ar: string | null;
+          price_delta: number | string | null;
+          max_qty: number | null;
+          is_default: boolean | null;
+        }>;
+      };
+    }>;
     comboGroups: Array<{
-      id?: string;
+      id?: number;
       min_select?: number | null;
       max_select?: number | null;
-      combo_group_items?: ComboItem[];
+      combo_group_items?: Array<{
+        child_menu_id: number;
+        upgrade_price_delta?: number | string | null;
+        is_default?: boolean | null;
+      }>;
     }>;
   };
 
@@ -108,16 +141,16 @@ export default function AdminOptionsPanel({
       setLoading(true);
       setError(null);
 
-      const data = await api.get(`/menus/${menuId}/options`) as OptionsResponse;
+      const data = await api.get<RawOptionsResponse>(`/menus/${menuId}/options`);
 
-      setAllIngredients(data.allIngredients || []);
-      setAllMenus(data.allMenus || []);
+      setAllIngredients((data.allIngredients || []).map((i) => ({ ...i, id: String(i.id) })));
+      setAllMenus((data.allMenus || []).map((m) => ({ ...m, id: String(m.id), price: m.price == null ? null : Number(m.price) })));
 
       // ingredients for this menu
       const mi = data.menuIngredients;
       setIngCfg(
         (mi || []).map((r) => ({
-          ingredient_id: r.ingredient_id,
+          ingredient_id: String(r.ingredient_id),
           removable: !!r.removable,
           extra_available: !!r.extra_available,
           max_extra: Number(r.max_extra ?? 0),
@@ -134,7 +167,7 @@ export default function AdminOptionsPanel({
         .filter(Boolean);
       setGroups(
         (g || []).map((gr) => ({
-          id: gr.id,
+          id: String(gr.id),
           name_en: gr.name_en || "",
           name_ar: gr.name_ar,
           selection_type: (gr.selection_type || "single") as "single" | "multi",
@@ -142,7 +175,7 @@ export default function AdminOptionsPanel({
           max_select: gr.max_select,
           required: !!gr.required,
           options: (gr.modifier_options || []).map((o) => ({
-            id: o.id,
+            id: String(o.id),
             name_en: o.name_en || "",
             name_ar: o.name_ar,
             price_delta: Number(o.price_delta || 0),
@@ -158,11 +191,11 @@ export default function AdminOptionsPanel({
       setCombo(
         grp
           ? {
-            id: grp.id,
+            id: grp.id == null ? undefined : String(grp.id),
             min_select: grp.min_select,
             max_select: grp.max_select,
             items: (grp.combo_group_items || []).map((it) => ({
-              child_menu_id: it.child_menu_id,
+              child_menu_id: String(it.child_menu_id),
               upgrade_price_delta: Number(it.upgrade_price_delta || 0),
               is_default: !!it.is_default,
             })),

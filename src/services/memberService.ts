@@ -28,14 +28,14 @@ export interface UpdateMemberInput {
 
 export const memberService = {
   async list(): Promise<OrganizationMember[]> {
-    return await api.get('/organization/members');
+    return await api.get<OrganizationMember[]>('/organization/members');
   },
 
   async add(input: AddMemberInput): Promise<OrganizationMember> {
-    return await api.post('/organization/members', input);
+    return await api.post<OrganizationMember>('/organization/members', input);
   },
 
   async update(userId: string, input: UpdateMemberInput): Promise<OrganizationMember> {
-    return await api.patch(`/organization/members/${userId}`, input);
+    return await api.patch<OrganizationMember>(`/organization/members/${userId}`, input);
   },
 };

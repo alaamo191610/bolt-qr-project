@@ -1,6 +1,6 @@
 // src/hooks/useAdminMonetary.ts
 import { useEffect, useState } from 'react';
-import { adminService } from '../services/adminService';
+import { adminService, type AdminMonetarySettings } from '../services/adminService';
 import { api } from '../services/api';
 import { DEFAULT_PRICING, DEFAULT_BILLING, type PricingPrefs, type BillingSettings } from '../pricing/types';
 
@@ -15,7 +15,12 @@ export function useAdminMonetary(adminId?: string) {
     let alive = true;
     (async () => {
       try {
-        let data;
+        let data: AdminMonetarySettings | {
+          pricing_prefs: PricingPrefs;
+          billing_settings: BillingSettings;
+          restaurant_name: string | null;
+          logo_url: string | null;
+        };
 
         // For customers (no adminId), use table code from URL
         if (!adminId) {
@@ -25,13 +30,13 @@ export function useAdminMonetary(adminId?: string) {
 
           if (tableCode) {
             // Use public pricing endpoint (no auth required)
-            data = await api.get('/public/pricing', {
+            data = await api.get<AdminMonetarySettings>('/public/pricing', {
               table: tableCode,
               ...(restaurantId ? { adminId: restaurantId } : {})
             });
           } else {
             // Fallback to defaults if no table code
-            data = { pricing_prefs: DEFAULT_PRICING, billing_settings: DEFAULT_BILLING };
+            data = { pricing_prefs: DEFAULT_PRICING, billing_settings: DEFAULT_BILLING, restaurant_name: null, logo_url: null };
           }
         } else {
           // For admin users, use authenticated endpoint

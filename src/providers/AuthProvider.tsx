@@ -1,6 +1,6 @@
 // src/providers/AuthProvider.tsx
 import React from "react";
-import { adminService } from "../services/adminService";
+import { adminService, type LoginResponse } from "../services/adminService";
 import { api, isUnauthenticatedError } from "../services/api";
 import { getErrorMessage } from "../utils/errors";
 
@@ -20,6 +20,16 @@ export interface OrganizationMembership {
   slug: string;
   role: "OWNER" | "MANAGER" | "STAFF";
   current: boolean;
+}
+
+// GET /api/auth/session (server/index.js)
+interface SessionResponse {
+  user: User;
+  profile: {
+    id: string;
+    restaurantName: string | null;
+    preferredLanguage: string | null;
+  };
 }
 
 type AuthCtxType = {
@@ -50,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
 
   const loadOrganizations = React.useCallback(async () => {
-    const memberships = await api.get("/auth/organizations");
+    const memberships = await api.get<OrganizationMembership[]>("/auth/organizations");
     setOrganizations(Array.isArray(memberships) ? memberships : []);
   }, []);
 
@@ -62,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const session = await api.get("/auth/session");
+      const session = await api.get<SessionResponse>("/auth/session");
       if (session?.user) {
         setUser(session.user);
         await loadOrganizations();
@@ -132,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const switchOrganization = async (organizationId: string) => {
-    const { token, user: authUser } = await api.post("/auth/switch-organization", { organizationId });
+    const { token, user: authUser } = await api.post<LoginResponse>("/auth/switch-organization", { organizationId });
     localStorage.setItem("auth_token", token);
     setUser(authUser);
     await loadOrganizations();

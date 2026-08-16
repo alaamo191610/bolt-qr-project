@@ -366,7 +366,7 @@ const ImageUploadField = ({
       const formData = new FormData();
       formData.append("file", file);
 
-      const data = await api.upload('/upload', formData);
+      const data = await api.upload<{ url: string; filename: string }>('/upload', formData);
       const imageUrl = data.url;
 
       onChange(imageUrl);
