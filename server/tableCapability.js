@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { ApiError, ERROR_CODES } from './errors.js';
 import { TOKEN_TYPES, issueToken, verifyToken } from './tokenPolicy.js';
+import { hasRestaurantAccess } from './subscriptionPolicy.js';
 
 export const TABLE_SESSION_EXPIRES_IN_SECONDS = 30 * 60;
 const CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -44,7 +45,15 @@ const tableSessionSelection = {
         },
       },
       organization: { select: { id: true, active: true } },
-      admin: { select: { id: true, organization_id: true, subscription_status: true } },
+      admin: {
+        select: {
+          id: true,
+          organization_id: true,
+          subscription_status: true,
+          subscription_end: true,
+          trial_ends_at: true,
+        },
+      },
     },
   },
 };
@@ -56,7 +65,7 @@ const isUsable = capability => Boolean(
   && capability.table.organization?.active
   && capability.organization_id === capability.table.organization_id
   && capability.organization_id === capability.table.admin.organization_id
-  && ['ACTIVE', 'TRIAL'].includes(capability.table.admin.subscription_status),
+  && hasRestaurantAccess(capability.table.admin),
 );
 
 export const createTableCapabilityService = ({ db, tokenSecret }) => {

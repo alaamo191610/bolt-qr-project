@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { TOKEN_TYPES, issueToken, verifyToken } from './tokenPolicy.js';
+import { hasRestaurantAccess } from './subscriptionPolicy.js';
 
 export const REALTIME_PROTOCOL_VERSION = 1;
 export const SOCKET_AUTHORIZATION_FAILED = 'SOCKET_AUTHORIZATION_FAILED';
@@ -204,9 +205,18 @@ export const createOrderRealtimeService = ({
         status: true,
         version: true,
         updated_at: true,
+        admin: {
+          select: {
+            subscription_status: true,
+            subscription_end: true,
+            trial_ends_at: true,
+          },
+        },
       },
     });
-    if (!order) throw new OrderTrackingAuthorizationError('NOT_FOUND');
+    if (!order || !hasRestaurantAccess(order.admin)) {
+      throw new OrderTrackingAuthorizationError('NOT_FOUND');
+    }
     return order;
   };
 
@@ -251,6 +261,11 @@ export const createOrderRealtimeService = ({
       socket.on('join-order', async (payload, acknowledge) => {
         try {
           const authorization = await authorizeOrder(payload);
+          socket.data = socket.data || {};
+          socket.data.orderAuthorization = {
+            organizationId: authorization.order.organization_id,
+          };
+          activeSockets.set(socketKey, socket);
           await socket.join([authorization.room, authorization.legacyRoom]);
           if (typeof acknowledge === 'function') {
             acknowledge({ ok: true, protocolVersion: REALTIME_PROTOCOL_VERSION });
@@ -272,6 +287,17 @@ export const createOrderRealtimeService = ({
     for (const [socketKey, socket] of activeSockets) {
       const authorization = socket.data?.adminAuthorization;
       if (authorization?.organizationId !== organizationId || authorization.userId !== userId) continue;
+      activeSockets.delete(socketKey);
+      socket.disconnect?.(true);
+    }
+  };
+
+  const revokeOrganization = ({ organizationId }) => {
+    for (const [socketKey, socket] of activeSockets) {
+      const adminAuthorization = socket.data?.adminAuthorization;
+      const orderAuthorization = socket.data?.orderAuthorization;
+      if (adminAuthorization?.organizationId !== organizationId
+        && orderAuthorization?.organizationId !== organizationId) continue;
       activeSockets.delete(socketKey);
       socket.disconnect?.(true);
     }
@@ -316,6 +342,7 @@ export const createOrderRealtimeService = ({
     resolveTrackingOrder,
     getOrCreateTrackingToken,
     revokeMembership,
+    revokeOrganization,
     revokeTrackingToken,
     register,
     emitCreated,

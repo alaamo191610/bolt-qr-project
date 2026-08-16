@@ -59,6 +59,8 @@ import {
   resolveCursorPagination,
 } from './pagination.js';
 import { createAnalyticsService, resolveAnalyticsRange } from './analytics.js';
+import { createRestaurantInvitationService } from './restaurantInvitations.js';
+import { hasRestaurantAccess, validateSubscriptionInput } from './subscriptionPolicy.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
@@ -133,6 +135,7 @@ const superAdminAuth = createSuperAdminAuthService({
   tokenSecret: JWT_SECRET,
   encryptionKey: resolveMfaEncryptionKey({ jwtSecret: JWT_SECRET }),
 });
+const restaurantInvitations = createRestaurantInvitationService({ db: prisma });
 
 const tableCapabilities = createTableCapabilityService({ db: prisma, tokenSecret: JWT_SECRET });
 const analyticsService = createAnalyticsService({ database: prisma });
@@ -421,6 +424,25 @@ app.post('/api/auth/login', authRateLimit, async (req, res) => {
   } catch (err) {
     console.error('Tenant login failed:', err);
     res.status(500).json({ error: 'Unable to sign in' });
+  }
+});
+
+app.post('/api/auth/activate', authRateLimit, async (req, res) => {
+  try {
+    const admin = await restaurantInvitations.activate({
+      token: req.body.token,
+      password: req.body.password,
+    });
+    res.json({
+      activated: true,
+      restaurant: {
+        id: admin.id,
+        email: admin.email,
+        restaurantName: admin.restaurant_name,
+      },
+    });
+  } catch (error) {
+    sendError(res, req, error);
   }
 });
 
@@ -1009,7 +1031,16 @@ app.get('/api/public/menus/:id/config', async (req, res) => {
     const [menu, ingredients, modifierGroups, comboGroups] = await Promise.all([
       prisma.menu.findUnique({
         where: { id: menuId, deleted_at: null },
-        include: { category: true }
+        include: {
+          category: true,
+          admin: {
+            select: {
+              subscription_status: true,
+              subscription_end: true,
+              trial_ends_at: true,
+            },
+          },
+        }
       }),
       prisma.menuIngredient.findMany({
         where: { menu_id: menuId },
@@ -1039,10 +1070,13 @@ app.get('/api/public/menus/:id/config', async (req, res) => {
       })
     ]);
 
-    if (!menu) return res.status(404).json({ error: 'Menu item not found' });
+    if (!menu || !hasRestaurantAccess(menu.admin)) {
+      return res.status(404).json({ error: 'Menu item not found' });
+    }
 
+    const { admin: _subscription, ...publicMenu } = menu;
     res.json({
-      menu,
+      menu: publicMenu,
       ingredients,
       modifierGroups,
       comboGroups
@@ -1322,11 +1356,13 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
           id: true,
           organization_id: true,
           subscription_status: true,
+          subscription_end: true,
+          trial_ends_at: true,
           billing_settings: true,
           pricing_prefs: true
         }
       });
-      if (!targetAdmin || !['ACTIVE', 'TRIAL'].includes(targetAdmin.subscription_status)) {
+      if (!hasRestaurantAccess(targetAdmin)) {
         throw Object.assign(new Error('Restaurant is not accepting orders'), { status: 403 });
       }
 
@@ -2009,15 +2045,24 @@ app.get('/api/public/pricing', async (req, res) => {
         restaurant_name: true,  // 🆕 For customer menu header
         logo_url: true,          // 🆕 For customer menu header
         pricing_prefs: true,
-        billing_settings: true
+        billing_settings: true,
+        subscription_status: true,
+        subscription_end: true,
+        trial_ends_at: true,
       }
     });
 
-    if (!admin) {
+    if (!hasRestaurantAccess(admin)) {
       return res.status(404).json({ error: 'Restaurant settings not found' });
     }
 
-    res.json(admin);
+    const {
+      subscription_status: _status,
+      subscription_end: _subscriptionEnd,
+      trial_ends_at: _trialEndsAt,
+      ...publicPricing
+    } = admin;
+    res.json(publicPricing);
   } catch (err) {
     console.error('Public pricing error:', err);
     res.status(500).json({ error: 'Unable to load pricing settings' });
@@ -2034,11 +2079,16 @@ app.get('/api/public/promotions/validate', orderRateLimit, async (req, res) => {
   }
 
   try {
-    const restaurant = await prisma.admin.findFirst({
-      where: { id: adminId, subscription_status: { in: ['ACTIVE', 'TRIAL'] } },
-      select: { id: true }
+    const restaurant = await prisma.admin.findUnique({
+      where: { id: adminId },
+      select: {
+        id: true,
+        subscription_status: true,
+        subscription_end: true,
+        trial_ends_at: true,
+      }
     });
-    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+    if (!hasRestaurantAccess(restaurant)) return res.status(404).json({ error: 'Restaurant not found' });
 
     const table = tableCode
       ? await prisma.table.findFirst({
@@ -2081,6 +2131,17 @@ app.get('/api/public/menus', async (req, res) => {
   }
 
   try {
+    const restaurant = await prisma.admin.findUnique({
+      where: { id: adminId },
+      select: {
+        subscription_status: true,
+        subscription_end: true,
+        trial_ends_at: true,
+      },
+    });
+    if (!hasRestaurantAccess(restaurant)) {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
     const menus = await prisma.menu.findMany({
       where: {
         user_id: adminId,
@@ -2151,90 +2212,6 @@ app.get('/api/admins', authenticate, requireSuperAdmin, async (req, res) => {
     if (err instanceof PaginationError) return sendError(res, req, err);
     return sendError(res, req, err);
   }
-});
-
-app.post('/api/admins', authRateLimit, async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '');
-  const restaurantName = String(req.body.restaurant_name || '').trim() || email.split('@')[0] || 'Restaurant';
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  }
-
-  try {
-    const [existingIdentity, existingAdmin] = await Promise.all([
-      prisma.user.findUnique({ where: { email }, select: { id: true } }),
-      prisma.admin.findUnique({ where: { email }, select: { id: true } }),
-    ]);
-    if (existingIdentity || existingAdmin) {
-      return res.status(409).json({ error: 'An account with this email already exists' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await prisma.$transaction(async tx => {
-      const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
-      const slugBase = restaurantName
-        .toLowerCase()
-        .normalize('NFKD')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 40) || 'restaurant';
-      const organization = await tx.organization.create({
-        data: { name: restaurantName, slug: `${slugBase}-${suffix}` },
-      });
-      const branch = await tx.branch.create({
-        data: {
-          organization_id: organization.id,
-          code: 'MAIN',
-          name: 'Main Branch',
-          timezone: process.env.DEFAULT_TIMEZONE || 'Asia/Amman',
-          currency: process.env.DEFAULT_CURRENCY || 'JOD',
-        },
-      });
-      const identity = await tx.user.create({
-        data: { email, password_hash: hashedPassword, name: restaurantName },
-      });
-      await tx.organizationUser.create({
-        data: {
-          organization_id: organization.id,
-          user_id: identity.id,
-          default_branch_id: branch.id,
-          role: 'OWNER',
-          status: 'ACTIVE',
-        },
-      });
-      const admin = await tx.admin.create({
-        data: {
-          organization_id: organization.id,
-          default_branch_id: branch.id,
-          email,
-          // Transitional copy; User.password_hash is now authoritative.
-          password: hashedPassword,
-          restaurant_name: restaurantName,
-        },
-        select: publicAdminSelect,
-      });
-      return { admin, organization, identity };
-    });
-    res.status(201).json({
-      ...result.admin,
-      identity_id: result.identity.id,
-      organization_id: result.organization.id,
-    });
-  } catch (err) {
-    if (err.code === 'P2002') {
-      return res.status(409).json({ error: 'An account with this email already exists' });
-    }
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/admins/:id', authenticate, requireSuperAdmin, async (req, res) => {
-  try {
-    await prisma.admin.delete({ where: { id: req.params.id } });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/admin/profile', authenticate, async (req, res) => {
@@ -2630,6 +2607,76 @@ app.post('/api/super-admin/logout', authenticate, requireSuperAdmin, async (req,
 });
 
 // Get all restaurants with subscription info
+app.post(
+  '/api/super-admin/restaurants',
+  authenticate,
+  requireSuperAdmin,
+  requireRecentSuperAdmin(),
+  async (req, res) => {
+    try {
+      const result = await restaurantInvitations.provision({
+        actorSuperAdminId: req.user.id,
+        ownerEmail: req.body.ownerEmail,
+        restaurantName: req.body.restaurantName,
+        plan: req.body.plan,
+        status: req.body.status,
+        subscriptionEnd: req.body.subscriptionEnd,
+        trialEndsAt: req.body.trialEndsAt,
+      });
+      res.status(201).json({
+        restaurant: {
+          id: result.admin.id,
+          organizationId: result.organization.id,
+          ownerEmail: result.user.email,
+          restaurantName: result.admin.restaurant_name,
+          plan: result.admin.subscription_plan,
+          status: result.admin.subscription_status,
+          subscriptionEnd: result.admin.subscription_end,
+          trialEndsAt: result.admin.trial_ends_at,
+          maxTables: result.admin.max_tables,
+          maxMenuItems: result.admin.max_menu_items,
+          maxStaffAccounts: result.admin.max_staff_accounts,
+        },
+        invitation: {
+          token: result.token,
+          expiresAt: result.invitation.expires_at,
+          activationPath: `/activate?token=${encodeURIComponent(result.token)}`,
+        },
+      });
+    } catch (error) {
+      if (Number(error?.status) >= 500 || !error?.status) {
+        console.error('Restaurant provisioning failed:', logSafeError(error));
+      }
+      sendError(res, req, error);
+    }
+  },
+);
+
+app.post(
+  '/api/super-admin/restaurants/:id/invitations',
+  authenticate,
+  requireSuperAdmin,
+  requireRecentSuperAdmin(),
+  async (req, res) => {
+    if (!isUuid(req.params.id)) return res.status(400).json({ error: 'Valid restaurant is required' });
+    try {
+      const result = await restaurantInvitations.rotate({
+        actorSuperAdminId: req.user.id,
+        adminId: req.params.id,
+      });
+      res.status(201).json({
+        invitation: {
+          token: result.token,
+          expiresAt: result.invitation.expires_at,
+          activationPath: `/activate?token=${encodeURIComponent(result.token)}`,
+        },
+      });
+    } catch (error) {
+      sendError(res, req, error);
+    }
+  },
+);
+
 app.get('/api/super-admin/restaurants', authenticate, requireSuperAdmin, async (req, res) => {
   try {
     const { limit, cursor } = resolveCursorPagination(req.query, {
@@ -2668,6 +2715,16 @@ app.get('/api/super-admin/restaurants', authenticate, requireSuperAdmin, async (
         max_menu_items: true,
         max_staff_accounts: true,
         created_at: true,
+        organization: {
+          select: {
+            users: {
+              where: { role: 'OWNER' },
+              orderBy: { created_at: 'asc' },
+              take: 1,
+              select: { status: true },
+            },
+          },
+        },
         _count: {
           select: {
             menus: { where: { deleted_at: null } },
@@ -2678,7 +2735,14 @@ app.get('/api/super-admin/restaurants', authenticate, requireSuperAdmin, async (
       }
     });
 
-    res.json(presentPage(restaurants, limit));
+    const page = presentPage(restaurants, limit);
+    res.json({
+      ...page,
+      items: page.items.map(({ organization, ...restaurant }) => ({
+        ...restaurant,
+        activation_status: organization?.users?.[0]?.status || 'UNKNOWN',
+      })),
+    });
   } catch (err) {
     if (err instanceof PaginationError) return sendError(res, req, err);
     console.error('Restaurant pagination failed:', logSafeError(err));
@@ -2689,14 +2753,27 @@ app.get('/api/super-admin/restaurants', authenticate, requireSuperAdmin, async (
 // Get platform stats
 app.get('/api/super-admin/stats', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const thirtyDaysAgo = new Date();
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const currentAccessWhere = {
+      OR: [
+        {
+          subscription_status: 'ACTIVE',
+          OR: [{ subscription_end: null }, { subscription_end: { gt: now } }],
+        },
+        { subscription_status: 'TRIAL', trial_ends_at: { gt: now } },
+      ],
+    };
     const [totalRestaurants, activeRestaurants, activePlans, recentSignups] = await Promise.all([
       prisma.admin.count(),
-      prisma.admin.count({ where: { subscription_status: 'ACTIVE' } }),
+      prisma.admin.count({ where: currentAccessWhere }),
       prisma.admin.groupBy({
         by: ['subscription_plan'],
-        where: { subscription_status: 'ACTIVE' },
+        where: {
+          subscription_status: 'ACTIVE',
+          OR: [{ subscription_end: null }, { subscription_end: { gt: now } }],
+        },
         _count: { _all: true },
       }),
       prisma.admin.count({ where: { created_at: { gte: thirtyDaysAgo } } }),
@@ -2725,46 +2802,77 @@ app.put(
   requireSuperAdmin,
   requireRecentSuperAdmin(),
   async (req, res) => {
-  const { plan, status, subscription_end } = req.body;
+  const { plan, status, subscription_end, trial_ends_at } = req.body;
   const restaurantId = req.params.id;
-  const allowedPlans = new Set(['STANDARD', 'BASIC', 'PRO']);
-  const allowedStatuses = new Set(['ACTIVE', 'PAST_DUE', 'CANCELLED', 'TRIAL']);
-  if (!allowedPlans.has(plan) || (status && !allowedStatuses.has(status))) {
-    return res.status(400).json({ error: 'Invalid subscription plan or status' });
-  }
+  if (!isUuid(restaurantId)) return res.status(400).json({ error: 'Valid restaurant is required' });
 
   try {
-    // Plan limits based on tier
-    const planLimits = {
-      STANDARD: { max_tables: 10, max_menu_items: 50, max_staff_accounts: 1 },
-      BASIC: { max_tables: 25, max_menu_items: 150, max_staff_accounts: 3 },
-      PRO: { max_tables: 999999, max_menu_items: 999999, max_staff_accounts: 10 }
-    };
-
-    const limits = planLimits[plan] || planLimits.STANDARD;
-
-    const updated = await prisma.admin.update({
-      where: { id: restaurantId },
-      data: {
-        subscription_plan: plan,
-        subscription_status: status || 'ACTIVE',
-        subscription_end: subscription_end ? new Date(subscription_end) : null,
-        ...limits
-      },
-      select: {
-        id: true,
-        subscription_plan: true,
-        subscription_status: true,
-        subscription_end: true,
-        max_tables: true,
-        max_menu_items: true,
-        max_staff_accounts: true,
-      },
+    const subscription = validateSubscriptionInput({
+      plan,
+      status: status || 'ACTIVE',
+      subscriptionEnd: subscription_end,
+      trialEndsAt: trial_ends_at,
     });
+    const updated = await prisma.$transaction(async tx => {
+      const current = await tx.admin.findUnique({ where: { id: restaurantId } });
+      if (!current?.organization_id) {
+        throw Object.assign(new Error('Restaurant not found'), { status: 404 });
+      }
+      const next = await tx.admin.update({
+        where: { id: restaurantId },
+        data: {
+          subscription_plan: subscription.plan,
+          subscription_status: subscription.status,
+          subscription_end: subscription.subscriptionEnd,
+          trial_ends_at: subscription.trialEndsAt,
+          ...subscription.limits,
+        },
+        select: {
+          id: true,
+          organization_id: true,
+          subscription_plan: true,
+          subscription_status: true,
+          subscription_end: true,
+          trial_ends_at: true,
+          max_tables: true,
+          max_menu_items: true,
+          max_staff_accounts: true,
+        },
+      });
+      await tx.platformAuditEvent.create({
+        data: {
+          actor_super_admin_id: req.user.id,
+          organization_id: current.organization_id,
+          action: 'RESTAURANT_SUBSCRIPTION_CHANGED',
+          entity_type: 'Admin',
+          entity_id: restaurantId,
+          metadata: {
+            previous: {
+              plan: current.subscription_plan,
+              status: current.subscription_status,
+              subscriptionEnd: current.subscription_end,
+              trialEndsAt: current.trial_ends_at,
+            },
+            next: {
+              plan: next.subscription_plan,
+              status: next.subscription_status,
+              subscriptionEnd: next.subscription_end,
+              trialEndsAt: next.trial_ends_at,
+            },
+            requestId: req.requestId,
+          },
+        },
+      });
+      return next;
+    }, { isolationLevel: 'Serializable' });
+
+    if (!hasRestaurantAccess(updated)) {
+      orderRealtime.revokeOrganization({ organizationId: updated.organization_id });
+    }
 
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, req, err);
   }
   },
 );

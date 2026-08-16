@@ -952,6 +952,50 @@ p95/error rate/capacity on the selected VPS.
 - Support pilot telemetry and daily risk review; approve production Go/No-Go only with all
   data/security/operations evidence attached.
 
+## Tracking update — 16 August 2026 (SuperAdmin-controlled restaurant onboarding started)
+
+Yazan approved an invite-only Release 1 onboarding policy. Public restaurant signup will be
+removed: only a recently MFA-authenticated SuperAdmin may provision an organization, its MAIN
+branch, OWNER identity/membership, compatibility Admin profile, server-derived plan limits, and a
+single-use activation invitation. The owner will set their own password through the activation
+flow; operators will never choose or store an owner's plaintext password.
+
+This implementation point also closes the subscription-enforcement gap in the tenant session
+boundary. Restaurant REST and authenticated realtime access will remain available only for
+`ACTIVE` subscriptions within their optional end date and non-expired `TRIAL` subscriptions.
+`PAST_DUE`, `CANCELLED`, expired subscriptions/trials, inactive organizations/users, and invited or
+suspended memberships fail closed. Public table/order capability checks must follow the same
+policy. Plan limits are selected from a backend-owned catalog, not accepted as client-provided
+numbers.
+
+Work in progress: additive invitation/platform-audit migration, transactional provisioning,
+single-use 48-hour activation and invitation rotation, subscription/status management with audit
+evidence, removal of destructive/public legacy account routes, SuperAdmin provisioning UI,
+activation UI, and unit/integration/frontend regression tests. Existing active restaurant fixtures
+remain compatible. No production database has been changed by starting this local point.
+
+### Point update — backend and client flow implemented locally
+
+The additive migration and [provisioning contract](contracts/super-admin-restaurant-provisioning.md)
+are now implemented. Public `POST /api/admins` and destructive `DELETE /api/admins/:id` were
+removed. The SuperAdmin dashboard can create a restaurant, select its server-owned plan/status and
+date, copy the one-time activation link, and rotate a pending invitation; the owner activation page
+requires a 12-character password. Plan/status mutations record platform audit events and denied
+subscriptions revoke organization realtime connections.
+
+The tenant session, table capability, public menu/config/pricing/promotion/order paths, and order
+tracking now share date-aware subscription enforcement. The PostgreSQL test also proves expired
+links fail, rotating an invitation revokes the old secret, concurrent activation yields exactly one
+success, and stale-MFA provisioning is denied.
+
+This point is **locally complete on 16 August 2026**. Final evidence passes 79 backend unit/security/
+operations tests, 35 disposable-PostgreSQL integration/migration/capacity tests, 80 frontend tests,
+and 39 desktop/mobile browser tests with the intentional mobile real-backend golden skip. Prisma
+validation, TypeScript, ESLint, diff checks, production build, and the production dependency audit
+also pass; the audit reports zero production vulnerabilities. Deployment still requires applying
+the additive migration before the application and completing the normal staging/TLS evidence. No
+production database was changed during local validation.
+
 ## PR and handoff checklist
 
 - [ ] Contract posted before Alaa depends on it.

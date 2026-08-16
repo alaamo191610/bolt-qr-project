@@ -464,6 +464,146 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
   assert.equal(planChangeBody.subscription_plan, 'BASIC');
   assert.equal(planChangeBody.password, undefined);
 
+  const legacySignup = await postJson('/api/admins', {
+    email: `public-signup-${randomUUID()}@example.com`,
+    password: 'Public-signup-password!',
+    restaurant_name: 'Public Signup Must Stay Closed',
+  });
+  assert.equal(legacySignup.status, 404);
+
+  const invitedEmail = `invited-owner-${randomUUID()}@example.com`;
+  const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
+  const provisioning = await cookieRequest(sessionCookie, '/api/super-admin/restaurants', {
+    method: 'POST',
+    body: JSON.stringify({
+      ownerEmail: invitedEmail,
+      restaurantName: 'Invited Pilot Restaurant',
+      plan: 'PRO',
+      status: 'TRIAL',
+      trialEndsAt,
+      maxTables: 999_999,
+    }),
+  });
+  const provisioned = await provisioning.json();
+  assert.equal(provisioning.status, 201);
+  assert.equal(provisioned.restaurant.maxTables, 500);
+  assert.equal(provisioned.restaurant.maxMenuItems, 2_000);
+  assert.match(provisioned.invitation.token, /^[A-Za-z0-9_-]{43}$/u);
+  assert.ok(provisioned.invitation.activationPath.includes(encodeURIComponent(provisioned.invitation.token)));
+
+  const invitedIdentity = await database.prisma.user.findUnique({ where: { email: invitedEmail } });
+  const invitedMembership = await database.prisma.organizationUser.findUnique({
+    where: {
+      organization_id_user_id: {
+        organization_id: provisioned.restaurant.organizationId,
+        user_id: invitedIdentity.id,
+      },
+    },
+  });
+  const storedInvitation = await database.prisma.restaurantInvitation.findFirst({
+    where: { organization_id: provisioned.restaurant.organizationId },
+  });
+  assert.equal(invitedIdentity.active, false);
+  assert.equal(invitedIdentity.password_hash, null);
+  assert.equal(invitedMembership.status, 'INVITED');
+  assert.notEqual(storedInvitation.token_hash, provisioned.invitation.token);
+  assert.equal(storedInvitation.token_hash.length, 64);
+
+  const preActivationLogin = await postJson('/api/auth/login', {
+    email: invitedEmail,
+    password: 'Invited-owner-password!',
+  });
+  assert.equal(preActivationLogin.status, 401);
+
+  const activationPassword = 'Invited-owner-password!';
+  const concurrentActivation = await Promise.all([
+    postJson('/api/auth/activate', { token: provisioned.invitation.token, password: activationPassword }),
+    postJson('/api/auth/activate', { token: provisioned.invitation.token, password: activationPassword }),
+  ]);
+  assert.deepEqual(concurrentActivation.map(response => response.status).sort(), [200, 400]);
+  const activatedMembership = await database.prisma.organizationUser.findUnique({
+    where: {
+      organization_id_user_id: {
+        organization_id: provisioned.restaurant.organizationId,
+        user_id: invitedIdentity.id,
+      },
+    },
+  });
+  assert.equal(activatedMembership.status, 'ACTIVE');
+  assert.ok((await database.prisma.user.findUnique({ where: { id: invitedIdentity.id } })).password_hash);
+
+  const activatedLogin = await postJson('/api/auth/login', {
+    email: invitedEmail,
+    password: activationPassword,
+  });
+  const activatedSession = await activatedLogin.json();
+  assert.equal(activatedLogin.status, 200);
+  assert.ok(activatedSession.token);
+
+  const cancelled = await cookieRequest(
+    sessionCookie,
+    `/api/super-admin/restaurants/${provisioned.restaurant.id}/plan`,
+    { method: 'PUT', body: JSON.stringify({ plan: 'PRO', status: 'CANCELLED' }) },
+  );
+  assert.equal(cancelled.status, 200);
+  const revokedTenantSession = await authenticatedRequest(activatedSession.token, '/api/auth/session');
+  assert.equal(revokedTenantSession.status, 403);
+  const cancelledPublicMenu = await fetch(
+    `${baseUrl}/api/public/menus?adminId=${encodeURIComponent(provisioned.restaurant.id)}`,
+  );
+  assert.equal(cancelledPublicMenu.status, 404);
+  const platformAuditActions = await database.prisma.platformAuditEvent.findMany({
+    where: { organization_id: provisioned.restaurant.organizationId },
+    orderBy: { created_at: 'asc' },
+    select: { action: true },
+  });
+  assert.deepEqual(platformAuditActions.map(event => event.action), [
+    'RESTAURANT_PROVISIONED',
+    'RESTAURANT_INVITATION_ACCEPTED',
+    'RESTAURANT_SUBSCRIPTION_CHANGED',
+  ]);
+
+  const replacementEmail = `replacement-owner-${randomUUID()}@example.com`;
+  const replacementProvisioning = await cookieRequest(sessionCookie, '/api/super-admin/restaurants', {
+    method: 'POST',
+    body: JSON.stringify({
+      ownerEmail: replacementEmail,
+      restaurantName: 'Replacement Invitation Restaurant',
+      plan: 'STANDARD',
+      status: 'ACTIVE',
+    }),
+  });
+  const replacementRestaurant = await replacementProvisioning.json();
+  assert.equal(replacementProvisioning.status, 201);
+  await database.prisma.restaurantInvitation.updateMany({
+    where: { organization_id: replacementRestaurant.restaurant.organizationId },
+    data: { expires_at: new Date(Date.now() - 1_000) },
+  });
+  const expiredActivation = await postJson('/api/auth/activate', {
+    token: replacementRestaurant.invitation.token,
+    password: activationPassword,
+  });
+  assert.equal(expiredActivation.status, 400);
+
+  const replacementInvitation = await cookieRequest(
+    sessionCookie,
+    `/api/super-admin/restaurants/${replacementRestaurant.restaurant.id}/invitations`,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+  const replacementInvitationBody = await replacementInvitation.json();
+  assert.equal(replacementInvitation.status, 201);
+  assert.notEqual(replacementInvitationBody.invitation.token, replacementRestaurant.invitation.token);
+  const revokedOldActivation = await postJson('/api/auth/activate', {
+    token: replacementRestaurant.invitation.token,
+    password: activationPassword,
+  });
+  assert.equal(revokedOldActivation.status, 400);
+  const replacementActivation = await postJson('/api/auth/activate', {
+    token: replacementInvitationBody.invitation.token,
+    password: activationPassword,
+  });
+  assert.equal(replacementActivation.status, 200);
+
   const staleSession = issueToken(TOKEN_TYPES.SUPER_ADMIN_SESSION, {
     id: superAdmin.id,
     email,
@@ -480,6 +620,16 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
   const staleWriteBody = await staleWrite.json();
   assert.equal(staleWrite.status, 401);
   assert.equal(staleWriteBody.code, 'SUPER_ADMIN_REAUTH_REQUIRED');
+  const staleProvisioning = await authenticatedRequest(staleSession, '/api/super-admin/restaurants', {
+    method: 'POST',
+    body: JSON.stringify({
+      ownerEmail: `stale-${randomUUID()}@example.com`,
+      restaurantName: 'Stale MFA Attempt',
+      plan: 'STANDARD',
+      status: 'ACTIVE',
+    }),
+  });
+  assert.equal(staleProvisioning.status, 401);
 
   const recoveryLogin = await postJson('/api/super-admin/login', { email, password });
   const recoveryChallenge = await recoveryLogin.json();

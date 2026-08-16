@@ -40,6 +40,7 @@ const TeamManagement = React.lazy(() => import("./components/team/TeamManagement
 const CustomerMenu = React.lazy(() => import("./pages/CustomerMenu"));
 const SuperAdminLogin = React.lazy(() => import("./components/super-admin/SuperAdminLogin"));
 const SuperAdminDashboard = React.lazy(() => import("./components/super-admin/SuperAdminDashboard"));
+const ActivationForm = React.lazy(() => import("./components/Auth/ActivationForm"));
 
 const PageFallback = () => (
   <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -144,6 +145,7 @@ function App() {
                 <Route path="/ar/menu" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
                 <Route path="/en/menu" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
                 <Route path="/menu/:lang" element={<ErrorBoundary scope="customer"><CustomerMenu /></ErrorBoundary>} />
+                <Route path="/activate" element={<ErrorBoundary scope="admin"><ActivationForm /></ErrorBoundary>} />
 
                 {/* Super Admin Routes */}
                 <Route path="/super-admin/login" element={<ErrorBoundary scope="admin"><SuperAdminLogin /></ErrorBoundary>} />

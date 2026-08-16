@@ -17,8 +17,9 @@ export interface Restaurant {
     restaurant_name?: string;
     subscription_plan: SubscriptionPlan;
     subscription_status: string;
-    subscription_end?: Date;
-    trial_ends_at?: Date;
+    subscription_end?: string | null;
+    trial_ends_at?: string | null;
+    activation_status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'UNKNOWN';
     max_tables: number;
     max_menu_items: number;
     max_staff_accounts: number;
@@ -48,6 +49,23 @@ export interface SuperAdminMfaChallenge {
 export interface SuperAdminSession {
     user: { id: string; email: string; name?: string; role: 'SUPER_ADMIN' };
     recoveryCodes?: string[];
+}
+
+export interface RestaurantInvitationResponse {
+    restaurant: {
+        id: string;
+        organizationId: string;
+        ownerEmail: string;
+        restaurantName: string;
+        plan: SubscriptionPlan;
+        status: 'ACTIVE' | 'TRIAL';
+        subscriptionEnd: string | null;
+        trialEndsAt: string | null;
+        maxTables: number;
+        maxMenuItems: number;
+        maxStaffAccounts: number;
+    };
+    invitation: { token: string; expiresAt: string; activationPath: string };
 }
 
 export const superAdminService = {
@@ -88,11 +106,32 @@ export const superAdminService = {
         return api.get<SuperAdminStats>('/super-admin/stats', undefined, 'superAdmin');
     },
 
+    async provisionRestaurant(input: {
+        ownerEmail: string;
+        restaurantName: string;
+        plan: SubscriptionPlan;
+        status: 'ACTIVE' | 'TRIAL';
+        subscriptionEnd?: string;
+        trialEndsAt?: string;
+    }): Promise<RestaurantInvitationResponse> {
+        return api.post<RestaurantInvitationResponse>('/super-admin/restaurants', input, 'superAdmin');
+    },
+
+    async rotateRestaurantInvitation(restaurantId: string): Promise<RestaurantInvitationResponse['invitation']> {
+        const response = await api.post<{ invitation: RestaurantInvitationResponse['invitation'] }>(
+            `/super-admin/restaurants/${restaurantId}/invitations`,
+            {},
+            'superAdmin',
+        );
+        return response.invitation;
+    },
+
     async updateRestaurantPlan(
         restaurantId: string,
         plan: string,
         status?: string,
-        subscription_end?: string
+        subscription_end?: string,
+        trial_ends_at?: string,
     ): Promise<{
         id: string
         subscription_plan: SubscriptionPlan
@@ -102,6 +141,11 @@ export const superAdminService = {
         max_menu_items: number
         max_staff_accounts: number
     }> {
-        return api.put(`/super-admin/restaurants/${restaurantId}/plan`, { plan, status, subscription_end }, 'superAdmin');
+        return api.put(`/super-admin/restaurants/${restaurantId}/plan`, {
+            plan,
+            status,
+            subscription_end,
+            trial_ends_at,
+        }, 'superAdmin');
     },
 };

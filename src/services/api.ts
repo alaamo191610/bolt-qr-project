@@ -192,7 +192,7 @@ export const api = {
     });
   },
 
-  // No token exists yet at login/signup - deliberately no Authorization header.
+  // No session exists yet for login, MFA, activation, or public capability exchange.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async postPublic<T = any>(endpoint: string, body: unknown): Promise<T> {
     return request<T>(`${API_URL}${endpoint}`, {

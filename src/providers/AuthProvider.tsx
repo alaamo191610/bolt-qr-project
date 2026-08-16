@@ -2,7 +2,6 @@
 import React from "react";
 import { adminService, type LoginResponse } from "../services/adminService";
 import { api, isUnauthenticatedError } from "../services/api";
-import { getErrorMessage } from "../utils/errors";
 
 export interface User {
   id: string;
@@ -37,7 +36,6 @@ type AuthCtxType = {
   organizations: OrganizationMembership[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, restaurantName?: string) => Promise<void>;
   switchOrganization: (organizationId: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -47,7 +45,6 @@ const AuthCtx = React.createContext<AuthCtxType>({
   organizations: [],
   loading: true,
   signIn: async () => {},
-  signUp: async () => {},
   switchOrganization: async () => {},
   signOut: async () => {},
 });
@@ -124,23 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, restaurantName?: string) => {
-    try {
-      await adminService.createAdmin({
-        email,
-        password,
-        restaurant_name: restaurantName?.trim() || email.split("@")[0],
-      });
-      // Auto login after sign up
-      await signIn(email, password);
-    } catch (error) {
-      console.error("Signup failed:", error);
-      throw new Error(
-        getErrorMessage(error, "Registration failed. If an admin already exists, please log in.")
-      );
-    }
-  };
-
   const switchOrganization = async (organizationId: string) => {
     const { token, user: authUser } = await api.post<LoginResponse>("/auth/switch-organization", { organizationId });
     localStorage.setItem("auth_token", token);
@@ -156,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, organizations, loading, signIn, signUp, switchOrganization, signOut }}>
+    <AuthCtx.Provider value={{ user, organizations, loading, signIn, switchOrganization, signOut }}>
       {children}
     </AuthCtx.Provider>
   );

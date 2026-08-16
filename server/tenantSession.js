@@ -5,6 +5,7 @@ import {
   tenantUserResponse,
 } from './tenantAccess.js';
 import { TOKEN_TYPES, issueToken } from './tokenPolicy.js';
+import { hasRestaurantAccess } from './subscriptionPolicy.js';
 
 export const createTenantSessionService = ({ db, tokenSecret }) => {
   if (!db) throw new Error('Tenant session database is required');
@@ -36,7 +37,7 @@ export const createTenantSessionService = ({ db, tokenSecret }) => {
       where: { organization_id: membership.organization_id },
       orderBy: { created_at: 'asc' },
     });
-    if (!admin) return null;
+    if (!hasRestaurantAccess(admin)) return null;
 
     return {
       membership,

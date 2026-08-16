@@ -19,6 +19,9 @@ const admin = {
   organization_id: organizationId,
   default_branch_id: '55555555-5555-4555-8555-555555555555',
   restaurant_name: 'Tenant Restaurant',
+  subscription_status: 'ACTIVE',
+  subscription_end: null,
+  trial_ends_at: null,
 };
 
 test('tenant session service resolves active membership and compatibility profile', async () => {
@@ -88,4 +91,25 @@ test('tenant claim resolution fails closed when the compatibility profile is una
   });
 
   assert.equal(await service.resolveTenantClaims({ sub: userId, organizationId }), null);
+});
+
+test('tenant session fails closed for cancelled and expired subscriptions', async () => {
+  const createService = subscription => createTenantSessionService({
+    db: {
+      organizationUser: { findFirst: async () => membership },
+      admin: { findFirst: async () => ({ ...admin, ...subscription }) },
+    },
+    tokenSecret: secret,
+  });
+
+  assert.equal(await createService({ subscription_status: 'CANCELLED' })
+    .resolveTenantSession({ userId, organizationId }), null);
+  assert.equal(await createService({
+    subscription_status: 'TRIAL',
+    trial_ends_at: new Date(Date.now() - 1_000),
+  }).resolveTenantSession({ userId, organizationId }), null);
+  assert.ok(await createService({
+    subscription_status: 'TRIAL',
+    trial_ends_at: new Date(Date.now() + 60_000),
+  }).resolveTenantSession({ userId, organizationId }));
 });

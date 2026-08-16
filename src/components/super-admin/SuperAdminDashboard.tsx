@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings } from 'lucide-react';
+import { Building2, Users, TrendingUp, DollarSign, Crown, LogOut, Search, ArrowUp, ArrowDown, Settings, Plus, Copy, RefreshCw, X } from 'lucide-react';
 import { superAdminService, type Restaurant, type SubscriptionPlan } from '../../services/superAdminService';
 import { isUnauthenticatedError } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import PlanManagementModal from './PlanManagementModal';
+import RestaurantProvisioningModal from './RestaurantProvisioningModal';
 import toast from 'react-hot-toast';
 
 const SuperAdminDashboard: React.FC = () => {
@@ -16,6 +17,8 @@ const SuperAdminDashboard: React.FC = () => {
     const [selectedPlan, setSelectedPlan] = useState<'ALL' | 'STANDARD' | 'BASIC' | 'PRO'>('ALL');
     const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isProvisioningOpen, setIsProvisioningOpen] = useState(false);
+    const [replacementInvitation, setReplacementInvitation] = useState<{ name: string; url: string } | null>(null);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -84,9 +87,15 @@ const SuperAdminDashboard: React.FC = () => {
         navigate('/super-admin/login');
     };
 
-    const handleUpgradePlan = async (restaurantId: string, newPlan: string, status?: string, endDate?: string) => {
+    const handleUpgradePlan = async (
+        restaurantId: string,
+        newPlan: string,
+        status?: string,
+        subscriptionEnd?: string,
+        trialEndsAt?: string,
+    ) => {
         try {
-            await superAdminService.updateRestaurantPlan(restaurantId, newPlan, status, endDate);
+            await superAdminService.updateRestaurantPlan(restaurantId, newPlan, status, subscriptionEnd, trialEndsAt);
             const requestRevision = ++restaurantRequestRevision.current;
             void loadData(requestRevision);
         } catch (error) {
@@ -100,6 +109,23 @@ const SuperAdminDashboard: React.FC = () => {
     };
 
     const filteredRestaurants = restaurants;
+
+    const handleRotateInvitation = async (restaurant: Restaurant) => {
+        try {
+            const invitation = await superAdminService.rotateRestaurantInvitation(restaurant.id);
+            setReplacementInvitation({
+                name: restaurant.restaurant_name || restaurant.email,
+                url: `${window.location.origin}${invitation.activationPath}`,
+            });
+        } catch (error) {
+            if (isUnauthenticatedError(error)) {
+                toast.error('For security, please sign in with MFA again.');
+                navigate('/super-admin/login');
+                return;
+            }
+            toast.error(getErrorMessage(error, 'Failed to replace invitation'));
+        }
+    };
 
     const getPlanColor = (plan: string) => {
         switch (plan) {
@@ -201,7 +227,16 @@ const SuperAdminDashboard: React.FC = () => {
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <div className="p-6 border-b border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Restaurants</h2>
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Restaurants</h2>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsProvisioningOpen(true)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                                >
+                                    <Plus className="h-4 w-4" /> Add restaurant
+                                </button>
+                            </div>
                             <div className="flex items-center space-x-2">
                                 {(['ALL', 'STANDARD', 'BASIC', 'PRO'] as const).map(plan => (
                                     <button
@@ -263,6 +298,9 @@ const SuperAdminDashboard: React.FC = () => {
                                                         }`}>
                                                         {restaurant.subscription_status}
                                                     </span>
+                                                    {restaurant.activation_status === 'INVITED' && (
+                                                        <span className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-800">Awaiting activation</span>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">{restaurant.email}</p>
 
@@ -274,6 +312,15 @@ const SuperAdminDashboard: React.FC = () => {
                                             </div>
 
                                             <div className="flex space-x-2">
+                                                {restaurant.activation_status === 'INVITED' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleRotateInvitation(restaurant)}
+                                                        className="flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50"
+                                                    >
+                                                        <RefreshCw className="h-4 w-4" /> New activation link
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => {
                                                         setSelectedRestaurant(restaurant);
@@ -312,10 +359,40 @@ const SuperAdminDashboard: React.FC = () => {
                     setIsModalOpen(false);
                     setSelectedRestaurant(null);
                 }}
-                onUpdate={async (restaurantId, plan, status, endDate) => {
-                    await handleUpgradePlan(restaurantId, plan, status, endDate);
+                onUpdate={async (restaurantId, plan, status, subscriptionEnd, trialEndsAt) => {
+                    await handleUpgradePlan(restaurantId, plan, status, subscriptionEnd, trialEndsAt);
                 }}
             />
+            <RestaurantProvisioningModal
+                isOpen={isProvisioningOpen}
+                onClose={() => setIsProvisioningOpen(false)}
+                onCreated={async () => {
+                    const requestRevision = ++restaurantRequestRevision.current;
+                    await loadData(requestRevision);
+                }}
+            />
+            {replacementInvitation && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="replacement-invitation-title">
+                    <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
+                        <div className="mb-5 flex items-start justify-between">
+                            <div>
+                                <h2 id="replacement-invitation-title" className="text-xl font-bold text-slate-900 dark:text-white">Replacement activation link</h2>
+                                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{replacementInvitation.name}. All previous unused links are revoked.</p>
+                            </div>
+                            <button type="button" aria-label="Close" onClick={() => setReplacementInvitation(null)}><X /></button>
+                        </div>
+                        <div className="flex gap-2">
+                            <input readOnly aria-label="Replacement activation link" value={replacementInvitation.url} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                            <button
+                                type="button"
+                                onClick={() => void navigator.clipboard.writeText(replacementInvitation.url).then(() => toast.success('Activation link copied'))}
+                                className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white"
+                            ><Copy className="h-4 w-4" /> Copy</button>
+                        </div>
+                        <p className="mt-3 text-xs text-amber-700">This secret is shown only now. Share it through a trusted channel.</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

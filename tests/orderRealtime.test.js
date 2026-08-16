@@ -35,6 +35,11 @@ const persistedOrder = {
   status: 'preparing',
   version: 2,
   updated_at: new Date('2026-08-15T10:00:00.000Z'),
+  admin: {
+    subscription_status: 'ACTIVE',
+    subscription_end: null,
+    trial_ends_at: null,
+  },
 };
 
 const createService = ({ findFirst, resolveTenantClaims } = {}) => createOrderRealtimeService({
@@ -105,6 +110,19 @@ test('tracking authorization verifies token scope and revalidates the order in t
 
 test('tracking authorization fails closed when the persisted order no longer matches', async () => {
   const service = createService({ findFirst: async () => null });
+  await assert.rejects(
+    service.authorizeOrder({ orderId: 41, trackingToken }),
+    error => error instanceof OrderTrackingAuthorizationError && error.reason === 'NOT_FOUND',
+  );
+});
+
+test('tracking authorization fails closed when the restaurant subscription is inactive', async () => {
+  const service = createService({
+    findFirst: async () => ({
+      ...persistedOrder,
+      admin: { subscription_status: 'CANCELLED', subscription_end: null, trial_ends_at: null },
+    }),
+  });
   await assert.rejects(
     service.authorizeOrder({ orderId: 41, trackingToken }),
     error => error instanceof OrderTrackingAuthorizationError && error.reason === 'NOT_FOUND',

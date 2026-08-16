@@ -882,6 +882,44 @@ PostgreSQL integration/migration tests, 77 frontend tests, and the full Playwrig
 default real-backend config and the separate golden config) pass; lint, TypeScript, and the
 production build are clean; zero leaked disposable test databases across the whole session.
 
+## Implementation tracking — 16 August 2026 (invite-only provisioning started)
+
+Release 1 restaurant access is now decided as SuperAdmin-controlled and invite-only. The local
+implementation has started and will remove public signup, require recent SuperAdmin MFA for
+restaurant creation and subscription changes, derive all entitlements from a backend plan catalog,
+and create the organization/MAIN branch/OWNER membership/Admin compatibility profile atomically.
+The owner receives a hashed-at-rest, single-use, 48-hour activation token and sets their own
+password; an invited identity cannot authenticate before activation.
+
+The same point will enforce subscription validity centrally for every restaurant session and align
+public ordering with it: only non-expired `ACTIVE` and `TRIAL` access is accepted for the pilot;
+`PAST_DUE`, `CANCELLED`, expired, suspended, and pre-activation access fail closed. Platform
+provisioning and subscription mutations will be auditable, hard deletion will not be part of the
+operator workflow, and concurrent activation/invitation attempts will be tested. This entry records
+work started, not completion or deployment evidence.
+
+### Implementation point update
+
+The migration, backend policy, SuperAdmin provisioning/invitation UI, owner activation UI, audit
+trail, socket revocation, and removal of public signup/hard delete are implemented locally. The
+published [provisioning contract](contracts/super-admin-restaurant-provisioning.md) fixes endpoint,
+secret-handling, lifecycle, entitlement, migration, and rollback behavior. Date-aware subscription
+checks now cover restaurant REST/realtime and public ordering/catalog/tracking boundaries.
+
+This point is **locally complete on 16 August 2026**. PostgreSQL evidence covers public-signup
+denial, recent-MFA provisioning, stale-MFA rejection, server-owned limits, hash-only token storage,
+inactive pre-activation login, expiry, rotation/revocation, concurrent single-use activation,
+cancellation revocation, public denial, and platform audit records. Final regression passes 79
+backend unit/security/operations tests, 35 disposable-PostgreSQL integration/migration/capacity
+tests, 80 frontend tests, and 39 desktop/mobile browser tests with one intentional mobile
+real-backend golden skip. Prisma validation, TypeScript, ESLint, diff checks, the production build,
+and production dependency audit pass with zero production vulnerabilities.
+
+Production-Done remains deployment-gated: apply migration
+`20260816130000_super_admin_restaurant_invitations` before the new application, enroll/verify the
+pilot SuperAdmin over TLS, perform one real invitation handoff without logging the link, and retain
+staging audit/session/public-denial evidence. No production database was changed by this local work.
+
 ## Required test evidence
 
 | Layer | Minimum evidence | Required at |

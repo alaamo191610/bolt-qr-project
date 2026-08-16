@@ -62,6 +62,36 @@ describe('superAdminService token namespace isolation (G9)', () => {
     expect(init.credentials).toBe('include');
   });
 
+  it('provisions with server-owned plan inputs and the HttpOnly SuperAdmin session', async () => {
+    const response = {
+      restaurant: { id: 'restaurant-1' },
+      invitation: { token: 'secret', expiresAt: '2026-08-18T00:00:00.000Z', activationPath: '/activate?token=secret' },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await superAdminService.provisionRestaurant({
+      ownerEmail: 'owner@example.com',
+      restaurantName: 'Pilot Restaurant',
+      plan: 'BASIC',
+      status: 'TRIAL',
+      trialEndsAt: '2026-08-18T00:00:00.000Z',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.credentials).toBe('include');
+    expect(JSON.parse(String(init.body))).toEqual({
+      ownerEmail: 'owner@example.com',
+      restaurantName: 'Pilot Restaurant',
+      plan: 'BASIC',
+      status: 'TRIAL',
+      trialEndsAt: '2026-08-18T00:00:00.000Z',
+    });
+  });
+
   it('login does not attach any Authorization header (no session exists yet)', async () => {
     tokenStore.set('restaurant', 'restaurant-admin-token');
 

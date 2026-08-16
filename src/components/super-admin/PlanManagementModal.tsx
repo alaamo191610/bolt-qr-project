@@ -9,14 +9,21 @@ interface Restaurant {
     restaurant_name?: string;
     subscription_plan: string;
     subscription_status: string;
-    subscription_end?: Date;
+    subscription_end?: string | null;
+    trial_ends_at?: string | null;
 }
 
 interface PlanManagementModalProps {
     restaurant: Restaurant | null;
     isOpen: boolean;
     onClose: () => void;
-    onUpdate: (restaurantId: string, plan: string, status: string, endDate?: string) => Promise<void>;
+    onUpdate: (
+        restaurantId: string,
+        plan: string,
+        status: string,
+        subscriptionEnd?: string,
+        trialEndsAt?: string,
+    ) => Promise<void>;
 }
 
 const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
@@ -35,8 +42,8 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
         setSelectedPlan(restaurant.subscription_plan || 'STANDARD');
         setSelectedStatus(restaurant.subscription_status || 'ACTIVE');
         setEndDate(
-            restaurant.subscription_end
-                ? new Date(restaurant.subscription_end).toISOString().split('T')[0]
+            (restaurant.subscription_status === 'TRIAL' ? restaurant.trial_ends_at : restaurant.subscription_end)
+                ? new Date((restaurant.subscription_status === 'TRIAL' ? restaurant.trial_ends_at : restaurant.subscription_end)!).toISOString().split('T')[0]
                 : ''
         );
     }, [isOpen, restaurant]);
@@ -66,7 +73,7 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
             price: 79,
             icon: Crown,
             color: 'from-purple-600 to-pink-600',
-            features: ['Unlimited tables', 'Unlimited items', 'All features', 'KDS', 'API access', '10 staff accounts'],
+            features: ['500 tables', '2,000 menu items', 'All features', 'KDS', 'API access', '10 staff accounts'],
         },
     ];
 
@@ -80,7 +87,14 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
     const handleSave = async () => {
         setLoading(true);
         try {
-            await onUpdate(restaurant.id, selectedPlan, selectedStatus, endDate || undefined);
+            const normalizedEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).toISOString() : undefined;
+            await onUpdate(
+                restaurant.id,
+                selectedPlan,
+                selectedStatus,
+                selectedStatus === 'ACTIVE' ? normalizedEnd : undefined,
+                selectedStatus === 'TRIAL' ? normalizedEnd : undefined,
+            );
             toast.success('Subscription updated successfully!');
             onClose();
         } catch (error) {
@@ -191,10 +205,11 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
                     {/* End Date */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
-                            Subscription End Date (Optional)
+                            {selectedStatus === 'TRIAL' ? 'Trial End Date' : 'Subscription End Date (Optional)'}
                         </label>
                         <input
                             type="date"
+                            required={selectedStatus === 'TRIAL'}
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
                             min={new Date().toISOString().split('T')[0]}

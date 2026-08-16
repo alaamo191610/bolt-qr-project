@@ -5,21 +5,12 @@ import AuthForm from './AuthForm';
 
 const translations: Record<string, string> = {
   'auth.welcome': 'Welcome Back',
-  'auth.createAccount': 'Create Account',
   'auth.signInDescription': 'Sign in to your restaurant dashboard',
-  'auth.signUpDescription': 'Set up your restaurant account',
-  'auth.restaurantName': 'Restaurant Name',
-  'auth.restaurantNamePlaceholder': 'Bella Vista',
   'auth.email': 'Email Address',
   'auth.emailPlaceholder': 'admin@restaurant.com',
   'auth.password': 'Password',
   'auth.passwordPlaceholder': '********',
-  'auth.passwordHint': 'At least 8 characters',
-  'auth.passwordTooShort': 'Password must be at least 8 characters',
   'auth.signIn': 'Sign In',
-  'auth.signUp': 'Sign Up',
-  'auth.alreadyHaveAccount': 'Already have an account? Sign in',
-  'auth.dontHaveAccount': "Don't have an account? Sign up",
 };
 
 vi.mock('../../contexts/LanguageContext', () => ({
@@ -30,10 +21,9 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-const signUp = vi.fn();
 const signIn = vi.fn();
 vi.mock('../../providers/AuthProvider', () => ({
-  useAuth: () => ({ signIn, signUp, user: null }),
+  useAuth: () => ({ signIn, user: null }),
 }));
 
 afterEach(() => {
@@ -46,32 +36,20 @@ describe('AuthForm', () => {
     expect(screen.queryByLabelText('Restaurant Name')).not.toBeInTheDocument();
   });
 
-  it('shows a restaurant name field after switching to sign up and submits it', async () => {
+  it('submits restaurant login without exposing public signup', async () => {
     const user = userEvent.setup();
     render(<AuthForm />);
 
-    await user.click(screen.getByText("Don't have an account? Sign up"));
-    expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
-
-    await user.type(screen.getByLabelText('Restaurant Name'), 'Bella Vista');
     await user.type(screen.getByLabelText('Email Address'), 'owner@bellavista.com');
     await user.type(screen.getByLabelText('Password'), 'a-real-password');
-    await user.click(screen.getByRole('button', { name: 'Sign Up' }));
+    await user.click(screen.getByRole('button', { name: 'Sign In' }));
 
-    expect(signUp).toHaveBeenCalledWith('owner@bellavista.com', 'a-real-password', 'Bella Vista');
+    expect(signIn).toHaveBeenCalledWith('owner@bellavista.com', 'a-real-password');
+    expect(screen.queryByText(/sign up/iu)).not.toBeInTheDocument();
   });
 
-  it('blocks submission with an inline message when the sign-up password is too short', async () => {
-    const user = userEvent.setup();
+  it('explains that access is controlled by the platform administrator', () => {
     render(<AuthForm />);
-
-    await user.click(screen.getByText("Don't have an account? Sign up"));
-    await user.type(screen.getByLabelText('Restaurant Name'), 'Bella Vista');
-    await user.type(screen.getByLabelText('Email Address'), 'owner@bellavista.com');
-    await user.type(screen.getByLabelText('Password'), 'short');
-    await user.click(screen.getByRole('button', { name: 'Sign Up' }));
-
-    expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-    expect(signUp).not.toHaveBeenCalled();
+    expect(screen.getByText(/invitation-only/iu)).toBeInTheDocument();
   });
 });
