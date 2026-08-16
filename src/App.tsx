@@ -17,7 +17,7 @@ import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { adminService, type AnalyticsSummary } from "./services/adminService";
 import { tableService, type ApiTable } from "./services/tableService";
 import { menuService } from "./services/menuService";
-import { orderService } from "./services/orderService";
+import { orderService, type ApiOrder, type ApiOrderItem } from "./services/orderService";
 import AuthForm from "./components/Auth/AuthForm";
 import ResponsiveLayout from "./components/common/ResponsiveLayout";
 import ErrorBoundary from "./components/common/ErrorBoundary";
@@ -64,7 +64,7 @@ interface Order {
     price: number;
     quantity: number;
     note?: string | null;
-    customizationDetails?: ApiCustomizationDetails;
+    customizationDetails?: ApiOrderItem['customization_details'];
   }>;
   total: number;
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
@@ -73,8 +73,10 @@ interface Order {
   type?: 'dine_in' | 'take_away';
 }
 
+// menuItems/setMenuItems below is currently write-only (never rendered),
+// but id must still match menuService's real AdminMenuItem.id: string.
 interface MenuItem {
-  id: number;
+  id: string;
   name: string;
   description: string;
   price: number;
@@ -90,55 +92,25 @@ interface AdminProfile {
   preferred_language?: string;
 }
 
-interface ApiOrderItem {
-  menu?: { name_en?: string } | null;
-  price_at_order: number;
-  quantity: number;
-  note?: string | null;
-  customization_details?: ApiCustomizationDetails;
-}
-
-interface ApiCustomizationDetails {
-  ingredients?: Array<{ name_en?: string; action?: string; qty?: number }>;
-  options?: Array<{ name_en?: string; qty?: number }>;
-  comboChildren?: Array<{ name_en?: string }>;
-}
-
-interface ApiOrder {
-  id: number;
-  order_number?: number;
-  table?: { code?: string } | null;
-  table_id?: number;
-  order_items?: ApiOrderItem[];
-  total?: number;
-  status?: Order['status'];
-  version?: number;
-  type?: Order['type'];
-  created_at: string;
-}
-
-interface ApiMenuItem {
-  id: number;
-  name_en: string;
-  name_ar?: string;
-  price: number;
-  categories?: { name_en?: string } | null;
-  image_url?: string;
-}
-
+// Accepts ApiOrder (the wider, raw-wire type - Decimal fields serialize as
+// strings over JSON), not just MappedOrder (getOrdersPage's own already-
+// coerced result): the real-time socket handler below pushes the same raw
+// presentPublicOrder() shape the POST /api/orders response uses, which
+// never goes through getOrdersPage's Number(...) coercion. Coercing here too
+// keeps this correct for both callers instead of only the REST-fetched path.
 const mapApiOrder = (order: ApiOrder): Order => ({
   id: order.id,
   order_number: order.order_number,
   tableNumber: String(order.table?.code ?? order.table_id ?? ''),
   items: order.order_items?.map((item: ApiOrderItem) => ({
     name: item.menu?.name_en || "Unknown Item",
-    price: item.price_at_order,
-    quantity: item.quantity,
+    price: Number(item.price_at_order) || 0,
+    quantity: item.quantity ?? 1,
     note: item.note,
     customizationDetails: item.customization_details,
   })) || [],
-  total: order.total || 0,
-  status: order.status || "pending",
+  total: Number(order.total) || 0,
+  status: (order.status || "pending") as Order['status'],
   version: order.version || 1,
   timestamp: new Date(order.created_at),
   type: order.type,
@@ -309,10 +281,7 @@ const AdminDashboard: React.FC = () => {
     const requestRevision = ++orderRequestRevision.current;
     if (append) setOrdersLoadingMore(true);
     try {
-      const page = await orderService.getOrdersPage(user.id, { scope, limit: 50, cursor }) as unknown as {
-        items: ApiOrder[];
-        pagination: { nextCursor: string | null; hasMore: boolean };
-      };
+      const page = await orderService.getOrdersPage(user.id, { scope, limit: 50, cursor });
       if (requestRevision !== orderRequestRevision.current) return;
       const mapped = page.items.map(mapApiOrder);
       setOrders(previous => append
@@ -345,9 +314,9 @@ const AdminDashboard: React.FC = () => {
   const fetchMenuItems = useCallback(async () => {
     if (!user) return;
     try {
-      const adminMenuItems = await menuService.getMenuItems(user.id) as unknown as ApiMenuItem[];
+      const adminMenuItems = await menuService.getMenuItems(user.id);
       setMenuItems(
-        adminMenuItems.map((item: ApiMenuItem) => ({
+        adminMenuItems.map((item) => ({
           id: item.id,
           name: item.name_en,
           description: item.name_ar || item.name_en,

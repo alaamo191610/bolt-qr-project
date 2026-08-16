@@ -1,6 +1,7 @@
 // orderService.ts
 import { api, ApiError } from './api'
 import { getErrorMessage } from '../utils/errors'
+import type { Promotion } from '../pricing/types'
 
 // ---------------- Types (kept compatible) ----------------
 type IngredientAction = 'no' | 'normal' | 'extra'
@@ -52,14 +53,14 @@ export interface AnalyticsOrder {
 }
 
 interface ApiMenuRef {
-  id?: string
+  id?: number
   name_en?: string
   name_ar?: string
   price?: number | string
 }
 
-interface ApiOrderItem {
-  id?: string
+export interface ApiOrderItem {
+  id?: number
   price_at_order?: number | string
   quantity?: number
   menu?: ApiMenuRef | null
@@ -72,16 +73,68 @@ interface ApiOrderItem {
   }
 }
 
-interface ApiOrder {
-  id: string
+// Order.id and Order.table_id are Postgres Int (server/prisma/schema.prisma),
+// not strings - App.tsx's mapApiOrder already assumed this correctly and
+// worked around this file's wrong declaration with an `as unknown as` cast.
+export interface ApiOrder {
+  id: number
   order_number?: number
-  table_id?: string
+  table_id?: number
   table?: { code?: string } | null
   status?: string
   type?: 'dine_in' | 'take_away'
   total?: number | string
+  version?: number
   created_at: string
   order_items?: ApiOrderItem[]
+}
+
+// POST /api/orders response (server/index.js: presentPublicOrder(fullOrder)
+// plus tracking_token) - the raw order minus table_session_id. status is
+// always set on a just-created order, unlike the more general ApiOrder.
+export interface CreatedOrder extends ApiOrder {
+  status: string
+  tracking_token: string
+}
+
+// GET /api/public/orders/:id/status
+export interface PublicOrderStatus {
+  id: number
+  order_number?: number
+  status: string
+  version: number
+  updated_at: string
+}
+
+// GET /api/public/promotions/validate (server/index.js). promotion.id/table_id
+// are wire-accurate here already: Promotion.id is a UUID, not autoincrement.
+interface RawPromotion {
+  id: string
+  admin_id: string
+  code: string
+  type: string
+  value: number
+  min_order: number | null
+  start_at: string | null
+  end_at: string | null
+  usage_limit: number | null
+  times_used: number
+  active: boolean
+  applies_to: string
+  table_id: number | null
+}
+
+// What getOrdersPage() actually returns after its own mapping below:
+// total/price_at_order are guaranteed numbers (Number(...) || 0), not the
+// wire's number|string - App.tsx's mapApiOrder and everything downstream of
+// getOrdersPage relies on that guarantee.
+export interface MappedOrderItem extends Omit<ApiOrderItem, 'price_at_order' | 'menu'> {
+  price_at_order: number
+  menu: (Omit<ApiMenuRef, 'price'> & { price: number }) | null
+}
+export interface MappedOrder extends Omit<ApiOrder, 'total' | 'order_items'> {
+  total: number
+  order_items: MappedOrderItem[]
 }
 
 export interface CursorPage<T> {
@@ -140,7 +193,7 @@ export const orderService = {
      * it to the current table capability/version and returns the original
      * order for an unchanged retry. See docs/contracts/order-idempotency.md. */
     idempotency_key?: string
-  }) {
+  }): Promise<CreatedOrder> {
     try {
       // Build function payload items
       const items = (orderData.items || []).map((it) => {
@@ -188,11 +241,11 @@ export const orderService = {
         }
         // Dine-in identity comes from the table-session bearer token, not
         // from body tableCode/adminId — the server ignores the latter.
-        return await api.postWithToken('/orders', body, orderData.table_session_token, idempotencyHeaders);
+        return await api.postWithToken<CreatedOrder>('/orders', body, orderData.table_session_token, idempotencyHeaders);
       }
 
       // Call Backend API instead of Edge Function
-      return await api.post('/orders', {
+      return await api.post<CreatedOrder>('/orders', {
         ...body,
         tableCode: orderData.table_code,
         adminId: orderData.admin_id,
@@ -208,13 +261,19 @@ export const orderService = {
     code: string
     subtotal: number
     tableCode?: string
-  }) {
-    return await api.get('/public/promotions/validate', {
+  }): Promise<Promotion> {
+    const raw = await api.get<RawPromotion>('/public/promotions/validate', {
       adminId: input.adminId,
       code: input.code,
       subtotal: String(input.subtotal),
       ...(input.tableCode ? { table: input.tableCode } : {}),
     });
+    return {
+      ...raw,
+      type: raw.type as Promotion['type'],
+      applies_to: raw.applies_to as Promotion['applies_to'],
+      table_id: raw.table_id == null ? null : String(raw.table_id),
+    };
   },
 
   // Get orders for admin (raw, with nested menus; unchanged columns)
@@ -223,7 +282,7 @@ export const orderService = {
     scope?: 'all' | 'active' | 'history';
     limit?: number;
     cursor?: string;
-  } = {}): Promise<CursorPage<ApiOrder>> {
+  } = {}): Promise<CursorPage<MappedOrder>> {
     try {
       const params: Record<string, string> = { adminId };
       if (options.status) params.status = options.status;
@@ -249,16 +308,19 @@ export const orderService = {
     }
   },
 
-  async getOrders(adminId: string, status?: string) {
+  async getOrders(adminId: string, status?: string): Promise<MappedOrder[]> {
     return (await this.getOrdersPage(adminId, { status, limit: 50 })).items;
   },
 
-  // Cleaned, mapped shape for Analytics (unit price already includes extras)
+  // Cleaned, mapped shape for Analytics (unit price already includes extras).
+  // Unused since Analytics.tsx moved to server-computed aggregates
+  // (adminService.getAnalytics) - kept typed rather than deleted since
+  // removing it isn't part of this pass.
   async getOrdersForAnalytics(adminId: string): Promise<AnalyticsOrder[]> {
     // Reuse the getOrders API or create a specific analytics endpoint
     const data = (await this.getOrdersPage(adminId, { limit: 100 })).items;
     return (data ?? []).map((o) => ({
-      id: o.id,
+      id: String(o.id),
       tableNumber: String(o.table_id ?? ''), // join tables for code if you want the code instead of id
       status: o.status ?? 'pending',
       total: Number(o.total) || 0,
@@ -266,7 +328,7 @@ export const orderService = {
       items: (o.order_items ?? []).map((oi) => {
         const m = oi.menu ?? oi.menus
         return {
-          id: m?.id,
+          id: m?.id != null ? String(m.id) : undefined,
           name_en: m?.name_en ?? undefined,
           name_ar: m?.name_ar ?? undefined,
           name: m?.name_en ?? undefined, // legacy fallback
@@ -278,10 +340,10 @@ export const orderService = {
   },
 
   // Update order status (same behavior)
-  async updateOrderStatus(orderId: string, status: string) {
+  async updateOrderStatus(orderId: string, status: string): Promise<ApiOrder> {
     try {
       // Implement PUT /api/orders/:id/status in backend
-      return await api.put(`/orders/${orderId}/status`, { status });
+      return await api.put<ApiOrder>(`/orders/${orderId}/status`, { status });
     } catch (error) {
       console.error('Error updating order status:', error)
       throw error
@@ -289,22 +351,18 @@ export const orderService = {
   },
 
   // Get order by ID (raw)
-  async getOrderById(orderId: string) {
+  // Unused, and there is no GET /api/orders/:id route on the server (only
+  // /api/orders/:id/status) - this would 404 if ever called.
+  async getOrderById(orderId: string): Promise<ApiOrder> {
     try {
-      return await api.get(`/orders/${orderId}`);
+      return await api.get<ApiOrder>(`/orders/${orderId}`);
     } catch (error) {
       console.error('Error fetching order:', error)
       throw error
     }
   },
 
-  async getPublicOrderStatus(orderId: number, trackingToken: string) {
-    return await api.getWithToken(`/public/orders/${orderId}/status`, trackingToken) as {
-      id: number
-      order_number?: number
-      status: string
-      version: number
-      updated_at: string
-    }
+  async getPublicOrderStatus(orderId: number, trackingToken: string): Promise<PublicOrderStatus> {
+    return await api.getWithToken<PublicOrderStatus>(`/public/orders/${orderId}/status`, trackingToken)
   },
 }

@@ -11,10 +11,10 @@ export interface OrderingStateResponse {
 
 export const orderingStateService = {
   async get(branchId: string): Promise<OrderingStateResponse> {
-    return await api.get(`/branches/${branchId}/ordering-state`);
+    return await api.get<OrderingStateResponse>(`/branches/${branchId}/ordering-state`);
   },
 
   async set(branchId: string, state: OrderingState): Promise<OrderingStateResponse> {
-    return await api.put(`/branches/${branchId}/ordering-state`, { state });
+    return await api.put<OrderingStateResponse>(`/branches/${branchId}/ordering-state`, { state });
   },
 };
