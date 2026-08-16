@@ -479,14 +479,14 @@ related work from being correctly implemented.
 
 | Decision | Owner | Required by | Why it matters |
 |---|---|---:|---|
-| Takeaway ordering entry point **(Yazan selected ADR 0007 A; defaults accepted)** | Both | Alaa sign-off pending | Takeaway is disabled; dine-in defaults are fixed for implementation. |
+| Takeaway ordering entry point **(Yazan selected ADR 0007 A; defaults accepted)** | Both | Closed — Alaa sign-off recorded 14 Aug (ADR 0007) | Takeaway is disabled; dine-in defaults are fixed for implementation. |
 | Order-tracking token expiry and recovery | Both | Day 2 | Defines customer behaviour after tracking credentials expire. |
 | POS schema disposition: **Park** | Both | Day 3 | Record the recommended non-destructive disposition and controls for dormant tables. |
 | Log retention, contents, and access control | Both | Day 3 | Required before structured production logs contain user/organization IDs. |
 | 12-week schedule and pilot/launch dates | Both | Day 1 | Establishes the release commitment and scope-control baseline. |
 | Phase 1 infrastructure: **single VPS/local storage/local PostgreSQL/in-memory limiter/nginx/systemd/Sentry/uptime selected in ADR 0008** | Yazan | Selected 15 Aug | Fixes the pilot deployment topology; managed providers defer to growth triggers. |
 | Browser session strategy and threat model — SuperAdmin uses ADR 0009 HttpOnly SameSite cookie; restaurant compatibility bearer remains separately bounded | Both | Platform complete 15 Aug | Removes JavaScript access to the platform credential; restaurant-session review remains separate. |
-| PostgreSQL RLS adoption or compensating controls **(Yazan selected ADR 0006 B)** | Both | Alaa/staging sign-off pending | Release 1 uses constraints/controls; RLS follows safe runtime-role work. |
+| PostgreSQL RLS adoption or compensating controls **(Yazan selected ADR 0006 B)** | Both | Sign-off closed — Alaa recorded 14 Aug (ADR 0006); zero-issue staging report remains | Release 1 uses constraints/controls; RLS follows safe runtime-role work. |
 | Backup/RPO/RTO: encrypted restic off-VPS; **RPO 24h/RTO 4h accepted** | Yazan | ADR 0010/local automation 15 Aug | Selected remote repository and real timed restore evidence remain before M5. |
 | Restaurant ordering pause and capacity behaviour | Both | Day 5 | Defines safe operation during overload or kitchen closure. |
 | SuperAdmin MFA/re-authentication and session duration — ADR 0009 implemented locally | Yazan, reviewed with Alaa client boundary | Complete locally 15 Aug | Mandatory TOTP, 30-minute revocable HttpOnly session, and 10-minute recent-auth write gate; staging/TLS evidence remains. |
@@ -845,6 +845,43 @@ public HTTPS/nginx with representative data and retained resource observations. 
 off-VPS restore, hosted Sentry/uptime notification, and provider-policy evidence remain open M3/M5
 environment gates and are not implied by these local results.
 
+## Implementation tracking — 16 August 2026 (Alaa: response-body typing, member/role UI, merge verification)
+
+Merged and verified `Yazan-Plan-exe` (SuperAdmin MFA/ADR 0009, off-VPS backup/ADR 0010, Sentry/
+ADR 0011, and the pagination/bounded-analytics work above) into `codex/api-response-typing`,
+resolving one real conflict: kept the `globalSetup.js`-based Playwright teardown over a reverted
+`workers: 1`/old-server-script version, since the latter was the exact pattern already root-caused
+and fixed earlier for leaking disposable test databases. The merge itself surfaced one regression —
+`GET /api/orders`'s new paginated envelope broke the golden E2E test's direct read of it — fixed and
+reverified both ways.
+
+Completed the response-body typing point from A0's typed-API-design row: every
+`api.get/post/put/patch/delete/postWithToken/getWithToken/upload` call site in `src/` now has a real
+type verified against `server/index.js` and the Prisma schema, replacing the implicit `any` the
+client shipped with. Found and fixed three real bugs this had been hiding: a `parseInt()` on an
+already-numeric id, a live bug where the Digital Menu admin category filter's
+`item.category_id === selectedCategory` was always false (raw number vs. the `<select>`'s always-
+string value — proven both ways with a new E2E regression test, `tests/e2e/digital-menu-category-
+filter.spec.ts`), and a real-time Socket.IO new-order push that bypassed the numeric price/total
+coercion the REST path already had. Also deleted several duplicate, drifted local type definitions
+in favor of one real source of truth per endpoint.
+
+Built the member/role management UI (`src/components/team/TeamManagement.tsx`) on Yazan's
+organization-membership contract: OWNER gets inline role/status editing, MANAGER can add members
+only, STAFF never sees the tab (matches the server's own `GET /api/organization/members` role
+gate), and suspending a member goes through a confirm step first. Extended the axe-core
+accessibility audit to cover it and every other authenticated admin screen (`tests/e2e/admin-
+accessibility.spec.ts`), fixing every genuine violation found along the way.
+
+Corrected two stale decision-table entries in this document and in `Yazan-Parallel-Work-Plan.md`:
+both D1 sign-offs (ADR 0006 tenant enforcement, ADR 0007 takeaway/abuse policy) were recorded by
+Alaa on 14 Aug in the ADR files themselves but the tracking tables still said "pending."
+
+Full local regression: 74 backend unit/configuration/security/performance tests, 35 disposable-
+PostgreSQL integration/migration tests, 77 frontend tests, and the full Playwright suite (both the
+default real-backend config and the separate golden config) pass; lint, TypeScript, and the
+production build are clean; zero leaked disposable test databases across the whole session.
+
 ## Required test evidence
 
 | Layer | Minimum evidence | Required at |
@@ -864,7 +901,7 @@ recorded in the completion register. “Code is written” is not a completion s
 
 | Item | Status | PR / commit | Tests/evidence | Verified by | Date |
 |---|---|---|---|---|---|
-| D1 decisions | Partially approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off remains | Yazan | 14 Aug 2026 |
+| D1 decisions | Approved | ADRs 0006–0007 selected by Yazan | Tenant B, takeaway A, and dine-in defaults recorded; Alaa sign-off recorded 14 Aug in both ADRs | Yazan + Alaa | 14 Aug 2026 |
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Local implementation complete; final enforcement staging-gated | ADR 0009 | Request context, safe errors, limiter, token/session revocation, SuperAdmin MFA/HttpOnly session, organization/member contract, expand/backfill, upload ownership, cross-tenant negatives, and clean/corrupt final-enforcement rehearsal pass; staging zero-issue verify/enforce and TLS enrollment remain. | Yazan | 15 Aug 2026 |
 | M2 bounded order cycle | Local joint implementation accepted; staging/release evidence remains | `01b5c45` | QR/session, durable and reload-safe idempotency, capacity, admin availability control, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, secure QR routing, real-backend desktop golden E2E, and mocked mobile recovery pass. | Yazan + Alaa | 15 Aug 2026 |

@@ -883,9 +883,9 @@ documentation, fixture, or regression task instead of waiting.
 
 | Decision | Needed for | Owner | Due |
 |---|---|---|---|
-| Takeaway entry and anti-abuse policy — Yazan selected ADR 0007 A and accepted defaults; Alaa pending | Public order M2 | Both | Alaa sign-off required |
+| Takeaway entry and anti-abuse policy — Yazan selected ADR 0007 A and accepted defaults; Alaa sign-off recorded 14 Aug (ADR 0007) | Public order M2 | Both | Closed |
 | Session-storage threat model and token classes — SuperAdmin resolved by ADR 0009 HttpOnly cookie; restaurant compatibility bearer remains separately bounded | M1 auth/session | Both | Platform decision complete 15 Aug; restaurant review remains |
-| RLS versus documented compensating controls — Yazan selected ADR 0006 B; Alaa/staging pending | M1 tenant integrity | Both | Sign-off/staging required |
+| RLS versus documented compensating controls — Yazan selected ADR 0006 B; Alaa sign-off recorded 14 Aug (ADR 0006) | M1 tenant integrity | Both | Sign-off closed; zero-issue staging report remains the only enforcement gate |
 | POS disposition: **Park** | Schema/migration scope | Both | Day 3 |
 | Phase 1 hosting/providers — single VPS/nginx/systemd/local PostgreSQL/uploads/in-memory limiter/Sentry/uptime selected in ADR 0008 | M3 pilot operations | Yazan | Runtime, recovery, and observability automation local; hosted Sentry/uptime and VPS evidence pending |
 | Backup method, RPO/RTO, and retention — restic off-VPS; RPO 24h/RTO 4h accepted in ADR 0010 | M3 recovery and M5 gate | Yazan | Automation/rehearsal contract local; real remote restore evidence pending |

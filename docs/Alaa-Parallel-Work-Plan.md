@@ -54,7 +54,7 @@ documentation, fixture, or regression task instead of waiting.
 | Repair/test local frontend path | Pair with Yazan: Alaa verifies frontend/E2E commands; Yazan owns server/CI commands. | Build/lint/test commands captured in plan. |
 | E2E skeleton | Configure runner and create smoke flows for login/admin shell and QR/menu page using isolated fixtures or mocks; pair with Yazan on deterministic backend fixtures. | Smoke suite runs locally and in CI/staging. |
 | Journey/state inventory | Map customer, admin, team, and SuperAdmin success/loading/empty/validation/permission/offline/failure states. | **Done** — see backlog below. |
-| Typed API design | Define `ApiError` and request/response typing approach from Yazan’s draft contract. | `ApiError` shipped (`src/services/api.ts`) with unit tests. Response-body typing still defaults to `any`; see `codex/api-response-typing`. |
+| Typed API design | Define `ApiError` and request/response typing approach from Yazan’s draft contract. | **Done** (`codex/api-response-typing`, 16 Aug). `ApiError` shipped with unit tests, and every `api.get/post/put/patch/delete/postWithToken/getWithToken/upload` call site across `src/` (tableService, menuService, orderService, adminService, superAdminService, orderingStateService, memberService, AuthProvider, AdminOptionsPanel, useAdminMonetary) now has a real response type verified against `server/index.js` and the Prisma schema, not the frontend's prior assumptions. Found and fixed 3 real bugs `any` had been hiding: a `parseInt()` on an already-numeric id, a live admin category-filter bug where `item.category_id === selectedCategory` was always false (number vs. string — proven both ways with a new E2E regression test), and a real-time Socket.IO order push that bypassed the numeric price/total coercion the REST path had. Also deleted several duplicate/drifted local type copies in favor of one real source of truth per endpoint. |
 | Cleanup | Delete stale schema/hook files and confirm the client build stays clean. | **Done** — `useAuthhhhh.tsx`, `schema.sql`, `schema.prisma.bak` removed; typecheck/build clean. |
 
 ## Journey/state inventory — 13 August 2026
@@ -190,6 +190,15 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
 | Tenant UX | Organization switcher, member/role UI, capability guards, and negative/forbidden states. | Owner/manager/staff scenarios against fixtures/HTTP test environment. |
 | Accessibility/RTL foundations | Keyboard/focus/dialog primitives, labels/live regions, real Arabic fixtures, responsive baseline. | Component/visual checks in EN + AR/RTL. |
 
+**A1 status — 16 August 2026: all five rows done.** Organization switcher shipped
+14–15 Aug; member/role UI (`src/components/team/TeamManagement.tsx`) shipped 16 Aug on
+Yazan's organization-membership contract, with role-gated visibility (OWNER edits
+role/status inline, MANAGER can add members only, STAFF never sees the tab — matches
+the server's own `GET /api/organization/members` role gate) and a confirm step before
+suspending a member. Accessibility/RTL foundations covered by the axe-core audit across
+AuthForm, the full customer journey (EN + AR/RTL), and every authenticated admin screen
+including Team itself (`tests/e2e/admin-accessibility.spec.ts`).
+
 ### A2 — M2 reliable customer order journey (Weeks 4–5)
 
 | Task | Frontend scope | Required test / Yazan handoff |
@@ -199,6 +208,16 @@ Covered by `src/services/api.test.ts` (`isUnauthenticatedError` cases) and the n
 | Order recovery | Persist the minimum order/tracking state; on refresh, `visibilitychange`, online/reconnect, and socket reconnect, refetch the authoritative status. | Browser test plus real iOS Safari/Android Chrome evidence. |
 | Status and failure UX | Pending, committed, conflict, validation, rate-limit, overloaded/paused, offline, reconnecting, expired-link, and server-error states. | E2E/visual evidence; no raw backend error messages exposed. |
 | Core journey | Complete menu/customization/cart/promotion/tip/submit/confirmation/tracking in EN/AR and LTR/RTL. | Golden E2E on desktop/mobile; server totals displayed as authoritative. |
+
+**A2 status — 16 August 2026: functionally done, one evidence gap remains.** Capability-
+aware ordering, idempotency-keyed retry-safe checkout (persisted across reload/mobile-
+resume), reconnect/online-event order recovery, the full pending/conflict/rate-limit/
+paused/offline/expired-link error-state set, and the EN/AR core journey are all shipped
+and covered by `tests/e2e-golden/` and `tests/e2e/table-capability-order.spec.ts` on
+desktop Chromium and Playwright's Pixel 7 mobile emulation. Not done: real iOS Safari/
+Android Chrome device evidence as this row's own test column calls for — only emulated
+mobile Chromium has been run, never an actual device or Safari's WebKit engine. Low
+priority, previously flagged and deferred, not picked back up.
 
 ### A3 — M3 production experience (Weeks 6–8)
 
