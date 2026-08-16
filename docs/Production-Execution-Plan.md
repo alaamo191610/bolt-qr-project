@@ -920,6 +920,12 @@ Production-Done remains deployment-gated: apply migration
 pilot SuperAdmin over TLS, perform one real invitation handoff without logging the link, and retain
 staging audit/session/public-denial evidence. No production database was changed by this local work.
 
+**Repository handoff:** implementation commit `0b75b51` was pushed to `origin/main` on 16 August
+2026. The immediate next execution point is the staging/pilot deployment gate: database backup and
+preflight, additive migration deployment before application restart, HTTPS SuperAdmin enrollment,
+one controlled invitation/activation, subscription cutoff verification across REST/realtime/public
+ordering, audit-event inspection, and rollback rehearsal/evidence capture.
+
 ## Required test evidence
 
 | Layer | Minimum evidence | Required at |

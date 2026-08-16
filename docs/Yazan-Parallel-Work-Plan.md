@@ -996,6 +996,11 @@ also pass; the audit reports zero production vulnerabilities. Deployment still r
 the additive migration before the application and completing the normal staging/TLS evidence. No
 production database was changed during local validation.
 
+**Repository handoff:** implementation commit `0b75b51` (`feat: add SuperAdmin restaurant
+provisioning`) was pushed to `origin/main` on 16 August 2026. The next point is deployment-gated:
+apply the additive migration on the target environment before the application, then retain the
+staging/TLS invitation, activation, subscription-revocation, audit, and rollback evidence.
+
 ## PR and handoff checklist
 
 - [ ] Contract posted before Alaa depends on it.
