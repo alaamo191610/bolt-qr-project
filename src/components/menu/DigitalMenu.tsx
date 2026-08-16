@@ -11,41 +11,18 @@ import {
 import { useAuth } from "../../providers/AuthProvider";
 
 import { useLanguage } from "../../contexts/LanguageContext";
-import { menuService } from "../../services/menuService";
+import {
+  menuService,
+  type AdminMenuItem as MenuItem,
+  type AdminCategory as Category,
+  type AdminIngredient as Ingredient,
+} from "../../services/menuService";
 import toast from "react-hot-toast";
 import { UploadCloud, Loader2, XCircle } from "lucide-react";
 import AdminOptionsPanel from "../admin/AdminOptionsPanel"; // adjust path
 import { SeedDataButton } from "./SeedDataButton";
 import { api } from "../../services/api";
 import { getErrorMessage } from "../../utils/errors";
-
-interface Category {
-  id: string;
-  name_en: string;
-  name_ar: string;
-}
-
-interface Ingredient {
-  id: string;
-  name_en: string;
-  name_ar: string;
-}
-
-interface MenuItem {
-  id: string;
-  name_en: string;
-  name_ar: string;
-  price: number;
-  image_url: string;
-  available: boolean;
-  category_id: string;
-  created_at: string;
-  user_id?: string;
-  categories?: Category | null;
-  ingredients_details?: {
-    ingredient: Ingredient;
-  }[];
-}
 
 interface ImageUploadFieldProps {
   value: string;
@@ -592,8 +569,8 @@ const DigitalMenu: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   // Helper function to get localized name
-  const getLocalizedName = (item: { name_en: string; name_ar: string }) => {
-    return language === "ar" ? item.name_ar : item.name_en;
+  const getLocalizedName = (item: { name_en: string; name_ar: string | null }) => {
+    return (language === "ar" ? item.name_ar : item.name_en) || item.name_en || item.name_ar || "";
   };
 
   // Data fetching
@@ -633,7 +610,7 @@ const DigitalMenu: React.FC = () => {
         }
       }
 
-      const data = await menuService.getMenuItems(user.id) as unknown as MenuItem[];
+      const data = await menuService.getMenuItems(user.id);
 
       console.log("Fetched items:", data); // Debug log
 
@@ -756,10 +733,10 @@ const DigitalMenu: React.FC = () => {
       setForm({
         id: item.id,
         name_en: item.name_en,
-        name_ar: item.name_ar,
+        name_ar: item.name_ar || "",
         price: item.price.toString(),
         category_id: item.category_id,
-        image_url: item.image_url,
+        image_url: item.image_url || "",
         available: item.available,
         ingredients:
           item.ingredients_details?.map((i) => i.ingredient.id) || [],

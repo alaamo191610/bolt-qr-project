@@ -1,6 +1,19 @@
 import type { Table } from '../lib/supabase'
 import { api } from './api'
 
+// Matches the raw `tables` row Prisma returns from GET/POST/PUT /api/tables
+// (server/index.js, server/prisma/schema.prisma `model Table`).
+export interface ApiTable {
+  id: number
+  admin_id: string | null
+  organization_id: string | null
+  branch_id: string | null
+  code: string
+  capacity: number | null
+  status: string | null
+  created_at: string
+}
+
 export interface TableCapabilityRotation {
   capability: string
   tableId: number
@@ -18,9 +31,9 @@ export interface TableSessionExchange {
 
 export const tableService = {
   // Get all tables for admin
-  async getTables(adminId: string) {
+  async getTables(adminId: string): Promise<ApiTable[]> {
     try {
-      return await api.get('/tables', { adminId });
+      return await api.get<ApiTable[]>('/tables', { adminId });
     } catch (error) {
       console.error('Error fetching tables:', error)
       throw error
@@ -28,10 +41,10 @@ export const tableService = {
   },
 
   // Add new table
-  async addTable(table: Omit<Table, 'id' | 'created_at'>) {
+  async addTable(table: Omit<Table, 'id' | 'created_at'>): Promise<ApiTable> {
     try {
       // Backend will get admin_id from the token
-      return await api.post('/tables', table);
+      return await api.post<ApiTable>('/tables', table);
     } catch (error) {
       console.error('Error adding table:', error)
       throw error
@@ -39,9 +52,9 @@ export const tableService = {
   },
 
   // Update table
-  async updateTable(id: string, updates: Partial<Table>) {
+  async updateTable(id: string, updates: Partial<Table>): Promise<ApiTable> {
     try {
-      return await api.put(`/tables/${id}`, updates);
+      return await api.put<ApiTable>(`/tables/${id}`, updates);
     } catch (error) {
       console.error('Error updating table:', error)
       throw error
@@ -49,9 +62,9 @@ export const tableService = {
   },
 
   // Delete table
-  async deleteTable(id: string) {
+  async deleteTable(id: string): Promise<{ success: boolean }> {
     try {
-      return await api.delete(`/tables/${id}`);
+      return await api.delete<{ success: boolean }>(`/tables/${id}`);
     } catch (error) {
       console.error('Error deleting table:', error)
       throw error
@@ -62,7 +75,7 @@ export const tableService = {
   // secret once — it is never retrievable again after this call returns.
   async rotateCapability(tableId: number | string): Promise<TableCapabilityRotation> {
     try {
-      return await api.post(`/tables/${tableId}/capability/rotate`, {});
+      return await api.post<TableCapabilityRotation>(`/tables/${tableId}/capability/rotate`, {});
     } catch (error) {
       console.error('Error rotating table capability:', error)
       throw error
@@ -73,7 +86,7 @@ export const tableService = {
   // already issued from it. Safe to call again on an already-revoked table.
   async revokeCapability(tableId: number | string): Promise<{ success: boolean }> {
     try {
-      return await api.delete(`/tables/${tableId}/capability`);
+      return await api.delete<{ success: boolean }>(`/tables/${tableId}/capability`);
     } catch (error) {
       console.error('Error revoking table capability:', error)
       throw error
@@ -83,6 +96,6 @@ export const tableService = {
   // Public: exchange a scanned QR capability for a short-lived table-session
   // bearer token. No restaurant/SuperAdmin auth is attached to this call.
   async exchangeTableSession(capability: string): Promise<TableSessionExchange> {
-    return await api.postPublic('/public/table-session', { capability });
+    return await api.postPublic<TableSessionExchange>('/public/table-session', { capability });
   }
 }

@@ -15,7 +15,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { adminService, type AnalyticsSummary } from "./services/adminService";
-import { tableService } from "./services/tableService";
+import { tableService, type ApiTable } from "./services/tableService";
 import { menuService } from "./services/menuService";
 import { orderService } from "./services/orderService";
 import AuthForm from "./components/Auth/AuthForm";
@@ -88,14 +88,6 @@ interface AdminProfile {
   restaurant_name?: string;
   email?: string;
   preferred_language?: string;
-}
-
-interface ApiTable {
-  id: number;
-  code: string;
-  status?: string;
-  capacity?: number;
-  admin_id?: string;
 }
 
 interface ApiOrderItem {

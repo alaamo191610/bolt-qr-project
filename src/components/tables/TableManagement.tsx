@@ -73,7 +73,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
       const createdTable = await tableService.addTable(tableData);
 
       const uiTable: Table = {
-        id: parseInt(createdTable.id) || Math.random(),
+        id: createdTable.id,
         number: createdTable.code,
         status: "available",
         capacity: newTable.capacity,

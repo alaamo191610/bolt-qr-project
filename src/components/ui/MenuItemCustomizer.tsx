@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Minus } from "lucide-react";
-import { menuService } from "../../services/menuService";
+import {
+  menuService,
+  type MenuConfigMenu as MenuRow,
+  type MenuConfigIngredientRow as IngredientRow,
+  type MenuConfigMenuModifierGroup as MenuModifierGroupRow,
+  type MenuConfigComboGroup as ComboGroupRow,
+} from "../../services/menuService";
 import { getErrorMessage } from "../../utils/errors";
 
 /**
@@ -37,70 +43,6 @@ export type CartLine = {
   priceDelta?: number;
   displayLabels?: string[];
 };
-
-// --- DB result shapes ---
-interface MenuRow {
-  id: string;
-  name_en: string | null;
-  name_ar: string | null;
-  price: number | null;
-  image_url: string | null;
-}
-interface IngredientRow {
-  menu_id: string;
-  ingredient_id: string;
-  removable: boolean | null;
-  extra_available: boolean | null;
-  max_extra: number | null;
-  extra_price_override: number | null;
-  ingredients: {
-    id: string;
-    name_en: string | null;
-    name_ar: string | null;
-    extra_price: number | null;
-  };
-  ingredient?: { // Fix: Match usage (row.ingredient) and schema
-    id: string;
-    name_en: string | null;
-    name_ar: string | null;
-    extra_price: number | null;
-  };
-}
-interface ModifierOptionRow {
-  id: string;
-  name_en: string | null;
-  name_ar: string | null;
-  price_delta: number | null;
-  max_qty: number | null;
-  is_default: boolean | null;
-}
-interface ModifierGroupRow {
-  id: string;
-  name_en: string | null;
-  name_ar: string | null;
-  selection_type: "single" | "multi";
-  min_select: number | null;
-  max_select: number | null;
-  required: boolean | null;
-  modifier_options: ModifierOptionRow[];
-}
-interface MenuModifierGroupRow {
-  menu_id: string;
-  modifier_group: ModifierGroupRow; // Fix: Match usage (row.modifier_group)
-}
-interface ComboGroupItemRow {
-  child_menu_id: string;
-  is_default: boolean | null;
-  upgrade_price_delta: number | null;
-  menus?: { id: string; name_en: string | null; price: number | null };
-}
-interface ComboGroupRow {
-  id: string;
-  menu_id: string;
-  min_select: number | null;
-  max_select: number | null;
-  combo_group_items: ComboGroupItemRow[];
-}
 
 // -------- Hook: load config for a menu --------
 function useMenuConfig(menuId: string) {
