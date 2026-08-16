@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   SUBSCRIPTION_PLANS,
   hasRestaurantAccess,
@@ -47,4 +48,18 @@ test('subscription input derives immutable limits and requires a future trial ex
   }), /must start with an active or trial/u);
   assert.equal(SUBSCRIPTION_PLANS.PRO.max_tables, 500);
   assert.equal(SUBSCRIPTION_PLANS.PRO.max_menu_items, 2_000);
+});
+
+test('database migration clamps legacy plans and enforces exact finite entitlements', async () => {
+  const migration = await readFile(new URL(
+    '../server/prisma/migrations/20260816150000_enforce_finite_plan_entitlements/migration.sql',
+    import.meta.url,
+  ), 'utf8');
+
+  assert.match(migration, /Unknown subscription plan found/u);
+  assert.match(migration, /WHEN 'PRO' THEN 500/u);
+  assert.match(migration, /WHEN 'PRO' THEN 2000/u);
+  assert.match(migration, /"subscription_plan" = 'PRO'/u);
+  assert.match(migration, /"max_staff_accounts" = 10/u);
+  assert.match(migration, /VALIDATE CONSTRAINT "admins_plan_entitlements_finite_check"/u);
 });

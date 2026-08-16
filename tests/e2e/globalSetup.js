@@ -58,11 +58,13 @@ const seedFixture = async prisma => {
       email: user.email,
       password: passwordHash,
       restaurant_name: organization.name,
-      // The Prisma default (1) is realistic for a real restaurant but too
-      // tight for this fixture: the chromium and mobile-chrome projects
-      // share this one organization, and each independently exercises
-      // adding a team member in tests/e2e/admin-accessibility.spec.ts.
-      max_staff_accounts: 5,
+      // Both browser projects share this organization and add a team member.
+      // Use the exact PRO catalog entitlement so the fixture remains valid
+      // under the database-level finite-plan constraint.
+      subscription_plan: 'PRO',
+      max_tables: 500,
+      max_menu_items: 2_000,
+      max_staff_accounts: 10,
     },
   });
   await prisma.organizationUser.create({

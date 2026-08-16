@@ -41,13 +41,18 @@ printf 'RELEASE_VERSION=%s\n' "$release_id" > "$release_directory/.release.env"
 chmod 0644 "$release_directory/.release.env"
 
 cd "$release_directory"
-env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm ci
-env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run prisma:generate
-SENTRY_RELEASE="$release_id" \
+env -u DATABASE_URL -u MIGRATION_DATABASE_URL -u JWT_SECRET -u SUPER_ADMIN_MFA_ENCRYPTION_KEY \
+  -u SENTRY_DSN -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm ci
+env -u DATABASE_URL -u MIGRATION_DATABASE_URL -u JWT_SECRET -u SUPER_ADMIN_MFA_ENCRYPTION_KEY \
+  -u SENTRY_DSN -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run prisma:generate
+env -u DATABASE_URL -u MIGRATION_DATABASE_URL -u JWT_SECRET -u SUPER_ADMIN_MFA_ENCRYPTION_KEY \
+  -u SENTRY_DSN \
+  SENTRY_RELEASE="$release_id" \
 VITE_RELEASE_VERSION="$release_id" \
 VITE_SENTRY_ENVIRONMENT="${VITE_SENTRY_ENVIRONMENT:-${SENTRY_ENVIRONMENT:-pilot}}" \
 npm run build
-env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run migrate:deploy
+npm run migrate:deploy
+npm run verify:database-roles
 
 current_target=""
 if [[ -L "$current_link" ]]; then

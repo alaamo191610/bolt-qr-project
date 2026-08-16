@@ -78,10 +78,19 @@ invitation and returns one new 48-hour secret exactly once.
 For `TRIAL`, use `trial_ends_at` instead. The backend replaces limits from its plan catalog and
 records old/new values, actor, organization, and request ID in `platform_audit_events`.
 
+Migration `20260816150000_enforce_finite_plan_entitlements` normalizes every existing known plan to
+the same catalog and adds a validated database check tying each plan to its exact limits. It fails
+closed if an unknown/custom plan exists; operators must review that data instead of silently
+mapping it. Direct SQL and future code therefore cannot restore effectively unlimited PRO values.
+Raising a ceiling requires a reviewed migration plus pagination/capacity evidence for the affected
+list.
+
 ## Migration and rollback
 
 Migration `20260816130000_super_admin_restaurant_invitations` is additive: it creates
 `restaurant_invitations` and `platform_audit_events` plus indexes and foreign keys. Deploy the
 migration before the application. Rolling application code back is safe while retaining the new
 tables. Dropping them is destructive and is not part of normal rollback. Existing restaurants
-remain active under their existing subscription values; no backfill is required.
+remain active under their existing subscription values; no invitation backfill is required. The
+finite-entitlement migration intentionally normalizes known plan limits and cannot restore prior
+oversized values on rollback; application rollback remains compatible with the lower limits.

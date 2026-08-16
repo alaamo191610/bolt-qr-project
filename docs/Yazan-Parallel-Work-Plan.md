@@ -1001,6 +1001,64 @@ provisioning`) was pushed to `origin/main` on 16 August 2026. The next point is 
 apply the additive migration on the target environment before the application, then retain the
 staging/TLS invitation, activation, subscription-revocation, audit, and rollback evidence.
 
+## Tracking update — 16 August 2026 (database-role boundary and growth guard review started)
+
+The SuperAdmin destructive-action audit is complete: public signup and hard restaurant deletion
+are absent, while restaurant provisioning, invitation rotation, and subscription mutation all
+require a current SuperAdmin session plus the existing ten-minute recent-MFA gate. The PostgreSQL
+role boundary remains the material open security point. Implementation has started to remove
+migration execution from the Node service, give the runtime a DML-only non-owner login, reserve
+schema ownership/DDL and `_prisma_migrations` for a separate migration login, and add an operator
+verification gate.
+
+The growth review confirms PRO already has finite backend-owned limits (500 tables, 2,000 menu
+items, 10 non-owner staff accounts), and orders, analytics exports, promotions, and SuperAdmin
+restaurant lists already use bounded cursor pages. This point will add regression guards so future
+changes cannot silently restore effectively unlimited entitlements or unbounded growth endpoints.
+No production role or database permission has been changed by starting this local work.
+
+### Point update — destructive actions, recent MFA, database roles, and finite growth locally complete
+
+This point is **locally complete on 16 August 2026**. SuperAdmin restaurant hard deletion remains
+absent from both the API and dashboard. Regression evidence calls the retired
+`DELETE /api/admins/:id` path, receives `404`, and proves the restaurant row is unchanged.
+Provisioning, invitation rotation, and plan/status mutation all require an authenticated
+SuperAdmin session whose MFA event is no more than ten minutes old; stale-MFA tests deny all three
+writes without mutation.
+
+The [database-role runbook](operations/database-role-boundary.md) now defines and automates the
+single-VPS least-privilege boundary. `boltqr_runtime` is a non-owner, non-inheriting DML-only role
+with no DDL, database `TEMP`, cluster powers, or `_prisma_migrations` access. `boltqr_migrate` is a
+separate non-inheriting schema owner used only by deployment. Node/systemd startup no longer runs
+migrations, the deployment wrapper exposes the migration URL only to Prisma, and a read-only
+verification gate runs before release activation. Disposable-PostgreSQL evidence converts a real
+legacy owner, runs Prisma through the migration role, proves runtime DML, denies runtime DDL and
+migration-ledger reads, and proves the retired owner is read-only. RLS itself remains deferred
+until request transactions set `SET LOCAL app.organization_id` and pool-leak/background-job tests
+exist; role separation is not represented as RLS completion.
+
+Migration `20260816150000_enforce_finite_plan_entitlements` normalizes known subscriptions and adds
+a validated database constraint for exact backend-owned limits: STANDARD `10/50/1`, BASIC
+`25/150/3`, and PRO `500/2000/10` for tables/menu items/staff. Unknown plans fail migration instead
+of receiving guessed limits. Orders, bounded analytics, promotions, and the SuperAdmin restaurant
+directory already use hard-capped cursor pagination. Tables and menus remain bounded by the finite
+plan ceilings; **no plan ceiling may be increased** until the affected list endpoint is paginated
+and its production-shaped query plan and capacity limits pass review.
+
+Final local evidence passes 81 backend unit/security/operations tests, 36 disposable-PostgreSQL
+integration/migration/capacity tests, 80 frontend tests, and 39 desktop/mobile browser tests with
+one intentional skip. The production-shaped 300-request gate passes at p95 `235.03 ms`, p99
+`318.40 ms`, `122.55 req/s`, and `0%` errors. Prisma validation, TypeScript, ESLint, shell/diff
+checks, production build, and production dependency audit also pass; the audit reports zero
+production vulnerabilities.
+
+Production-Done remains operator-gated: take and verify a backup; create independent passwords and
+the two PostgreSQL roles; run the guarded ownership/grant conversion locally on the VPS; install
+the runtime environment as `0640` and migration environment as root-only `0600`; deploy the finite
+entitlement migration; require `verify:database-roles` to pass; then retain TLS login, stale-MFA,
+rollback, and capacity evidence. No production database, role, or permission was changed during
+this local implementation.
+
 ## PR and handoff checklist
 
 - [ ] Contract posted before Alaa depends on it.

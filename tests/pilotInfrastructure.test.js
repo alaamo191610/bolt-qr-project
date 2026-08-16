@@ -13,7 +13,7 @@ test('systemd service runs one hardened unprivileged process with persistent upl
   assert.match(service, /^SupplementaryGroups=boltqruploads$/m);
   assert.match(service, /^EnvironmentFile=\/etc\/bolt-qr\/bolt-qr\.env$/m);
   assert.match(service, /^EnvironmentFile=-\/opt\/bolt-qr\/current\/\.release\.env$/m);
-  assert.match(service, /^ExecStartPre=\/usr\/bin\/npm run migrate:deploy$/m);
+  assert.doesNotMatch(service, /migrate:deploy/);
   assert.match(service, /^ExecStart=\/usr\/bin\/npm run start:server$/m);
   assert.match(service, /^NoNewPrivileges=true$/m);
   assert.match(service, /^ProtectSystem=strict$/m);
@@ -45,8 +45,10 @@ test('deployment scripts pass shell syntax checks and exclude mutable or secret 
   const deploy = await read('ops/bin/deploy-release.sh');
   assert.match(deploy, /--exclude '\.env'/);
   assert.match(deploy, /--exclude 'uploads'/);
-  assert.match(deploy, /env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm ci/);
+  assert.match(deploy, /env -u DATABASE_URL -u MIGRATION_DATABASE_URL -u JWT_SECRET -u SUPER_ADMIN_MFA_ENCRYPTION_KEY/);
+  assert.match(deploy, /-u SENTRY_DSN -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm ci/);
   assert.match(deploy, /npm run migrate:deploy/);
+  assert.match(deploy, /npm run verify:database-roles/);
   assert.match(deploy, /mv -Tf "\$next_link" "\$current_link"/);
   assert.match(deploy, /curl --fail/);
 
@@ -64,7 +66,45 @@ test('production environment template uses loopback and keeps uploads outside re
   assert.match(environment, /^UPLOAD_DIR=\/var\/lib\/bolt-qr\/uploads$/m);
   assert.match(environment, /^JWT_SECRET=REPLACE_/m);
   assert.match(environment, /^SUPER_ADMIN_MFA_ENCRYPTION_KEY=REPLACE_WITH_64_HEX_CHARACTERS$/m);
+  assert.match(environment, /^DATABASE_URL=postgresql:\/\/boltqr_runtime:/m);
+  assert.doesNotMatch(environment, /MIGRATION_DATABASE_URL/);
   assert.doesNotMatch(environment, /development-only-change-me/);
+});
+
+test('database migrations use a separately protected role and runtime startup never migrates', async () => {
+  const packageJson = JSON.parse(await read('package.json'));
+  const migrationEnvironment = await read('ops/env/bolt-qr-migrate.env.example');
+  const migrationWrapper = await read('ops/bin/migrate-deploy.js');
+  const roleBootstrap = await read('ops/bin/configure-database-roles.sh');
+  const roleSql = await read('ops/postgres/configure-role-boundaries.sql');
+  const verifier = await read('ops/bin/verify-database-roles.js');
+
+  assert.equal(packageJson.scripts.start, 'npm run start:server');
+  assert.equal(packageJson.scripts['migrate:deploy'], 'node ops/bin/migrate-deploy.js');
+  assert.equal(packageJson.scripts['verify:database-roles'], 'node ops/bin/verify-database-roles.js');
+  assert.match(migrationEnvironment, /^MIGRATION_DATABASE_URL=postgresql:\/\/boltqr_migrate:/m);
+  assert.match(migrationWrapper, /Runtime and migration database URLs must use distinct roles/);
+  assert.match(migrationWrapper, /DATABASE_URL: migrationUrl/);
+  assert.match(roleBootstrap, /CURRENT_OWNER_ROLE/);
+  assert.match(roleSql, /NOBYPASSRLS/);
+  assert.match(roleSql, /NOINHERIT/);
+  assert.match(roleSql, /pg_auth_members/);
+  assert.match(roleSql, /GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES/);
+  assert.match(roleSql, /REVOKE ALL PRIVILEGES ON TABLE public\._prisma_migrations/);
+  assert.match(verifier, /runtime_role_has_ddl_or_temp/);
+  assert.match(verifier, /runtime_role_can_inherit_membership/);
+  assert.match(verifier, /runtime_can_access_prisma_migrations/);
+
+  for (const relativePath of [
+    'ops/bin/configure-database-roles.sh',
+  ]) {
+    const scriptPath = new URL(`../${relativePath}`, import.meta.url).pathname;
+    const syntax = spawnSync('bash', ['-n', scriptPath], { encoding: 'utf8' });
+    assert.equal(syntax.status, 0, syntax.stderr);
+  }
+  const migrationPath = new URL('../ops/bin/migrate-deploy.js', import.meta.url).pathname;
+  const migrationSyntax = spawnSync(process.execPath, ['--check', migrationPath], { encoding: 'utf8' });
+  assert.equal(migrationSyntax.status, 0, migrationSyntax.stderr);
 });
 
 test('Sentry starts before the API and production source maps are uploaded then removed', async () => {
@@ -78,7 +118,7 @@ test('Sentry starts before the API and production source maps are uploaded then 
   assert.match(packageJson.scripts.server, /--import \.\/server\/instrumentation\.js/);
   assert.match(deploy, /SENTRY_RELEASE="\$release_id"/);
   assert.match(deploy, /VITE_RELEASE_VERSION="\$release_id"/);
-  assert.match(deploy, /env -u SENTRY_AUTH_TOKEN -u SENTRY_ORG -u SENTRY_PROJECT npm run migrate:deploy/);
+  assert.match(deploy, /npm run migrate:deploy/);
   assert.match(vite, /sourcemap: sentrySourceMapsEnabled \? 'hidden' : false/);
   assert.match(vite, /filesToDeleteAfterUpload: \['\.\/dist\/\*\*\/\*\.map'\]/);
   assert.match(applicationEnvironment, /^SENTRY_DSN=https:\/\//m);

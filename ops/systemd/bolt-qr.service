@@ -12,7 +12,6 @@ SupplementaryGroups=boltqruploads
 WorkingDirectory=/opt/bolt-qr/current
 EnvironmentFile=/etc/bolt-qr/bolt-qr.env
 EnvironmentFile=-/opt/bolt-qr/current/.release.env
-ExecStartPre=/usr/bin/npm run migrate:deploy
 ExecStart=/usr/bin/npm run start:server
 Restart=on-failure
 RestartSec=5s

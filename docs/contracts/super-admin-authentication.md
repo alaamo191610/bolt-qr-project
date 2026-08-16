@@ -76,9 +76,13 @@ fail closed.
 version, revokes every outstanding SuperAdmin session, expires the cookie, and returns
 `{ "success": true }`.
 
-`PUT /api/super-admin/restaurants/:id/plan` additionally requires `authTime` within the preceding
-10 minutes. Otherwise it returns `401 SUPER_ADMIN_REAUTH_REQUIRED`; the client clears the session
-and restarts password plus MFA. There is no refresh endpoint.
+Every platform-changing restaurant write requires `authTime` within the preceding 10 minutes:
+`POST /api/super-admin/restaurants`,
+`POST /api/super-admin/restaurants/:id/invitations`, and
+`PUT /api/super-admin/restaurants/:id/plan`. Otherwise it returns
+`401 SUPER_ADMIN_REAUTH_REQUIRED`; the client clears the session and restarts password plus MFA.
+There is no refresh endpoint. Hard restaurant deletion is not exposed; suspension/cancellation is
+an audited subscription mutation through the recent-MFA plan endpoint.
 
 ## Operational requirements
 

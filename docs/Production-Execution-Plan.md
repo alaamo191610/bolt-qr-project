@@ -926,6 +926,59 @@ preflight, additive migration deployment before application restart, HTTPS Super
 one controlled invitation/activation, subscription cutoff verification across REST/realtime/public
 ordering, audit-event inspection, and rollback rehearsal/evidence capture.
 
+## Implementation tracking — 16 August 2026 (least-privilege database roles started)
+
+The requested SuperAdmin and scale prerequisites were audited before new work. Hard restaurant
+deletion is no longer exposed, every sensitive SuperAdmin restaurant write has the ten-minute
+recent-MFA middleware, PRO entitlements are finite and server-derived, and material growth lists
+are already cursor-paginated. Regression assertions will make those properties explicit.
+
+The open implementation is PostgreSQL identity separation for the single-VPS pilot. The runtime
+service will receive only a `boltqr_runtime` URL with DML/sequence usage and no object ownership,
+DDL, `BYPASSRLS`, or `_prisma_migrations` access. Deployment will load a separately protected
+`boltqr_migrate` URL only for `prisma migrate deploy`; systemd startup will never migrate. A guarded
+ownership/grant bootstrap, read-only verification command, environment templates, runbook,
+rollback behavior, and disposable-PostgreSQL proof are in progress. This entry records work
+started, not completion or production evidence.
+
+### Implementation point update — role boundary and guarded growth locally complete
+
+This point is **locally complete on 16 August 2026**. Destructive SuperAdmin restaurant deletion is
+absent from the API and UI, and a PostgreSQL-backed regression proves the retired delete path is
+`404` and preserves its target. Every exposed sensitive restaurant write—provisioning, invitation
+rotation, and subscription mutation—uses the ten-minute recent-MFA gate and has stale-session
+negative evidence.
+
+The [database-role runbook](operations/database-role-boundary.md), guarded PostgreSQL bootstrap,
+separate protected environment templates, migration-only Prisma wrapper, and read-only verifier
+implement the ADR 0006 role prerequisite. Runtime owns no objects, cannot inherit another role,
+cannot perform DDL or create temporary objects, and cannot read `_prisma_migrations`; migration is
+the separate non-powerful schema owner. Node and systemd never migrate. Deployment runs migrations
+with the protected identity and verifies the role boundary before switching the active symlink. A
+disposable real-PostgreSQL conversion test covers legacy-owner transfer and read-only downgrade,
+runtime DML, denied runtime/legacy writes and DDL, migration DDL, default privileges, ownership, and
+ledger isolation. This does not enable RLS; transaction-bound tenant context and pool/background
+policy tests remain later ADR 0006 work.
+
+Migration `20260816150000_enforce_finite_plan_entitlements` makes direct SQL obey the same exact
+catalog as the server: STANDARD `10/50/1`, BASIC `25/150/3`, and PRO `500/2000/10`. It normalizes
+known rows, fails closed on unknown plans, then validates the database constraint. Material-growth
+orders, aggregate analytics, promotions, and restaurant-directory APIs are already cursor-paged.
+Tables and menus are bounded by finite subscription ceilings. Any proposal to raise those ceilings
+is blocked until the affected list is paginated and reviewed query-plan/capacity evidence passes.
+
+Final local regression passes 81 unit/security/operations, 36 disposable-PostgreSQL integration/
+migration/capacity, 80 frontend, and 39 browser tests with one intentional skip. The retained
+300-request capacity run records p95 `235.03 ms`, p99 `318.40 ms`, `122.55 req/s`, and `0%` errors.
+Prisma, TypeScript, ESLint, shell/diff checks, production build, and production dependency audit
+pass with zero production vulnerabilities.
+
+Production-Done is still deployment-gated. Back up first; create the runtime/migration identities
+with independent passwords; run the guarded conversion on the VPS; protect runtime and migration
+environment files as `0640` and root-only `0600`; deploy the finite-entitlement migration; require
+the role verifier to pass; and retain HTTPS recent-MFA, rollback, and selected-VPS capacity
+evidence. This local point changed no production database, role, or permission.
+
 ## Required test evidence
 
 | Layer | Minimum evidence | Required at |
@@ -949,7 +1002,7 @@ recorded in the completion register. “Code is written” is not a completion s
 | M0 test foundation | In progress | — | Foundation/HTTP/CI/integration/rehearsal checks pass; disposable PostgreSQL database, fixtures, auth characterization, and production-shaped migration rehearsal complete. Staging evidence remains. | — | 14 Aug 2026 |
 | M1 safety baseline | Local implementation complete; final enforcement staging-gated | ADR 0009 | Request context, safe errors, limiter, token/session revocation, SuperAdmin MFA/HttpOnly session, organization/member contract, expand/backfill, upload ownership, cross-tenant negatives, and clean/corrupt final-enforcement rehearsal pass; staging zero-issue verify/enforce and TLS enrollment remain. | Yazan | 15 Aug 2026 |
 | M2 bounded order cycle | Local joint implementation accepted; staging/release evidence remains | `01b5c45` | QR/session, durable and reload-safe idempotency, capacity, admin availability control, telemetry, atomic transitions, six-hour tracking/revocation, authorized/versioned realtime, secure QR routing, real-backend desktop golden E2E, and mocked mobile recovery pass. | Yazan + Alaa | 15 Aug 2026 |
-| M3 Phase 1 pilot infrastructure | In progress — runtime, security, recovery, observability, and bounded-performance automation locally complete | ADRs 0008–0011; pagination/analytics contract | Final local regression: 74 unit/config/security/performance, 35 PostgreSQL integration/migration, 60 frontend, and 11 browser passes with one intentional mobile golden skip; lint, TypeScript, Prisma, build, no-public-map, production dependency audit, seven indexed EXPLAIN paths, and a 300-request capacity gate pass. Hosted backup/restore, Sentry/uptime notifications, real VPS/TLS, and Node 22/nginx capacity rerun remain. | Yazan | 16 Aug 2026 |
+| M3 Phase 1 pilot infrastructure | In progress — runtime, security, recovery, observability, bounded performance, finite entitlements, and database-role automation locally complete | ADRs 0006, 0008–0011; pagination/analytics and database-role contracts | Final local regression: 81 unit/config/security/performance, 36 PostgreSQL integration/migration/capacity, 80 frontend, and 39 browser passes with one intentional skip; lint, TypeScript, Prisma, build, role-boundary conversion/verification, zero-vulnerability production audit, seven indexed EXPLAIN paths, and a 300-request capacity gate pass. Hosted backup/restore, Sentry/uptime notifications, real VPS/TLS role conversion, and Node 22/nginx capacity rerun remain. | Yazan | 16 Aug 2026 |
 | M4 quality hardening | Not started | — | — | — | — |
 | M5 pilot | Not started | — | — | — | — |
 | M6 launch | Not started | — | — | — | — |

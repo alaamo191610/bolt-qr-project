@@ -8,13 +8,14 @@
    npm install
    ```
 
-2. Copy `.env.example` to `.env`, then set `DATABASE_URL`, a private `JWT_SECRET`, and an
-   independent `SUPER_ADMIN_MFA_ENCRYPTION_KEY` (`openssl rand -hex 32`).
+2. Copy `.env.example` to `.env`, then set the runtime-only `DATABASE_URL`, the separate owner
+   `MIGRATION_DATABASE_URL`, a private `JWT_SECRET`, and an independent
+   `SUPER_ADMIN_MFA_ENCRYPTION_KEY` (`openssl rand -hex 32`).
 
 3. Synchronize the local database schema:
 
    ```bash
-   npx prisma db push --schema server/prisma/schema.prisma
+   npm run migrate:deploy
    ```
 
 4. Start the API in one terminal:

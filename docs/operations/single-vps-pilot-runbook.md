@@ -17,6 +17,7 @@ Recovery objectives: RPO 24 hours; RTO 4 hours.
 /var/cache/bolt-qr-backup           private temporary backup staging/cache
 /var/cache/bolt-qr-restore          private temporary restore staging
 /etc/bolt-qr/bolt-qr.env            production secrets/configuration
+/etc/bolt-qr/bolt-qr-migrate.env    root-only migration database URL
 /etc/bolt-qr/sentry-build.env       root-only browser source-map upload configuration
 /etc/bolt-qr/bolt-qr-backup.env     protected backup configuration
 /etc/bolt-qr/restic-password        root-only repository encryption password
@@ -34,8 +35,11 @@ SSH, HTTP, and HTTPS traffic at both provider and host firewalls.
    both users. Create the layout above and `/var/www/certbot`. Set the upload directory to
    `root:boltqruploads` mode `2770`; this preserves the shared upload group without exposing the
    application environment to the backup user.
-3. Copy `ops/env/bolt-qr.env.example` to `/etc/bolt-qr/bolt-qr.env`, replace every placeholder,
-   set owner `root:boltqr`, and mode `0640`.
+3. Configure PostgreSQL using [the database-role runbook](database-role-boundary.md). Copy
+   `ops/env/bolt-qr.env.example` to `/etc/bolt-qr/bolt-qr.env`, replace every placeholder, and set
+   owner `root:boltqr`, mode `0640`. Copy `ops/env/bolt-qr-migrate.env.example` to
+   `/etc/bolt-qr/bolt-qr-migrate.env`, set the separate migration URL, and set owner `root:root`,
+   mode `0600`.
 4. Replace `example.com` in the nginx configuration, obtain TLS certificates, run `nginx -t`, and
    enable the site.
 5. Install the systemd unit, run `systemctl daemon-reload`, and enable `bolt-qr.service`.
@@ -54,9 +58,11 @@ inside the database/upload backup. Losing this key makes enrolled TOTP seeds unr
 ## Deployment and rollback
 
 The deployment script copies a clean source tree into a new immutable release, installs locked
-dependencies, generates Prisma Client, builds assets, applies backward-compatible migrations,
-atomically switches the current symlink, restarts the service, and waits for readiness. It excludes
-`.env`, uploads, Git metadata, dependencies, and prior build output.
+dependencies, generates Prisma Client, builds assets without database/application secrets, applies
+backward-compatible migrations with the separate migration role, verifies the runtime/migration
+boundary, atomically switches the current symlink, restarts the service, and waits for readiness.
+The Node systemd service never runs migrations and cannot read the migration environment. It
+excludes `.env`, uploads, Git metadata, dependencies, and prior build output.
 
 The rollback script swaps `current` and `previous`, restarts, and verifies readiness. It does not
 reverse database migrations. Every migration deployed in this phase must therefore preserve the
@@ -70,6 +76,7 @@ journalctl -u bolt-qr.service --since '30 minutes ago'
 curl --fail https://example.com/api/health/live
 curl --fail https://example.com/api/health/ready
 nginx -t
+npm run verify:database-roles
 ```
 
 ## Encrypted off-VPS backup installation
@@ -196,9 +203,12 @@ and migration subprocesses; only the Vite build receives them:
 
 ```bash
 set -a
+source /etc/bolt-qr/bolt-qr.env
+source /etc/bolt-qr/bolt-qr-migrate.env
 source /etc/bolt-qr/sentry-build.env
 set +a
 /opt/bolt-qr/source/ops/bin/deploy-release.sh /opt/bolt-qr/source RELEASE_ID
+unset DATABASE_URL MIGRATION_DATABASE_URL JWT_SECRET SUPER_ADMIN_MFA_ENCRYPTION_KEY SENTRY_DSN
 unset SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT VITE_SENTRY_DSN VITE_SENTRY_ENVIRONMENT
 ```
 

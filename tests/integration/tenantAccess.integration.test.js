@@ -470,6 +470,13 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
     restaurant_name: 'Public Signup Must Stay Closed',
   });
   assert.equal(legacySignup.status, 404);
+  const destructiveDelete = await cookieRequest(
+    sessionCookie,
+    `/api/admins/${tenantA.admin.id}`,
+    { method: 'DELETE' },
+  );
+  assert.equal(destructiveDelete.status, 404);
+  assert.ok(await database.prisma.admin.findUnique({ where: { id: tenantA.admin.id } }));
 
   const invitedEmail = `invited-owner-${randomUUID()}@example.com`;
   const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
@@ -630,6 +637,12 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
     }),
   });
   assert.equal(staleProvisioning.status, 401);
+  const staleInvitationRotation = await authenticatedRequest(
+    staleSession,
+    `/api/super-admin/restaurants/${provisioned.restaurant.id}/invitations`,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+  assert.equal(staleInvitationRotation.status, 401);
 
   const recoveryLogin = await postJson('/api/super-admin/login', { email, password });
   const recoveryChallenge = await recoveryLogin.json();
@@ -1861,13 +1874,22 @@ test('production-shaped query plans use bounded indexes and the API meets pilot 
     FROM generate_series(1, 10000) AS series
   `, tenantB.admin.id, tenantB.organization.id, tenantB.branchId);
   await database.prisma.$executeRawUnsafe(`
-    INSERT INTO admins (id, email, restaurant_name, subscription_plan, subscription_status, created_at)
+    INSERT INTO admins (
+      id, email, restaurant_name, subscription_plan, subscription_status,
+      max_tables, max_menu_items, max_staff_accounts, created_at
+    )
     SELECT md5('load-admin-' || series)::uuid,
       'load-admin-' || series || '@example.test', 'Load restaurant ' || series,
-      (ARRAY['STANDARD', 'BASIC', 'PRO'])[(series % 3) + 1],
+      plan,
       CASE WHEN series % 10 = 0 THEN 'ACTIVE' ELSE 'CANCELLED' END,
+      CASE plan WHEN 'STANDARD' THEN 10 WHEN 'BASIC' THEN 25 WHEN 'PRO' THEN 500 END,
+      CASE plan WHEN 'STANDARD' THEN 50 WHEN 'BASIC' THEN 150 WHEN 'PRO' THEN 2000 END,
+      CASE plan WHEN 'STANDARD' THEN 1 WHEN 'BASIC' THEN 3 WHEN 'PRO' THEN 10 END,
       CURRENT_TIMESTAMP - (series * interval '1 second')
-    FROM generate_series(1, 10000) AS series
+    FROM (
+      SELECT series, (ARRAY['STANDARD', 'BASIC', 'PRO'])[(series % 3) + 1] AS plan
+      FROM generate_series(1, 10000) AS series
+    ) plans
   `);
   await database.prisma.$executeRawUnsafe('ANALYZE orders, promotions, admins');
 

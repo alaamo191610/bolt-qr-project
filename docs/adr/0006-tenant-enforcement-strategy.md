@@ -1,7 +1,7 @@
 # ADR 0006: Release 1 tenant enforcement strategy
 
-Status: Option B selected by Yazan on 14 August 2026; Alaa sign-off recorded 14 August 2026 —
-staging evidence pending
+Status: Option B selected by Yazan on 14 August 2026; Alaa sign-off recorded 14 August 2026;
+least-privilege runtime/migration roles implemented locally 16 August 2026 — staging evidence pending
 
 ## Recorded decision
 
@@ -69,6 +69,19 @@ possible, so tests, code review, and the verification report are mandatory compe
 Choose **Option B for Release 1**, with RLS recorded as an M3 hardening decision after runtime-role
 separation and transaction-bound tenant context exist. This gives real layered enforcement now and
 keeps a credible path to RLS rather than deploying policies the current connection model may bypass.
+
+## 16 August implementation note
+
+The prerequisite role boundary is now implemented locally and documented in
+[the database-role runbook](../operations/database-role-boundary.md). Node uses a non-owner,
+non-`BYPASSRLS`, DML-only runtime role. A separately protected migration role owns schema objects;
+only the deployment process may read its URL. systemd and `npm start` do not migrate, and every
+deployment verifies role attributes, ownership, DML grants, schema/database create/temp denial, and
+runtime denial from `_prisma_migrations` before release activation.
+
+This does **not** change the selected Release 1 Option B or enable RLS. The remaining prerequisites
+are transaction-bound organization context for every protected Prisma operation, explicit platform
+and background-job policies, and pool context-leak tests.
 
 ## Invariants under either option
 
