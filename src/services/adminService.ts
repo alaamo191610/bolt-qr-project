@@ -1,11 +1,55 @@
 import type { Admin } from '../lib/supabase';
 import type { OrderFlowRules, KDSPrefs } from '../order-admin/types';
 import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
+import type { User } from '../providers/AuthProvider';
 import { api } from './api';
 
 interface CursorPage<T> {
   items: T[];
   pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
+}
+
+// GET/PUT /api/admin/profile (server/index.js publicAdminSelect). A superset
+// of the frontend's own Admin type (lib/supabase.ts), which predates the
+// theme/settings/subscription fields and is missing them entirely.
+export interface AdminProfileResponse extends Omit<Admin, 'theme_color'> {
+  order_rules: OrderFlowRules | null
+  kds_prefs: KDSPrefs | null
+  pricing_prefs: PricingPrefs | null
+  billing_settings: BillingSettings | null
+  theme: { primary: string | null; secondary: string | null; accent: string | null } | null
+  theme_mode: 'light' | 'dark' | 'system' | null
+  theme_color: string | null
+  font_family: string | null
+  subscription_plan: string
+  subscription_status: string
+  subscription_end: string | null
+  trial_ends_at: string | null
+  max_tables: number
+  max_menu_items: number
+  max_staff_accounts: number
+}
+
+export interface LoginResponse {
+  token: string
+  user: User
+}
+
+// GET /api/admin/settings - a narrow projection of AdminProfileResponse, not
+// the whole profile.
+export interface AdminOrderSettings {
+  id: string
+  order_rules: OrderFlowRules | null
+  kds_prefs: KDSPrefs | null
+}
+
+// GET /api/admin/monetary - another narrow projection.
+export interface AdminMonetarySettings {
+  id: string
+  restaurant_name: string | null
+  logo_url: string | null
+  pricing_prefs: PricingPrefs | null
+  billing_settings: BillingSettings | null
 }
 
 export interface AnalyticsSummary {
@@ -31,15 +75,15 @@ export interface AnalyticsSummary {
 }
 
 export const adminService = {
-  async login(credentials: { email: string; password: string }) {
-    return await api.post('/auth/login', credentials);
+  async login(credentials: { email: string; password: string }): Promise<LoginResponse> {
+    return await api.post<LoginResponse>('/auth/login', credentials);
   },
 
   // Get admin profile
-  async getAdminProfile(adminId?: string) {
+  async getAdminProfile(adminId?: string): Promise<AdminProfileResponse> {
     void adminId;
     try {
-      return await api.get('/admin/profile');
+      return await api.get<AdminProfileResponse>('/admin/profile');
     } catch (error) {
       console.error('Error fetching admin profile:', error);
       throw error;
@@ -47,11 +91,10 @@ export const adminService = {
   },
 
   // Update admin profile
-  async updateAdminProfile(adminId: string | undefined, updates: Partial<Admin>) {
+  async updateAdminProfile(adminId: string | undefined, updates: Partial<Admin>): Promise<AdminProfileResponse> {
     void adminId;
     try {
-      const data = await api.put('/admin/profile', updates);
-      return data;
+      return await api.put<AdminProfileResponse>('/admin/profile', updates);
     } catch (error) {
       console.error('Error updating admin profile:', error);
       throw error;
@@ -59,11 +102,10 @@ export const adminService = {
   },
 
   // Update admin language preference
-  async updateAdminLanguage(adminId: string | undefined, language: 'en' | 'ar') {
+  async updateAdminLanguage(adminId: string | undefined, language: 'en' | 'ar'): Promise<AdminProfileResponse> {
     void adminId;
     try {
-      const data = await api.put('/admin/profile', { preferred_language: language });
-      return data;
+      return await api.put<AdminProfileResponse>('/admin/profile', { preferred_language: language });
     } catch (error) {
       console.error('Error updating admin language:', error);
       throw error;
@@ -82,9 +124,9 @@ export const adminService = {
   },
 
   // -------- Order workflow & KDS --------
-  async getAdminSettings(adminId?: string) {
+  async getAdminSettings(adminId?: string): Promise<AdminOrderSettings> {
     void adminId;
-    return await api.get('/admin/settings');
+    return await api.get<AdminOrderSettings>('/admin/settings');
   },
 
   async saveOrderRules(adminId: string | undefined, order_rules: OrderFlowRules) {
@@ -98,9 +140,9 @@ export const adminService = {
   },
 
   // -------- Pricing / Billing --------
-  async getAdminMonetarySettings(adminId?: string) {
+  async getAdminMonetarySettings(adminId?: string): Promise<AdminMonetarySettings> {
     void adminId;
-    return await api.get('/admin/monetary');
+    return await api.get<AdminMonetarySettings>('/admin/monetary');
   },
 
   async savePricingPrefs(adminId: string | undefined, pricing_prefs: PricingPrefs) {
@@ -124,8 +166,7 @@ export const adminService = {
     void adminId;
     const payload: Partial<Promotion> = { ...promo };
     delete payload.admin_id;
-    const data = await api.post('/promotions', payload);
-    return data as Promotion;
+    return await api.post<Promotion>('/promotions', payload);
   },
 
   async setPromotionActive(adminId: string | undefined, id: string, active: boolean) {
@@ -147,12 +188,12 @@ export const adminService = {
     email: string;
     password?: string;
     restaurant_name: string;
-  }) {
+  }): Promise<AdminProfileResponse & { identity_id: string; organization_id: string }> {
     return await api.post('/admins', data);
   },
 
-  async deleteAdmin(id: string) {
-    return await api.delete(`/admins/${id}`);
+  async deleteAdmin(id: string): Promise<{ success: boolean }> {
+    return await api.delete<{ success: boolean }>(`/admins/${id}`);
   },
 };
 
@@ -165,7 +206,7 @@ export type AdminThemeRow = {
 };
 
 export async function fetchAdminTheme(): Promise<AdminThemeRow> {
-  const data = await api.get('/admin/profile');
+  const data = await api.get<AdminProfileResponse>('/admin/profile');
 
   return {
     theme: data?.theme ?? null,
@@ -178,8 +219,8 @@ export async function updateAdminTheme(patch: {
   theme?: { primary: string; secondary: string; accent: string };
   theme_mode?: 'light' | 'dark' | 'system';
   font_family?: string;
-}) {
-  const data = await api.put('/admin/theme', patch);
+}): Promise<AdminThemeRow> {
+  const data = await api.put<AdminProfileResponse>('/admin/theme', patch);
 
   return {
     theme: data?.theme ?? null,

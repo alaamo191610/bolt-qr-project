@@ -35,7 +35,13 @@ describe('FeesTaxSettings load failure', () => {
     const user = userEvent.setup();
     vi.mocked(adminService.getAdminMonetarySettings)
       .mockRejectedValueOnce(new ApiError({ message: 'offline', code: 'NETWORK_ERROR' }))
-      .mockResolvedValueOnce({ billing_settings: { vatPercent: 15, serviceChargePercent: 0, deliveryFee: 0, showVatLine: true, showServiceChargeLine: false } });
+      .mockResolvedValueOnce({
+        id: 'admin-1',
+        restaurant_name: null,
+        logo_url: null,
+        pricing_prefs: null,
+        billing_settings: { vatPercent: 15, serviceChargePercent: 0, deliveryFee: 0, showVatLine: true, showServiceChargeLine: false },
+      });
 
     render(<FeesTaxSettings adminId="admin-1" />);
 

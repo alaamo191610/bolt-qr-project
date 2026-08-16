@@ -53,7 +53,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
       setLoadError(null);
       try {
         const settings = await adminService.getAdminSettings(adminId);
-        const incoming: OrderFlowRules | undefined = settings?.order_rules;
+        const incoming: OrderFlowRules | null | undefined = settings?.order_rules;
         setFlow(
           incoming && Object.keys(incoming).length ? incoming : DEFAULT_FLOW
         );

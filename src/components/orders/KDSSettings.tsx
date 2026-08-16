@@ -59,7 +59,7 @@ export default function KDSSettings({ adminId }: { adminId: string }) {
       setLoadError(null);
       try {
         const settings = await adminService.getAdminSettings(adminId);
-        const incoming: KDSPrefs | undefined = settings?.kds_prefs;
+        const incoming: KDSPrefs | null | undefined = settings?.kds_prefs;
         setPrefs(
           incoming && Object.keys(incoming).length ? incoming : DEFAULT_KDS
         );

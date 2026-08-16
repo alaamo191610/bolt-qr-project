@@ -30,6 +30,8 @@ describe('KDSSettings load failure', () => {
     vi.mocked(adminService.getAdminSettings)
       .mockRejectedValueOnce(new ApiError({ message: 'offline', code: 'NETWORK_ERROR' }))
       .mockResolvedValueOnce({
+        id: 'admin-1',
+        order_rules: null,
         kds_prefs: {
           ticketGrouping: 'byTable',
           soundEnabled: true,

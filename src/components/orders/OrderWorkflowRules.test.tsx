@@ -29,7 +29,14 @@ describe('OrderWorkflowRules load failure', () => {
     const user = userEvent.setup();
     vi.mocked(adminService.getAdminSettings)
       .mockRejectedValueOnce(new ApiError({ message: 'offline', code: 'NETWORK_ERROR' }))
-      .mockResolvedValueOnce({ order_rules: { statuses: [] } });
+      .mockResolvedValueOnce({
+        id: 'admin-1',
+        order_rules: {
+          statuses: [],
+          transitions: { pending: [], preparing: [], ready: [], served: [], cancelled: [] },
+        },
+        kds_prefs: null,
+      });
 
     render(<OrderWorkflowRules adminId="admin-1" />);
 
