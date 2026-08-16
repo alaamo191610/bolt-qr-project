@@ -14,8 +14,8 @@ const normalizeHex = (v: string) => {
       .split("")
       .map((ch) => ch + ch)
       .join("");
-  if (/^[0-9a-fA-F]{6}$/.test(s)) return null;
-  return `#${s.toUpperCase()}`;
+  if (/^[0-9a-fA-F]{6}$/.test(s)) return `#${s.toUpperCase()}`;
+  return null;
 };
 
 const textOn = (hex: string) => {

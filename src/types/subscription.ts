@@ -23,12 +23,12 @@ export interface AdminWithSubscription {
     restaurant_name?: string;
     subscription_plan: SubscriptionPlan;
     subscription_status: SubscriptionStatus;
-    subscription_end?: Date;
-    trial_ends_at?: Date;
+    subscription_end?: Date | string | null;
+    trial_ends_at?: Date | string | null;
     max_tables: number;
     max_menu_items: number;
     max_staff_accounts: number;
-    created_at: Date;
+    created_at: Date | string;
 }
 
 // Plan configurations
@@ -64,8 +64,8 @@ export const PLAN_CONFIG: Record<SubscriptionPlan, PlanLimits & { price: number;
     PRO: {
         name: 'Pro',
         price: 79,
-        maxTables: Infinity,
-        maxMenuItems: Infinity,
+        maxTables: 500,
+        maxMenuItems: 2_000,
         maxStaffAccounts: 10,
         hasAnalytics: true,
         hasAdvancedAnalytics: true,

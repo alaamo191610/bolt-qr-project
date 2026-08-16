@@ -62,7 +62,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ summary, loading = false, error, 
     <div className="space-y-6">
       <header className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-700">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-lg"
+            style={{
+              background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
+            }}
+          >
             <BarChart3 className="h-5 w-5 text-white" />
           </div>
           <div className="flex-1">

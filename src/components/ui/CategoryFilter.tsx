@@ -28,8 +28,11 @@ const CategoryFilter: React.FC<Props> = ({
         {/* All button */}
         <button
           onClick={() => onSelectCategory('All')}
+          style={selectedCategory === 'All' ? {
+            background: "linear-gradient(90deg, var(--color-primary), var(--color-secondary))",
+          } : undefined}
           className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all duration-200 ${selectedCategory === 'All'
-              ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg'
+              ? 'text-white shadow-lg'
               : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
             }`}
         >
@@ -43,8 +46,11 @@ const CategoryFilter: React.FC<Props> = ({
             <button
               key={category.id}
               onClick={() => onSelectCategory(category.id)} // use ID!
+              style={selectedCategory === category.id ? {
+                background: "linear-gradient(90deg, var(--color-primary), var(--color-secondary))",
+              } : undefined}
               className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all duration-200 ${selectedCategory === category.id
-                ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg'
+                ? 'text-white shadow-lg'
                 : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
             >

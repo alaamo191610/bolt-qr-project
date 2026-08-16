@@ -85,6 +85,10 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
     ];
 
     const handleSave = async () => {
+        if (selectedStatus === 'TRIAL' && !endDate) {
+            toast.error('A trial end date is required');
+            return;
+        }
         setLoading(true);
         try {
             const normalizedEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).toISOString() : undefined;
@@ -189,7 +193,10 @@ const PlanManagementModal: React.FC<PlanManagementModalProps> = ({
                                 return (
                                     <button
                                         key={status.value}
-                                        onClick={() => setSelectedStatus(status.value)}
+                                        onClick={() => {
+                                            setSelectedStatus(status.value);
+                                            if (status.value === 'TRIAL' && !endDate) setEndDate(defaultEndDateStr);
+                                        }}
                                         className={`px-4 py-3 rounded-lg font-medium text-sm transition-all ${isSelected
                                             ? status.color + ' ring-2 ring-offset-2 ring-purple-500'
                                             : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'

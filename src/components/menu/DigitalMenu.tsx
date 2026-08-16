@@ -183,17 +183,17 @@ const IngredientForm = ({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { name_en: string; name_ar: string }) => void;
+  onSubmit: (data: { name_en: string; name_ar: string; extra_price: number }) => void;
   loading: boolean;
 }) => {
   const { t } = useLanguage();
-  const [formData, setFormData] = useState({ name_en: "", name_ar: "" });
+  const [formData, setFormData] = useState({ name_en: "", name_ar: "", extra_price: "" });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.name_en.trim() && formData.name_ar.trim()) {
-      onSubmit(formData);
-      setFormData({ name_en: "", name_ar: "" });
+      onSubmit({ ...formData, extra_price: Number(formData.extra_price || 0) });
+      setFormData({ name_en: "", name_ar: "", extra_price: "" });
     }
   };
 
@@ -245,6 +245,23 @@ const IngredientForm = ({
               placeholder="مثال: جبن"
               required
               dir="rtl"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              Base extra price
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.extra_price}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, extra_price: e.target.value }))
+              }
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+              placeholder="0.00"
             />
           </div>
 
@@ -712,6 +729,7 @@ const DigitalMenu: React.FC = () => {
   const handleAddIngredient = async (ingredientData: {
     name_en: string;
     name_ar: string;
+    extra_price: number;
   }) => {
     try {
       setIngredientLoading(true);
@@ -973,7 +991,12 @@ const DigitalMenu: React.FC = () => {
       <div className="bg-white/90 dark:bg-slate-800/90 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-700/50 p-6 sticky top-4 z-20 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div className="flex items-center space-x-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 transform hover:scale-105 transition-transform duration-300">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transform hover:scale-105 transition-transform duration-300"
+              style={{
+                background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
+              }}
+            >
               <Settings className="w-7 h-7 text-white" />
             </div>
             <div>

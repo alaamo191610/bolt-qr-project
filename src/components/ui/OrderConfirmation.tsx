@@ -161,7 +161,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
           </p>
           <button
             onClick={onStartNewOrder}
-            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-4 bg-[var(--color-primary)] hover:bg-[var(--color-secondary)] text-white rounded-xl font-medium shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <span>{t('menu.startNewOrder')}</span>
             <ArrowRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
@@ -230,7 +230,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
             return (
               <div key={step.key} className={`relative flex items-center gap-4 ${isActive ? 'scale-105' : 'opacity-60'} transition-all duration-300`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center z-10 transition-colors duration-300 ${isActive || isCompleted
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                  ? 'bg-[var(--color-primary)] text-white shadow-lg'
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
                   }`}>
                   <Icon className="w-4 h-4" />
@@ -254,7 +254,7 @@ const OrderConfirmation: React.FC<Props> = ({ order: initialOrder, onStartNewOrd
         <div className="space-y-3">
           <button
             onClick={onStartNewOrder}
-            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-4 bg-[var(--color-primary)] hover:bg-[var(--color-secondary)] text-white rounded-xl font-medium shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <span>{t('menu.startNewOrder')}</span>
             <ArrowRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />

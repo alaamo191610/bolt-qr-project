@@ -15,6 +15,7 @@ interface UseSubscriptionReturn {
     isPastDue: boolean;
     isTrial: boolean;
     isCancelled: boolean;
+    hasAccess: boolean;
     daysUntilExpiration: number | null;
 
     // Limits
@@ -54,22 +55,28 @@ export const useSubscription = (adminProfile: AdminWithSubscription | null): Use
     const isTrial = status === 'TRIAL';
     const isCancelled = status === 'CANCELLED';
 
+    const accessEnd = isTrial ? adminProfile?.trial_ends_at : adminProfile?.subscription_end;
+    const accessEndTime = accessEnd ? new Date(accessEnd).getTime() : null;
+    const hasValidEnd = accessEndTime === null || Number.isFinite(accessEndTime);
+    const hasAccess = hasValidEnd && (isActive || isTrial)
+        && (accessEndTime === null || accessEndTime > Date.now());
+
     // Calculate days until expiration
     const daysUntilExpiration = useMemo(() => {
-        if (!adminProfile?.subscription_end) return null;
-        const end = new Date(adminProfile.subscription_end);
+        if (!accessEnd) return null;
+        const end = new Date(accessEnd);
         const now = new Date();
         const diff = end.getTime() - now.getTime();
         return Math.ceil(diff / (1000 * 60 * 60 * 24));
-    }, [adminProfile?.subscription_end]);
+    }, [accessEnd]);
 
     // Limits
-    const maxTables = adminProfile?.max_tables || planConfig.maxTables;
-    const maxMenuItems = adminProfile?.max_menu_items || planConfig.maxMenuItems;
-    const maxStaffAccounts = adminProfile?.max_staff_accounts || planConfig.maxStaffAccounts;
+    const maxTables = adminProfile?.max_tables ?? planConfig.maxTables;
+    const maxMenuItems = adminProfile?.max_menu_items ?? planConfig.maxMenuItems;
+    const maxStaffAccounts = adminProfile?.max_staff_accounts ?? planConfig.maxStaffAccounts;
 
     // Feature access (only active subscriptions have full access)
-    const hasFullAccess = isActive || isTrial;
+    const hasFullAccess = hasAccess;
     const canAccessAnalytics = hasFullAccess && planConfig.hasAnalytics;
     const canAccessAdvancedAnalytics = hasFullAccess && planConfig.hasAdvancedAnalytics;
     const canAccessKDS = hasFullAccess && planConfig.hasKDS;
@@ -131,6 +138,7 @@ export const useSubscription = (adminProfile: AdminWithSubscription | null): Use
         isPastDue,
         isTrial,
         isCancelled,
+        hasAccess,
         daysUntilExpiration,
 
         // Limits

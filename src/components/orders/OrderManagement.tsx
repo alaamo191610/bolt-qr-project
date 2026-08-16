@@ -397,7 +397,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
                 onClick={confirmAction}
                 className={`flex-1 px-4 py-3.5 rounded-xl font-bold text-white shadow-lg shadow-opacity-20 transition-all active:scale-95 hover:-translate-y-0.5 ${actionType === 'cancel'
                   ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/30'
-                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30'
+                  : 'bg-[var(--color-primary)] hover:bg-[var(--color-secondary)]'
                   }`}
               >
                 {actionType === 'cancel' ? 'Yes, Cancel' : 'Confirm'}

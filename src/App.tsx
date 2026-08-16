@@ -14,7 +14,7 @@ import { useLanguage } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
-import { adminService, type AnalyticsSummary } from "./services/adminService";
+import { adminService, type AdminProfileResponse, type AnalyticsSummary } from "./services/adminService";
 import { tableService, type ApiTable } from "./services/tableService";
 import { menuService } from "./services/menuService";
 import { orderService, type ApiOrder, type ApiOrderItem } from "./services/orderService";
@@ -28,6 +28,8 @@ import {
   isOrderRealtimeEvent,
   type OrderRealtimeEvent,
 } from "./services/orderRealtime";
+import { useSubscription } from "./hooks/useSubscription";
+import type { SubscriptionPlan, SubscriptionStatus } from "./types/subscription";
 
 const QRGenerator = React.lazy(() => import("./components/tables/QRGenerator"));
 const DigitalMenu = React.lazy(() => import("./components/menu/DigitalMenu"));
@@ -89,8 +91,16 @@ interface AdminProfile {
   id: string;
   name?: string;
   restaurant_name?: string;
-  email?: string;
+  email: string;
   preferred_language?: string;
+  subscription_plan: SubscriptionPlan;
+  subscription_status: SubscriptionStatus;
+  subscription_end: string | null;
+  trial_ends_at: string | null;
+  max_tables: number;
+  max_menu_items: number;
+  max_staff_accounts: number;
+  created_at: string;
 }
 
 // Accepts ApiOrder (the wider, raw-wire type - Decimal fields serialize as
@@ -227,8 +237,8 @@ const AdminDashboard: React.FC = () => {
   const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
   const [switchingOrganizationId, setSwitchingOrganizationId] = useState<string | null>(null);
+  const subscription = useSubscription(adminProfile);
 
   const handleSwitchOrganization = useCallback(async (organizationId: string) => {
     setSwitchingOrganizationId(organizationId);
@@ -249,7 +259,7 @@ const AdminDashboard: React.FC = () => {
   const fetchProfile = useCallback(async () => {
     if (!user) return;
     try {
-      const profile = await adminService.getAdminProfile(user.id);
+      const profile = await adminService.getAdminProfile(user.id) as AdminProfileResponse;
       setAdminProfile(profile);
     } catch (e) {
       console.error("Error fetching profile:", e);
@@ -348,13 +358,26 @@ const AdminDashboard: React.FC = () => {
     }
   }, [user]);
 
-  // Initial Data Load (Profile)
+  // Keep subscription and entitlement data current while the restaurant is open.
+  // SuperAdmin changes are persisted centrally, so focus/visibility refreshes and
+  // this bounded poll let an existing dashboard reflect them without a reload.
   useEffect(() => {
-    if (user && !dataLoaded) {
-      fetchProfile();
-      setDataLoaded(true);
-    }
-  }, [user, dataLoaded, fetchProfile]);
+    if (!user) return;
+
+    void fetchProfile();
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void fetchProfile();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [user, fetchProfile]);
 
   // Tab-specific Data Loading
   useEffect(() => {
@@ -532,6 +555,12 @@ const AdminDashboard: React.FC = () => {
           name:
             adminProfile?.restaurant_name || adminProfile?.name || user?.email?.split("@")[0] || "Restaurant",
           email: user?.email || "",
+          subscription: adminProfile ? {
+              planName: subscription.planName,
+              status: subscription.isTrial ? "TRIAL" : subscription.isActive ? "ACTIVE" : subscription.isPastDue ? "PAST_DUE" : "CANCELLED",
+              hasAccess: subscription.hasAccess,
+              daysUntilExpiration: subscription.daysUntilExpiration,
+          } : undefined,
         }}
         onSignOut={() => user && signOut()}
         organizations={organizations}

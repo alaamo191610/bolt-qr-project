@@ -127,7 +127,12 @@ const AdminSettingsOnly: React.FC<Props> = ({ adminId }) => {
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg grid place-items-center">
+          <div
+            className="w-10 h-10 rounded-lg grid place-items-center"
+            style={{
+              background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
+            }}
+          >
             <Settings className="w-5 h-5 text-white" />
           </div>
           <div>

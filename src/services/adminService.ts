@@ -2,6 +2,7 @@ import type { Admin } from '../lib/supabase';
 import type { OrderFlowRules, KDSPrefs } from '../order-admin/types';
 import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
 import type { User } from '../providers/AuthProvider';
+import type { SubscriptionPlan, SubscriptionStatus } from '../types/subscription';
 import { api } from './api';
 
 interface CursorPage<T> {
@@ -21,8 +22,8 @@ export interface AdminProfileResponse extends Omit<Admin, 'theme_color'> {
   theme_mode: 'light' | 'dark' | 'system' | null
   theme_color: string | null
   font_family: string | null
-  subscription_plan: string
-  subscription_status: string
+  subscription_plan: SubscriptionPlan
+  subscription_status: SubscriptionStatus
   subscription_end: string | null
   trial_ends_at: string | null
   max_tables: number
@@ -45,11 +46,15 @@ export interface AdminOrderSettings {
 
 // GET /api/admin/monetary - another narrow projection.
 export interface AdminMonetarySettings {
-  id: string
+  id?: string
   restaurant_name: string | null
   logo_url: string | null
   pricing_prefs: PricingPrefs | null
   billing_settings: BillingSettings | null
+  theme?: { primary: string | null; secondary: string | null; accent: string | null } | null
+  theme_mode?: 'light' | 'dark' | 'system' | null
+  theme_color?: string | null
+  font_family?: string | null
 }
 
 export interface AnalyticsSummary {
@@ -203,6 +208,7 @@ export type AdminThemeRow = {
   theme_mode: 'light' | 'dark' | 'system' | null;
   // keep for legacy fallback:
   theme_color: string | null;
+  font_family: string | null;
 };
 
 export async function fetchAdminTheme(): Promise<AdminThemeRow> {
@@ -212,6 +218,7 @@ export async function fetchAdminTheme(): Promise<AdminThemeRow> {
     theme: data?.theme ?? null,
     theme_mode: data?.theme_mode ?? null,
     theme_color: data?.theme_color ?? null,
+    font_family: data?.font_family ?? null,
   };
 }
 
@@ -226,5 +233,6 @@ export async function updateAdminTheme(patch: {
     theme: data?.theme ?? null,
     theme_mode: data?.theme_mode ?? null,
     theme_color: data?.theme_color ?? null,
+    font_family: data?.font_family ?? null,
   };
 }

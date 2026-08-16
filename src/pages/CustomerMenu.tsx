@@ -31,6 +31,7 @@ import { useAdminMonetary } from "../hooks/useAdminMonetary";
 import { formatPrice } from "../pricing/usePrice";
 import { socket, joinMenuRoom } from "../services/socket";
 import { getErrorMessage } from "../utils/errors";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface Ingredient {
   id: string;
@@ -209,7 +210,27 @@ const persistIdempotency = (table: string, record: IdempotencyRecord | null) => 
 
 const CustomerMenu: React.FC = () => {
   const { t, isRTL, language } = useLanguage();
-  const { prefs, restaurantName, logoUrl, loading: moneyLoading } = useAdminMonetary(); // 🆕 Get branding
+  const { applyTheme } = useTheme();
+  const {
+    prefs,
+    restaurantName,
+    logoUrl,
+    theme,
+    themeMode,
+    themeColor,
+    fontFamily,
+    loading: moneyLoading,
+  } = useAdminMonetary(); // Get branding, pricing, and public theme
+
+  useEffect(() => {
+    if (!theme && !themeMode && !themeColor && !fontFamily) return;
+    applyTheme({
+      theme: theme ?? null,
+      theme_mode: themeMode ?? null,
+      theme_color: themeColor ?? null,
+      font_family: fontFamily ?? null,
+    });
+  }, [applyTheme, fontFamily, theme, themeColor, themeMode]);
   // near top
   const didInitRef = useRef(false);
 

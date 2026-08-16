@@ -22,6 +22,7 @@ export interface RawIngredient {
   branch_id: string | null
   name_en: string
   name_ar: string | null
+  extra_price: string | number | null
   created_at: string
 }
 
@@ -220,7 +221,7 @@ const toMenuConfigResponse = (raw: RawMenuConfigResponse): MenuConfigResponse =>
       id: String(row.ingredient.id),
       name_en: row.ingredient.name_en,
       name_ar: row.ingredient.name_ar,
-      extra_price: 0,
+      extra_price: Number(row.ingredient.extra_price) || 0,
     },
   })),
   modifierGroups: raw.modifierGroups.map(row => ({
@@ -297,7 +298,7 @@ export const menuService = {
   },
 
   // Add new ingredient
-  async addIngredient(ingredient: { name_en: string; name_ar: string }): Promise<AdminIngredient> {
+  async addIngredient(ingredient: { name_en: string; name_ar: string; extra_price?: number }): Promise<AdminIngredient> {
     try {
       const created = await api.post<RawIngredient>('/ingredients', ingredient);
       return { ...created, id: String(created.id) };

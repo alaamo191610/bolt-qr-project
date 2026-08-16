@@ -310,7 +310,10 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8">
 
           <div className="flex items-center gap-6">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 transition-transform hover:rotate-6 ${accentColor.class}`}>
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 transition-transform hover:rotate-6"
+              style={{ backgroundColor: "var(--color-primary)" }}
+            >
               <QrCode className="w-8 h-8 text-white" />
             </div>
             <div>

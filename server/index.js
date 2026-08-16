@@ -876,6 +876,15 @@ app.post('/api/menus/:id/ingredients', authenticate, async (req, res) => {
     if (ingredientIds.length !== ingredients.length) {
       return res.status(400).json({ error: 'Invalid ingredient list' });
     }
+    if (ingredients.some(item =>
+      !Number.isInteger(Number(item.max_extra)) ||
+      Number(item.max_extra) < 0 ||
+      (item.extra_price_override != null && item.extra_price_override !== '' &&
+        (!Number.isFinite(Number(item.extra_price_override)) || Number(item.extra_price_override) < 0)) ||
+      (item.extra_available && Number(item.max_extra) < 1)
+    )) {
+      return res.status(400).json({ error: 'Invalid ingredient extra configuration' });
+    }
     await assertCatalogOwnership(prisma, req.user.id, undefined, ingredientIds);
 
     await prisma.$transaction(async (tx) => {
@@ -920,12 +929,29 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
       const groupIds = [];
       for (const gr of groups) {
         let gid = gr.id ? Number(gr.id) : undefined;
+        const selectionType = gr.selection_type === 'multi' ? 'multi' : gr.selection_type === 'single' ? 'single' : null;
+        const minSelect = Number(gr.min_select ?? 0);
+        const maxSelect = selectionType === 'single' ? 1 : Number(gr.max_select ?? 1);
+        if (!selectionType || !Number.isInteger(minSelect) || !Number.isInteger(maxSelect) || minSelect < 0 || maxSelect < 1 || minSelect > maxSelect) {
+          throw Object.assign(new Error('Invalid modifier selection limits'), { status: 400 });
+        }
+        if (minSelect > (Array.isArray(gr.options) ? gr.options.length : 0)) {
+          throw Object.assign(new Error('Modifier group requires more options than are configured'), { status: 400 });
+        }
+        if (selectionType === 'single' && Array.isArray(gr.options) && gr.options.filter(option => option.is_default).length > 1) {
+          throw Object.assign(new Error('Single-select modifier groups can have only one default option'), { status: 400 });
+        }
+        if (Array.isArray(gr.options) && gr.options.some(option =>
+          option.max_qty != null && (!Number.isInteger(Number(option.max_qty)) || Number(option.max_qty) < 1)
+        )) {
+          throw Object.assign(new Error('Invalid modifier option quantity'), { status: 400 });
+        }
         const data = {
           name_en: gr.name_en,
           name_ar: gr.name_ar,
-          selection_type: gr.selection_type,
-          min_select: gr.min_select,
-          max_select: gr.max_select,
+          selection_type: selectionType,
+          min_select: minSelect,
+          max_select: maxSelect,
           required: gr.required
         };
 
@@ -970,54 +996,57 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
 
 app.post('/api/menus/:id/combos', authenticate, async (req, res) => {
   const menuId = Number(req.params.id);
-  const { combo } = req.body;
+  const requestedCombos = Array.isArray(req.body.combos)
+    ? req.body.combos
+    : req.body.combo && typeof req.body.combo === 'object'
+      ? [req.body.combo]
+      : null;
   try {
     const ownedMenu = await prisma.menu.findFirst({
       where: { id: menuId, user_id: req.user.id },
       select: { id: true }
     });
     if (!ownedMenu) return res.status(404).json({ error: 'Menu item not found' });
-    if (!combo || typeof combo !== 'object') return res.status(400).json({ error: 'Combo configuration required' });
+    if (!requestedCombos) return res.status(400).json({ error: 'Combo configuration required' });
 
     await prisma.$transaction(async (tx) => {
-      let groupId = combo.id ? Number(combo.id) : undefined;
-      const data = {
-        menu_id: menuId,
-        min_select: combo.min_select,
-        max_select: combo.max_select
-      };
+      await tx.comboGroup.deleteMany({ where: { menu_id: menuId } });
 
-      if (groupId) {
-        const ownedGroup = await tx.comboGroup.findFirst({
-          where: { id: groupId, menu_id: menuId },
-          select: { id: true }
-        });
-        if (!ownedGroup) throw Object.assign(new Error('Combo group not found'), { status: 404 });
-        await tx.comboGroup.update({ where: { id: groupId }, data });
-      } else {
-        const newG = await tx.comboGroup.create({ data });
-        groupId = newG.id;
-      }
+      for (const combo of requestedCombos) {
+        const minSelect = Number(combo.min_select ?? 0);
+        const maxSelect = Number(combo.max_select ?? 1);
+        if (!Number.isInteger(minSelect) || !Number.isInteger(maxSelect) || minSelect < 0 || maxSelect < 1 || minSelect > maxSelect) {
+          throw Object.assign(new Error('Invalid combo selection limits'), { status: 400 });
+        }
 
-      await tx.comboGroupItem.deleteMany({ where: { group_id: groupId } });
-      if (combo.items?.length) {
-        const childIds = combo.items
-          .filter(i => i.child_menu_id)
-          .map(i => Number(i.child_menu_id));
+        const items = Array.isArray(combo.items) ? combo.items.filter(i => i.child_menu_id) : [];
+        const childIds = items.map(i => Number(i.child_menu_id));
+        if (childIds.some(id => !Number.isInteger(id)) || new Set(childIds).size !== childIds.length) {
+          throw Object.assign(new Error('Invalid combo item list'), { status: 400 });
+        }
+        if (minSelect > childIds.length) {
+          throw Object.assign(new Error('Combo requires more items than are configured'), { status: 400 });
+        }
         const ownedChildren = await tx.menu.count({
           where: { id: { in: childIds }, user_id: req.user.id, deleted_at: null }
         });
         if (ownedChildren !== new Set(childIds).size) {
           throw Object.assign(new Error('Combo contains an invalid menu item'), { status: 400 });
         }
-        await tx.comboGroupItem.createMany({
-          data: combo.items.filter(i => i.child_menu_id).map(i => ({
-            group_id: groupId,
-            child_menu_id: Number(i.child_menu_id),
-            upgrade_price_delta: i.upgrade_price_delta,
-            is_default: i.is_default
-          }))
+
+        const newGroup = await tx.comboGroup.create({
+          data: { menu_id: menuId, min_select: minSelect, max_select: maxSelect }
         });
+        if (items.length) {
+          await tx.comboGroupItem.createMany({
+            data: items.map(i => ({
+              group_id: newGroup.id,
+              child_menu_id: Number(i.child_menu_id),
+              upgrade_price_delta: i.upgrade_price_delta,
+              is_default: i.is_default
+            }))
+          });
+        }
       }
     });
     res.json({ success: true });
@@ -1127,7 +1156,13 @@ app.get('/api/ingredients', authenticate, async (req, res) => {
 app.post('/api/ingredients', authenticate, async (req, res) => {
   const name_en = String(req.body.name_en || '').trim();
   const name_ar = req.body.name_ar ? String(req.body.name_ar).trim() : null;
+  const extraPrice = req.body.extra_price == null || req.body.extra_price === ''
+    ? 0
+    : Number(req.body.extra_price);
   if (!name_en) return res.status(400).json({ error: 'English ingredient name is required' });
+  if (!Number.isFinite(extraPrice) || extraPrice < 0) {
+    return res.status(400).json({ error: 'Ingredient extra price must be a non-negative number' });
+  }
   try {
     const ingredient = await prisma.ingredient.create({
       data: {
@@ -1135,6 +1170,7 @@ app.post('/api/ingredients', authenticate, async (req, res) => {
         organization_id: req.auth.organizationId,
         name_en,
         name_ar,
+        extra_price: extraPrice,
       }
     });
     res.status(201).json(ingredient);
@@ -1410,7 +1446,10 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
         tx.menu.findMany({
           where: { id: { in: menuIds }, user_id: adminId, deleted_at: null, available: true }
         }),
-        tx.menuIngredient.findMany({ where: { menu_id: { in: menuIds } } }),
+        tx.menuIngredient.findMany({
+          where: { menu_id: { in: menuIds } },
+          include: { ingredient: { select: { extra_price: true } } },
+        }),
         tx.menuModifierGroup.findMany({
           where: { menu_id: { in: menuIds } },
           include: { modifier_group: { include: { modifier_options: true } } }
@@ -1476,7 +1515,8 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
             ) {
               throw Object.assign(new Error('Invalid ingredient quantity'), { status: 400 });
             }
-            ingredientDelta += Number(configured.extra_price_override || 0) * selection.qty;
+            const extraPrice = configured.extra_price_override ?? configured.ingredient?.extra_price ?? 0;
+            ingredientDelta += Number(extraPrice) * selection.qty;
           }
         }
 
@@ -2046,6 +2086,10 @@ app.get('/api/public/pricing', async (req, res) => {
         logo_url: true,          // 🆕 For customer menu header
         pricing_prefs: true,
         billing_settings: true,
+        theme: true,
+        theme_mode: true,
+        theme_color: true,
+        font_family: true,
         subscription_status: true,
         subscription_end: true,
         trial_ends_at: true,
@@ -2153,7 +2197,8 @@ app.get('/api/public/menus', async (req, res) => {
         menu_ingredients: {
           include: { ingredient: true }
         },
-        menu_modifier_groups: true // Include this to check for modifiers
+        menu_modifier_groups: true,
+        combo_groups: true,
       }
     });
 
@@ -2162,7 +2207,11 @@ app.get('/api/public/menus', async (req, res) => {
       categories: m.category,
       ingredients_details: m.menu_ingredients,
       // Dynamically compute has_modifiers since the DB field might be stale
-      has_modifiers: (m.menu_modifier_groups && m.menu_modifier_groups.length > 0) || m.has_modifiers
+      has_modifiers:
+        (m.menu_modifier_groups && m.menu_modifier_groups.length > 0) ||
+        (m.menu_ingredients && m.menu_ingredients.length > 0) ||
+        (m.combo_groups && m.combo_groups.length > 0) ||
+        m.has_modifiers
     }));
 
     // Preserve existing records while preventing duplicate catalog rows from

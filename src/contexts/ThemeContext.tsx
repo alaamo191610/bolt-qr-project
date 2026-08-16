@@ -26,6 +26,7 @@ interface ThemeColors {
 interface ThemeContextType {
   colors: ThemeColors;
   updateColors: (newColors: Partial<ThemeColors>) => void;
+  applyTheme: (settings: AdminThemeRow | null) => void;
   fontFamily: string;
   updateFontFamily: (font: string) => void;
   isDark: boolean;
@@ -148,6 +149,43 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const bootstrappedRef = useRef(false);
 
+  const applyTheme = React.useCallback((db: AdminThemeRow | null) => {
+    const savedIsDark = localStorage.getItem(DARK_KEY) === "true";
+    const systemDark =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+    const wantDark =
+      db?.theme_mode === "dark" ||
+      (db?.theme_mode === "system" && systemDark) ||
+      (db?.theme_mode == null && savedIsDark);
+
+    setIsDark(wantDark);
+    document.documentElement.classList.toggle("dark", wantDark);
+
+    const base = wantDark ? defaultDarkColors : defaultLightColors;
+    const tp = db?.theme?.primary ? normalizeHex(db.theme.primary) : null;
+    const ts = db?.theme?.secondary ? normalizeHex(db.theme.secondary) : null;
+    const ta = db?.theme?.accent ? normalizeHex(db.theme.accent) : null;
+
+    const merged = tp || ts || ta
+      ? {
+          ...base,
+          primary: tp ?? base.primary,
+          secondary: ts ?? base.secondary,
+          accent: ta ?? base.accent,
+        }
+      : db?.theme_color
+        ? deriveFromPrimary(db.theme_color, base)
+        : base;
+    const persistedFont = db?.font_family?.trim() || DEFAULT_FONT;
+
+    setColors(merged);
+    setFontFamily(persistedFont);
+    localStorage.setItem(THEME_KEY, JSON.stringify(merged));
+    localStorage.setItem(DARK_KEY, String(wantDark));
+    localStorage.setItem(FONT_KEY, persistedFont);
+  }, []);
+
   // 1) Fast local boot – run once, no auth needed
   useEffect(() => {
     if (bootstrappedRef.current) return;
@@ -171,53 +209,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const db: AdminThemeRow | null = await fetchAdminTheme();
 
-        const savedIsDark = localStorage.getItem(DARK_KEY) === "true";
-
-        // resolve mode
-        const systemDark =
-          typeof window !== "undefined" &&
-          window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-        const wantDark =
-          db?.theme_mode === "dark" ||
-          (db?.theme_mode === "system" && systemDark) ||
-          (db?.theme_mode == null && savedIsDark);
-
-        setIsDark(wantDark);
-        document.documentElement.classList.toggle("dark", wantDark);
-
-        const base = wantDark ? defaultDarkColors : defaultLightColors;
-
-        // Prefer jsonb theme if present
-        const tp = db?.theme?.primary ? normalizeHex(db.theme.primary) : null;
-        const ts = db?.theme?.secondary
-          ? normalizeHex(db.theme.secondary)
-          : null;
-        const ta = db?.theme?.accent ? normalizeHex(db.theme.accent) : null;
-
-        let merged: ThemeColors;
-        if (tp || ts || ta) {
-          merged = {
-            ...base,
-            primary: tp ?? base.primary,
-            secondary: ts ?? base.secondary,
-            accent: ta ?? base.accent,
-          };
-        } else if (db?.theme_color) {
-          // legacy single primary → derive tasteful palette
-          merged = deriveFromPrimary(db.theme_color, base);
-        } else {
-          merged = base;
-        }
-
-        setColors(merged);
-        localStorage.setItem(THEME_KEY, JSON.stringify(merged));
-        localStorage.setItem(DARK_KEY, String(wantDark));
+        applyTheme(db);
       } catch (e) {
         console.error("Failed to hydrate theme", e);
         // ignore; stay on local values if offline/unauth
       }
     })();
-  }, [loading, user]);
+  }, [applyTheme, loading, user]);
 
   // Cleanup debounce timer
   useEffect(() => {
@@ -314,7 +312,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <ThemeContext.Provider
-      value={{ colors, updateColors, fontFamily, updateFontFamily, isDark, toggleDarkMode, resetToDefault }}
+      value={{ colors, updateColors, applyTheme, fontFamily, updateFontFamily, isDark, toggleDarkMode, resetToDefault }}
     >
       {children}
     </ThemeContext.Provider>

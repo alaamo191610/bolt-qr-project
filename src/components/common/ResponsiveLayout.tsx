@@ -22,6 +22,12 @@ interface ResponsiveLayoutProps {
     id: string;
     name: string;
     email: string;
+    subscription?: {
+      planName: string;
+      status: string;
+      hasAccess: boolean;
+      daysUntilExpiration: number | null;
+    };
   };
   onSignOut?: () => void;
   /** Only rendered when there are 2+ memberships - nothing to switch between otherwise. */
@@ -206,6 +212,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                 <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {userInfo.email}
                 </p>
+                {userInfo.subscription && (
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${userInfo.subscription.hasAccess ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {userInfo.subscription.planName} · {userInfo.subscription.status}
+                  </p>
+                )}
               </div>
             </div>
             {onSignOut && (
@@ -345,6 +356,20 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                         <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
                           {userInfo.email}
                         </p>
+                        {userInfo.subscription && (
+                          <div className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${userInfo.subscription.hasAccess
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'}`}>
+                            <div>{userInfo.subscription.planName} plan · {userInfo.subscription.status}</div>
+                            {userInfo.subscription.daysUntilExpiration !== null && (
+                              <div className="mt-1 font-normal">
+                                {userInfo.subscription.daysUntilExpiration >= 0
+                                  ? `${userInfo.subscription.daysUntilExpiration} days remaining`
+                                  : 'Access expired'}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {organizations && organizations.length > 1 && (

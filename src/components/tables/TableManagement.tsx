@@ -147,7 +147,12 @@ const TableManagement: React.FC<TableManagementProps> = ({
       <div className="bg-white/90 dark:bg-slate-800/90 rounded-3xl shadow-lg border border-slate-200/50 dark:border-slate-700/50 p-6 sticky top-4 z-20 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center space-x-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 transform hover:scale-105 transition-transform duration-300">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transform hover:scale-105 transition-transform duration-300"
+              style={{
+                background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
+              }}
+            >
               <Users className="w-7 h-7 text-white" />
             </div>
             <div>

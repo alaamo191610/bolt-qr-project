@@ -9,18 +9,17 @@ export function useAdminMonetary(adminId?: string) {
   const [billing, setBilling] = useState<BillingSettings>(DEFAULT_BILLING);
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState<AdminMonetarySettings['theme']>(null);
+  const [themeMode, setThemeMode] = useState<AdminMonetarySettings['theme_mode']>(null);
+  const [themeColor, setThemeColor] = useState<string | null>(null);
+  const [fontFamily, setFontFamily] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        let data: AdminMonetarySettings | {
-          pricing_prefs: PricingPrefs;
-          billing_settings: BillingSettings;
-          restaurant_name: string | null;
-          logo_url: string | null;
-        };
+        let data: AdminMonetarySettings;
 
         // For customers (no adminId), use table code from URL
         if (!adminId) {
@@ -36,7 +35,16 @@ export function useAdminMonetary(adminId?: string) {
             });
           } else {
             // Fallback to defaults if no table code
-            data = { pricing_prefs: DEFAULT_PRICING, billing_settings: DEFAULT_BILLING, restaurant_name: null, logo_url: null };
+            data = {
+              pricing_prefs: DEFAULT_PRICING,
+              billing_settings: DEFAULT_BILLING,
+              restaurant_name: null,
+              logo_url: null,
+              theme: null,
+              theme_mode: null,
+              theme_color: null,
+              font_family: null,
+            };
           }
         } else {
           // For admin users, use authenticated endpoint
@@ -53,6 +61,10 @@ export function useAdminMonetary(adminId?: string) {
         setBilling(newBilling);
         setRestaurantName(newName);
         setLogoUrl(newLogo);
+        setTheme(data?.theme ?? null);
+        setThemeMode(data?.theme_mode ?? null);
+        setThemeColor(data?.theme_color ?? null);
+        setFontFamily(data?.font_family ?? null);
 
       } catch (err) {
         console.warn('Failed to load pricing settings, using defaults:', err);
@@ -64,5 +76,15 @@ export function useAdminMonetary(adminId?: string) {
     return () => { alive = false; };
   }, [adminId]);
 
-  return { prefs, billing, restaurantName, logoUrl, loading };
+  return {
+    prefs,
+    billing,
+    restaurantName,
+    logoUrl,
+    theme,
+    themeMode,
+    themeColor,
+    fontFamily,
+    loading,
+  };
 }

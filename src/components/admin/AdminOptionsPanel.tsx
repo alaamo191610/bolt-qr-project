@@ -88,7 +88,7 @@ export default function AdminOptionsPanel({
     max_select?: number | null;
     items: ComboItem[];
   };
-  const [combo, setCombo] = useState<ComboGroup>({ items: [] });
+  const [combo, setCombo] = useState<ComboGroup[]>([]);
 
   // GET /api/menus/:id/options (server/index.js) - raw wire shape. All ids
   // are Postgres Int (menus/ingredients/modifier_groups/modifier_options/
@@ -185,22 +185,17 @@ export default function AdminOptionsPanel({
         }))
       );
 
-      // combo for this parent menu (assume 1 group per parent for now)
-      const cg = data.comboGroups;
-      const grp = cg && cg[0];
       setCombo(
-        grp
-          ? {
-            id: grp.id == null ? undefined : String(grp.id),
-            min_select: grp.min_select,
-            max_select: grp.max_select,
-            items: (grp.combo_group_items || []).map((it) => ({
-              child_menu_id: String(it.child_menu_id),
-              upgrade_price_delta: Number(it.upgrade_price_delta || 0),
-              is_default: !!it.is_default,
-            })),
-          }
-          : { items: [] }
+        (data.comboGroups || []).map((grp) => ({
+          id: grp.id == null ? undefined : String(grp.id),
+          min_select: grp.min_select,
+          max_select: grp.max_select,
+          items: (grp.combo_group_items || []).map((it) => ({
+            child_menu_id: String(it.child_menu_id),
+            upgrade_price_delta: Number(it.upgrade_price_delta || 0),
+            is_default: !!it.is_default,
+          })),
+        }))
       );
     } catch (e) {
       setError(getErrorMessage(e));
@@ -276,27 +271,59 @@ export default function AdminOptionsPanel({
     );
 
   const saveGroups = async () => {
+    const invalid = groups.some((group) => {
+      const min = Number(group.min_select ?? 0);
+      const max = group.selection_type === "single" ? 1 : Number(group.max_select ?? 1);
+      return min < 0 || max < 1 || min > max || group.options.some((option) =>
+        option.max_qty != null && (!Number.isInteger(Number(option.max_qty)) || Number(option.max_qty) < 1)
+      );
+    });
+    if (invalid) {
+      setError("Each modifier group must have valid min/max values and option quantities.");
+      return;
+    }
     setSaving(true);
     try {
       await api.post(`/menus/${menuId}/modifiers`, { groups });
+      setError(null);
     } finally {
       setSaving(false);
     }
   };
 
   // ---------- COMBO ----------
-  const addChild = () =>
-    setCombo((c) => ({
-      ...c,
-      items: [...c.items, { child_menu_id: "", upgrade_price_delta: 0 }],
-    }));
-  const removeChild = (idx: number) =>
-    setCombo((c) => ({ ...c, items: c.items.filter((_, i) => i !== idx) }));
+  const addComboGroup = () =>
+    setCombo((groups) => [...groups, { min_select: 0, max_select: 1, items: [] }]);
+  const removeComboGroup = (groupIndex: number) =>
+    setCombo((groups) => groups.filter((_, index) => index !== groupIndex));
+  const addChild = (groupIndex: number) =>
+    setCombo((groups) => groups.map((group, index) =>
+      index === groupIndex
+        ? { ...group, items: [...group.items, { child_menu_id: "", upgrade_price_delta: 0 }] }
+        : group
+    ));
+  const removeChild = (groupIndex: number, itemIndex: number) =>
+    setCombo((groups) => groups.map((group, index) =>
+      index === groupIndex
+        ? { ...group, items: group.items.filter((_, item) => item !== itemIndex) }
+        : group
+    ));
 
   const saveCombo = async () => {
+    const invalid = combo.some((group) => {
+      const min = Number(group.min_select ?? 0);
+      const max = Number(group.max_select ?? 1);
+      const childIds = group.items.map((item) => item.child_menu_id).filter(Boolean);
+      return min < 0 || max < 1 || min > max || min > childIds.length || new Set(childIds).size !== childIds.length;
+    });
+    if (invalid) {
+      setError("Each combo group must have valid min/max values and unique child items.");
+      return;
+    }
     setSaving(true);
     try {
-      await api.post(`/menus/${menuId}/combos`, { combo });
+      await api.post(`/menus/${menuId}/combos`, { combos: combo });
+      setError(null);
     } finally {
       setSaving(false);
     }
@@ -554,7 +581,7 @@ export default function AdminOptionsPanel({
                       className="grid grid-cols-12 items-center gap-2"
                     >
                       <input
-                        className="col-span-4 px-2 py-1 rounded border bg-white text-slate-900"
+                        className="col-span-3 px-2 py-1 rounded border bg-white text-slate-900"
                         value={o.name_en}
                         onChange={(e) =>
                           setGroups((list) =>
@@ -576,7 +603,7 @@ export default function AdminOptionsPanel({
                       <input
                         type="number"
                         step="0.01"
-                        className="col-span-3 px-2 py-1 rounded border bg-white text-slate-900"
+                        className="col-span-2 px-2 py-1 rounded border bg-white text-slate-900"
                         value={o.price_delta ?? 0}
                         onChange={(e) =>
                           setGroups((list) =>
@@ -631,6 +658,29 @@ export default function AdminOptionsPanel({
                           }
                         />
                       </label>
+                      <label className="col-span-2 text-xs">
+                        default{" "}
+                        <input
+                          type="checkbox"
+                          checked={!!o.is_default}
+                          onChange={(e) =>
+                            setGroups((list) => list.map((x, i) =>
+                              i === gi
+                                ? {
+                                  ...x,
+                                  options: x.options.map((oo, j) =>
+                                    j === oi
+                                      ? { ...oo, is_default: e.target.checked }
+                                      : x.selection_type === "single"
+                                        ? { ...oo, is_default: false }
+                                        : oo
+                                  ),
+                                }
+                                : x
+                            ))
+                          }
+                        />
+                      </label>
                       <button
                         className="col-span-2 text-red-600"
                         onClick={() => removeOption(gi, oi)}
@@ -667,103 +717,111 @@ export default function AdminOptionsPanel({
       )}
 
       {tab === "combo" && (
-        <div className="rounded-xl border p-3 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs">
-              min
-              <select
-                className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
-                value={combo.min_select ?? 0}
-                onChange={(e) =>
-                  setCombo((c) => ({
-                    ...c,
-                    min_select: Number(e.target.value),
-                  }))
-                }
-              >
-                {[0, 1, 2, 3].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs">
-              max
-              <select
-                className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
-                value={combo.max_select ?? 1}
-                onChange={(e) =>
-                  setCombo((c) => ({
-                    ...c,
-                    max_select: Number(e.target.value),
-                  }))
-                }
-              >
-                {[1, 2, 3].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="space-y-2">
-            {combo.items.map((it, idx) => (
-              <div key={idx} className="grid grid-cols-12 items-center gap-2">
-                <select
-                  className="col-span-6 px-2 py-1 rounded border bg-white text-slate-900"
-                  value={it.child_menu_id}
-                  onChange={(e) =>
-                    setCombo((c) => ({
-                      ...c,
-                      items: c.items.map((x, i) =>
-                        i === idx ? { ...x, child_menu_id: e.target.value } : x
-                      ),
-                    }))
-                  }
-                >
-                  <option value="">Select child menu…</option>
-                  {allMenus
-                    .filter((m) => m.id !== menuId)
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name_en}
-                      </option>
+        <div className="rounded-xl border p-3 space-y-3">
+          {combo.map((group, groupIndex) => (
+            <div key={group.id || groupIndex} className="rounded-lg border p-3 space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold">Combo group {groupIndex + 1}</span>
+                <label className="text-xs">
+                  min
+                  <select
+                    className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
+                    value={group.min_select ?? 0}
+                    onChange={(e) => setCombo((groups) => groups.map((item, index) =>
+                      index === groupIndex ? { ...item, min_select: Number(e.target.value) } : item
                     ))}
-                </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="col-span-4 px-2 py-1 rounded border bg-white text-slate-900"
-                  value={it.upgrade_price_delta ?? 0}
-                  onChange={(e) =>
-                    setCombo((c) => ({
-                      ...c,
-                      items: c.items.map((x, i) =>
-                        i === idx
-                          ? {
-                            ...x,
-                            upgrade_price_delta: Number(e.target.value || 0),
-                          }
-                          : x
-                      ),
-                    }))
-                  }
-                />
+                  >
+                    {[0, 1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs">
+                  max
+                  <select
+                    className="ml-2 px-2 py-1 rounded border bg-white text-slate-900"
+                    value={group.max_select ?? 1}
+                    onChange={(e) => setCombo((groups) => groups.map((item, index) =>
+                      index === groupIndex ? { ...item, max_select: Number(e.target.value) } : item
+                    ))}
+                  >
+                    {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
                 <button
-                  className="col-span-2 text-red-600"
-                  onClick={() => removeChild(idx)}
+                  className="ml-auto text-red-600"
+                  onClick={() => removeComboGroup(groupIndex)}
+                  aria-label={`Remove combo group ${groupIndex + 1}`}
                 >
                   <Trash2 />
                 </button>
               </div>
-            ))}
-          </div>
+              <div className="space-y-2">
+                {group.items.map((item, itemIndex) => (
+                  <div key={itemIndex} className="grid grid-cols-12 items-center gap-2">
+                    <select
+                      className="col-span-5 px-2 py-1 rounded border bg-white text-slate-900"
+                      value={item.child_menu_id}
+                      onChange={(e) => setCombo((groups) => groups.map((groupItem, index) =>
+                        index === groupIndex
+                          ? { ...groupItem, items: groupItem.items.map((child, childIndex) =>
+                            childIndex === itemIndex ? { ...child, child_menu_id: e.target.value } : child
+                          ) }
+                          : groupItem
+                      ))}
+                    >
+                      <option value="">Select child menu…</option>
+                      {allMenus.filter((m) => m.id !== menuId).map((menu) => (
+                        <option key={menu.id} value={menu.id}>{menu.name_en}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="col-span-3 px-2 py-1 rounded border bg-white text-slate-900"
+                      value={item.upgrade_price_delta ?? 0}
+                      onChange={(e) => setCombo((groups) => groups.map((groupItem, index) =>
+                        index === groupIndex
+                          ? { ...groupItem, items: groupItem.items.map((child, childIndex) =>
+                            childIndex === itemIndex
+                              ? { ...child, upgrade_price_delta: Number(e.target.value || 0) }
+                              : child
+                          ) }
+                          : groupItem
+                      ))}
+                    />
+                    <label className="col-span-2 text-xs">
+                      default{" "}
+                      <input
+                        type="checkbox"
+                        checked={!!item.is_default}
+                        onChange={(e) => setCombo((groups) => groups.map((groupItem, index) =>
+                          index === groupIndex
+                            ? { ...groupItem, items: groupItem.items.map((child, childIndex) =>
+                              childIndex === itemIndex ? { ...child, is_default: e.target.checked } : child
+                            ) }
+                            : groupItem
+                        ))}
+                      />
+                    </label>
+                    <button
+                      className="col-span-2 text-red-600"
+                      onClick={() => removeChild(groupIndex, itemIndex)}
+                      aria-label={`Remove combo item ${itemIndex + 1}`}
+                    >
+                      <Trash2 />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button className="px-3 py-1.5 rounded border" onClick={() => addChild(groupIndex)}>
+                <Plus className="inline w-4 h-4 mr-1" />
+                Add child
+              </button>
+            </div>
+          ))}
           <div className="flex items-center gap-2 pt-2">
-            <button className="px-3 py-1.5 rounded border" onClick={addChild}>
+            <button className="px-3 py-1.5 rounded border" onClick={addComboGroup}>
               <Plus className="inline w-4 h-4 mr-1" />
-              Add child
+              Add group
             </button>
             <button
               className="px-3 py-1.5 rounded bg-emerald-600 text-white"

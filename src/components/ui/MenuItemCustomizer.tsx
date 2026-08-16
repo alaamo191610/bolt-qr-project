@@ -138,6 +138,12 @@ function TriState({
   maxExtra?: number;
 }) {
   const [qty, setQty] = useState(1);
+  const setExtraQty = (nextQty: number) => {
+    const cap = Number(maxExtra ?? 0);
+    const next = Math.max(1, cap > 0 ? Math.min(cap, nextQty) : nextQty);
+    setQty(next);
+    if (value === "extra") onChange("extra", next);
+  };
   useEffect(() => {
     if (value !== "extra") setQty(1);
   }, [value]);
@@ -169,16 +175,18 @@ function TriState({
       >
         <button
           className="p-1 rounded border"
-          onClick={() => setQty(Math.max(1, qty - 1))}
+          onClick={() => setExtraQty(qty - 1)}
+          disabled={value !== "extra" || qty <= 1}
+          aria-label="Decrease extra quantity"
         >
           <Minus size={14} />
         </button>
         <span className="min-w-5 text-center text-sm">{qty}</span>
         <button
           className="p-1 rounded border"
-          onClick={() =>
-            setQty(maxExtra ? Math.min(maxExtra, qty + 1) : qty + 1)
-          }
+          onClick={() => setExtraQty(qty + 1)}
+          disabled={value !== "extra" || (Number(maxExtra ?? 0) > 0 && qty >= Number(maxExtra))}
+          aria-label="Increase extra quantity"
         >
           <Plus size={14} />
         </button>
@@ -213,13 +221,42 @@ export default function MenuItemCustomizer({
     Record<string, { mode: "default" | "remove" | "extra"; qty?: number }>
   >({});
   const [optState, setOptState] = useState<Record<string, number>>({}); // optionId -> qty
-  const [childrenState, setChildrenState] = useState<Record<string, string>>(
+  const [childrenState, setChildrenState] = useState<Record<string, string[]>>(
     {}
-  ); // comboGroupId -> childMenuId
+  ); // comboGroupId -> childMenuIds
 
   useEffect(() => {
     setQty(defaultQuantity);
   }, [defaultQuantity]);
+
+  useEffect(() => {
+    setOptState(() => {
+      const defaults: Record<string, number> = {};
+      for (const group of groups) {
+        const defaultOptions = (group.modifier_options || []).filter((option) => option.is_default);
+        const optionsToSelect = group.selection_type === "single" ? defaultOptions.slice(0, 1) : defaultOptions;
+        for (const option of optionsToSelect) {
+          if (option.is_default) defaults[option.id] = 1;
+        }
+      }
+      return defaults;
+    });
+  }, [groups]);
+
+  useEffect(() => {
+    setChildrenState(() => {
+      const defaults: Record<string, string[]> = {};
+      for (const group of combo) {
+        const max = Number(group.max_select ?? 1);
+        const selected = (group.combo_group_items || [])
+          .filter((item) => item.is_default)
+          .slice(0, Math.max(1, max))
+          .map((item) => item.child_menu_id);
+        if (selected.length) defaults[group.id] = selected;
+      }
+      return defaults;
+    });
+  }, [combo]);
 
   // Required modifier groups (e.g. "Cooking Level") can render far below
   // the fold, past the photo and ingredient list. Without this, a customer
@@ -274,7 +311,7 @@ export default function MenuItemCustomizer({
   const comboErrors = useMemo(() => {
     const errors: string[] = [];
     for (const group of combo) {
-      const selectedCount = childrenState[group.id] ? 1 : 0;
+      const selectedCount = childrenState[group.id]?.length ?? 0;
       if (selectedCount < Number(group.min_select ?? 0)) errors.push("Select a combo item");
       if (selectedCount > Number(group.max_select ?? 1)) errors.push("Too many combo items selected");
     }
@@ -302,12 +339,12 @@ export default function MenuItemCustomizer({
     }
     let childrenDelta = 0;
     for (const cg of combo) {
-      const childId = childrenState[cg.id];
-      if (!childId) continue;
-      const item = (cg.combo_group_items || []).find(
-        (i) => i.child_menu_id === childId
-      );
-      if (item) childrenDelta += Number(item.upgrade_price_delta ?? 0);
+      for (const childId of childrenState[cg.id] || []) {
+        const item = (cg.combo_group_items || []).find(
+          (i) => i.child_menu_id === childId
+        );
+        if (item) childrenDelta += Number(item.upgrade_price_delta ?? 0);
+      }
     }
     const unit = base + extrasDelta + optionsDelta + childrenDelta;
     const total = unit * qty;
@@ -345,12 +382,12 @@ export default function MenuItemCustomizer({
     }
     // children snapshot
     for (const cg of combo) {
-      const childId = childrenState[cg.id];
-      if (!childId) continue;
-      const it = (cg.combo_group_items || []).find(
-        (i) => i.child_menu_id === childId
-      );
-      if (it?.menus?.name_en) lines.push(`+ ${it.menus.name_en}`);
+      for (const childId of childrenState[cg.id] || []) {
+        const it = (cg.combo_group_items || []).find(
+          (i) => i.child_menu_id === childId
+        );
+        if (it?.menus?.name_en) lines.push(`+ ${it.menus.name_en}`);
+      }
     }
     return lines;
   }, [ingState, ingredientConfig, groups, optState, combo, childrenState]);
@@ -382,8 +419,9 @@ export default function MenuItemCustomizer({
     }
     const comboChildren: ComboChildPick[] = [];
     for (const cg of combo) {
-      const childId = childrenState[cg.id];
-      if (childId) comboChildren.push({ groupId: cg.id, childMenuId: childId });
+      for (const childId of childrenState[cg.id] || []) {
+        comboChildren.push({ groupId: cg.id, childMenuId: childId });
+      }
     }
     return {
       menuId,
@@ -507,7 +545,7 @@ export default function MenuItemCustomizer({
                           setIngState((s) => ({ ...s, [row.ingredient_id]: { mode, qty: q } }))
                         }
                         disabledRemove={!cfg?.removable}
-                        disabledExtra={!cfg?.extra}
+                        disabledExtra={!cfg?.extra || cfg.maxExtra < 1}
                         maxExtra={cfg?.maxExtra}
                       />
                     </div>
@@ -579,20 +617,24 @@ export default function MenuItemCustomizer({
                                   }
                                 }
                               }}
+                              style={isSelected ? {
+                                borderColor: "var(--color-primary)",
+                                backgroundColor: "color-mix(in srgb, var(--color-primary) 5%, transparent)",
+                              } : undefined}
                               className={`group relative flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer ${isSelected
-                                ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10 dark:border-emerald-500/50"
+                                ? ""
                                 : "border-transparent bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
                                 }`}
                             >
                               <div className="flex items-center gap-3">
                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${isSelected
-                                  ? "bg-emerald-500 border-emerald-500"
+                                  ? "bg-[var(--color-primary)] border-[var(--color-primary)]"
                                   : "border-slate-300 dark:border-slate-600"
                                   }`}>
                                   {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className={`font-medium ${isSelected ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-700 dark:text-slate-300'}`}>
+                                  <span className={`font-medium ${isSelected ? 'text-[var(--color-primary)]' : 'text-slate-700 dark:text-slate-300'}`}>
                                     {o.name_en}
                                   </span>
                                   {Number(o.price_delta) > 0 && (
@@ -646,11 +688,13 @@ export default function MenuItemCustomizer({
                   <div key={cg.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-800/50">
                     <div className="mb-3">
                       <span className="font-medium text-slate-900 dark:text-white">Choose item</span>
-                      <span className="text-sm text-slate-500 ml-2">(Optional)</span>
+                            <span className="text-sm text-slate-500 ml-2">
+                              {Number(cg.min_select ?? 0) > 0 ? "(Required)" : "(Optional)"}
+                            </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {(cg.combo_group_items || []).map((ci) => {
-                        const selected = childrenState[cg.id] === ci.child_menu_id;
+                        const selected = (childrenState[cg.id] || []).includes(ci.child_menu_id);
                         return (
                           <button
                             key={ci.child_menu_id}
@@ -659,10 +703,17 @@ export default function MenuItemCustomizer({
                               : "border-transparent bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
                               }`}
                             onClick={() =>
-                              setChildrenState((s) => ({
-                                ...s,
-                                [cg.id]: selected ? "" : ci.child_menu_id,
-                              }))
+                              setChildrenState((s) => {
+                                const current = s[cg.id] || [];
+                                if (selected) {
+                                  return { ...s, [cg.id]: current.filter((id) => id !== ci.child_menu_id) };
+                                }
+                                const max = Number(cg.max_select ?? 1);
+                                const next = max <= 1
+                                  ? [ci.child_menu_id]
+                                  : [...current, ci.child_menu_id].slice(0, max);
+                                return { ...s, [cg.id]: next };
+                              })
                             }
                           >
                             <div>
@@ -768,7 +819,7 @@ export default function MenuItemCustomizer({
             }}
             disabled={!canAdd}
             className={`flex-1 h-12 rounded-full font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-between px-6 ${canAdd
-              ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30"
+              ? "bg-[var(--color-primary)] hover:bg-[var(--color-secondary)]"
               : "bg-slate-400 cursor-not-allowed"
               }`}
           >
