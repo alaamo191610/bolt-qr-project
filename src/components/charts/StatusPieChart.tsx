@@ -29,7 +29,7 @@ const FALLBACKS = ['#06b6d4', '#a78bfa', '#f97316', '#14b8a6', '#8b5cf6'];
 
 const StatusPieChart: React.FC<Props> = ({ data, t }) => {
   const { language, isRTL } = useLanguage();
-  const locale = language === 'ar' ? 'ar-QA' : 'en-QA';
+  const locale = language === 'ar' ? 'ar-JO' : 'en-JO';
 
   const numberFmt  = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const percentFmt = useMemo(

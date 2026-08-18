@@ -24,10 +24,6 @@ export const joinAdminRoom = (acknowledge?: (result: SocketJoinAcknowledgement) 
     socket.emit("join-admin", { token }, acknowledge);
 };
 
-export const joinMenuRoom = (adminId: string) => {
-    socket.emit("join-menu", adminId);
-};
-
 export const joinOrderRoom = (
     orderId: number,
     trackingToken: string,

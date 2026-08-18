@@ -26,7 +26,7 @@ import {
   requireSuperAdmin,
 } from './accessControl.js';
 import { createRateLimiter } from './rateLimit.js';
-import { ERROR_CODES, sendError, logSafeError } from './errors.js';
+import { ERROR_CODES, sendError, errorContractMiddleware, logSafeError } from './errors.js';
 import { createRequestContextMiddleware } from './requestContext.js';
 import {
   TOKEN_TYPES,
@@ -158,24 +158,6 @@ const io = new Server(server, {
 });
 orderRealtime.register(io);
 
-io.on('connection', (socket) => {
-  socket.on('join-menu', async (adminId) => {
-    if (!isUuid(adminId)) return;
-    try {
-      const admin = await prisma.admin.findUnique({
-        where: { id: adminId },
-        select: { id: true }
-      });
-      if (!admin) return;
-      socket.join(`menu_${adminId}`);
-      console.log(`Socket ${socket.id} joined menu_${adminId}`);
-    } catch {
-      // Invalid or unavailable restaurant identifiers are ignored.
-    }
-  });
-
-});
-
 const upload = multer({
   dest: runtimeConfig.uploadDirectory,
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -199,6 +181,7 @@ const hasImageSignature = (buffer, mimetype) => {
 
 app.disable('x-powered-by');
 app.use(createRequestContextMiddleware({ onServerError: captureServerException }));
+app.use(errorContractMiddleware);
 app.use((req, res, next) => {
   const requestHost = req.get('x-forwarded-host') || req.get('host');
   cors({
@@ -260,7 +243,7 @@ const tableExchangeCapabilityRateLimit = createRateLimiter({
 });
 const tableSessionOrderRateLimit = createRateLimiter({
   windowMs: 10 * 60 * 1000,
-  max: 6,
+  max: 8,
   key: req => `table-order-session:${req.tableSession?.sessionId || 'invalid'}`,
 });
 const organizationOrderRateLimit = createRateLimiter({
@@ -790,9 +773,6 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
       return menu;
     });
 
-    // Emit real-time update
-    io.to(`menu_${req.user.id}`).emit('menu-updated', result);
-
     res.json(result);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
@@ -911,7 +891,7 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
   const { groups } = req.body;
   try {
     const ownedMenu = await prisma.menu.findFirst({
-      where: { id: menuId, user_id: req.user.id },
+      where: { id: menuId, user_id: req.user.id, organization_id: req.auth.organizationId },
       select: { id: true }
     });
     if (!ownedMenu) return res.status(404).json({ error: 'Menu item not found' });
@@ -929,6 +909,9 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
       const groupIds = [];
       for (const gr of groups) {
         let gid = gr.id ? Number(gr.id) : undefined;
+        if (gid && !editableGroupIds.has(gid)) {
+          throw Object.assign(new Error('Modifier group not found'), { status: 404 });
+        }
         const selectionType = gr.selection_type === 'multi' ? 'multi' : gr.selection_type === 'single' ? 'single' : null;
         const minSelect = Number(gr.min_select ?? 0);
         const maxSelect = selectionType === 'single' ? 1 : Number(gr.max_select ?? 1);
@@ -956,9 +939,6 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
         };
 
         if (gid) {
-          if (!editableGroupIds.has(gid)) {
-            throw Object.assign(new Error('Modifier group not found'), { status: 404 });
-          }
           await tx.modifierGroup.update({ where: { id: gid }, data });
         } else {
           const newG = await tx.modifierGroup.create({
@@ -1694,7 +1674,10 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
     if (!replayed && fullOrder?.admin_id) {
       orderRealtime.emitCreated(io, fullOrder, presentedOrder);
       if (fullOrder?.table) {
-        io.to(`admin_${fullOrder.admin_id}`).emit('table-updated', {
+        io.to(orderRealtime.adminRealtimeRoom({
+          organizationId: fullOrder.organization_id,
+          adminId: fullOrder.admin_id,
+        })).emit('table-updated', {
           ...fullOrder.table,
           status: 'occupied'
         });
@@ -1822,7 +1805,10 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
     if (result.changed) {
       orderRealtime.emitStatus(io, result.order);
       if (result.releasedTable) {
-        io.to(`admin_${result.order.admin_id}`).emit('table-updated', result.releasedTable);
+        io.to(orderRealtime.adminRealtimeRoom({
+          organizationId: result.order.organization_id,
+          adminId: result.order.admin_id,
+        })).emit('table-updated', result.releasedTable);
       }
     }
     res.json(result.order);
@@ -1832,7 +1818,7 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
 // --- Tables ---
 app.get('/api/tables', authenticate, async (req, res) => {
   const tables = await prisma.table.findMany({
-    where: { admin_id: req.user.id },
+    where: { admin_id: req.user.id, organization_id: req.auth.organizationId },
     orderBy: { created_at: 'asc' }
   });
   res.json(tables);
@@ -1842,7 +1828,11 @@ app.post('/api/tables', authenticate, async (req, res) => {
   const { code, number, capacity } = req.body;
   const admin_id = req.user.id; // Get user ID from authenticated token
   // Handle frontend sending 'number' instead of 'code'
-  const tableCode = code || number;
+  const tableCode = String(code || number || '').trim();
+  const tableCapacity = capacity == null || capacity === '' ? 4 : Number(capacity);
+  if (!tableCode || tableCode.length > 50 || !Number.isInteger(tableCapacity) || tableCapacity < 1 || tableCapacity > 100) {
+    return res.status(400).json({ error: 'A valid table code and capacity between 1 and 100 are required' });
+  }
 
   try {
     // 🆕 Enforce Table Limit
@@ -1876,7 +1866,7 @@ app.post('/api/tables', authenticate, async (req, res) => {
     const table = await prisma.table.create({
       data: {
         code: tableCode,
-        capacity: Number(capacity),
+        capacity: tableCapacity,
         admin_id,
         organization_id: req.auth.organizationId,
         branch_id: defaultBranch.id,
@@ -1969,15 +1959,36 @@ app.put(
 app.put('/api/tables/:id', authenticate, async (req, res) => {
   const { code, capacity, status } = req.body;
   try {
+    const tableId = Number(req.params.id);
     const ownedTable = await prisma.table.findFirst({
-      where: { id: Number(req.params.id), admin_id: req.user.id },
+      where: { id: tableId, admin_id: req.user.id, organization_id: req.auth.organizationId },
       select: { id: true }
     });
     if (!ownedTable) return res.status(404).json({ error: 'Table not found' });
 
+    const allowedStatuses = new Set(['available', 'occupied', 'reserved', 'cleaning']);
+    const data = {};
+    if (code !== undefined) {
+      const normalizedCode = String(code).trim();
+      if (!normalizedCode || normalizedCode.length > 50) return res.status(400).json({ error: 'Invalid table code' });
+      data.code = normalizedCode;
+    }
+    if (capacity !== undefined) {
+      const normalizedCapacity = Number(capacity);
+      if (!Number.isInteger(normalizedCapacity) || normalizedCapacity < 1 || normalizedCapacity > 100) {
+        return res.status(400).json({ error: 'Capacity must be an integer between 1 and 100' });
+      }
+      data.capacity = normalizedCapacity;
+    }
+    if (status !== undefined) {
+      if (!allowedStatuses.has(status)) return res.status(400).json({ error: 'Invalid table status' });
+      data.status = status;
+    }
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'No table changes were supplied' });
+
     const table = await prisma.table.update({
-      where: { id: Number(req.params.id) },
-      data: { code, capacity: Number(capacity), status }
+      where: { id: tableId },
+      data,
     });
     res.json(table);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1986,15 +1997,13 @@ app.put('/api/tables/:id', authenticate, async (req, res) => {
 app.delete('/api/tables/:id', authenticate, async (req, res) => {
   try {
     const tableId = Number(req.params.id);
-    const table = await prisma.table.findUnique({ where: { id: tableId } });
+    const table = await prisma.table.findFirst({
+      where: { id: tableId, admin_id: req.user.id, organization_id: req.auth.organizationId },
+    });
 
     if (!table) {
       return res.status(404).json({ error: 'Table not found' });
     }
-    if (table.admin_id !== req.user.id) {
-      return res.status(404).json({ error: 'Table not found' });
-    }
-
     if (table.status === 'occupied') {
       return res.status(400).json({ error: 'Cannot delete an occupied table' });
     }
@@ -2036,7 +2045,17 @@ app.post(
   tableExchangeCapabilityRateLimit,
   async (req, res) => {
     try {
-      res.json(await tableCapabilities.exchange(req.body?.capability));
+      const result = await tableCapabilities.exchange(req.body?.capability);
+      if (result.tableStatusChanged) {
+        io.to(orderRealtime.adminRealtimeRoom({
+          organizationId: result.organizationId,
+          adminId: result.restaurantId,
+        })).emit('table-updated', {
+          id: result.table.id,
+          status: 'occupied',
+        });
+      }
+      res.json(result);
     } catch (error) {
       sendError(res, req, error);
     }

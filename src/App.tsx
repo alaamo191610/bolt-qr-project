@@ -30,6 +30,12 @@ import {
 } from "./services/orderRealtime";
 import { useSubscription } from "./hooks/useSubscription";
 import type { SubscriptionPlan, SubscriptionStatus } from "./types/subscription";
+import type { KDSPrefs } from "./order-admin/types";
+import {
+  playNotificationSound,
+  unlockNotificationAudio,
+  type NotificationSoundPreset,
+} from "./services/notificationSound";
 
 const QRGenerator = React.lazy(() => import("./components/tables/QRGenerator"));
 const DigitalMenu = React.lazy(() => import("./components/menu/DigitalMenu"));
@@ -101,6 +107,7 @@ interface AdminProfile {
   max_menu_items: number;
   max_staff_accounts: number;
   created_at: string;
+  kds_prefs?: Pick<KDSPrefs, 'soundEnabled' | 'soundPreset'> | null;
 }
 
 // Accepts ApiOrder (the wider, raw-wire type - Decimal fields serialize as
@@ -239,6 +246,18 @@ const AdminDashboard: React.FC = () => {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [switchingOrganizationId, setSwitchingOrganizationId] = useState<string | null>(null);
   const subscription = useSubscription(adminProfile);
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      void unlockNotificationAudio();
+    };
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
 
   const handleSwitchOrganization = useCallback(async (organizationId: string) => {
     setSwitchingOrganizationId(organizationId);
@@ -433,6 +452,11 @@ const AdminDashboard: React.FC = () => {
         ? prev.map(existing => existing.id === transformedOrder.id ? transformedOrder : existing)
         : [transformedOrder, ...prev]);
       toast.success(`New Order #${order.order_number || order.id} received!`);
+      if (adminProfile?.kds_prefs?.soundEnabled !== false) {
+        void playNotificationSound(
+          (adminProfile?.kds_prefs?.soundPreset || 'ding') as NotificationSoundPreset
+        );
+      }
       void fetchOrders();
       if (activeTab === 'analytics') void fetchAnalytics();
     };
@@ -456,7 +480,7 @@ const AdminDashboard: React.FC = () => {
       socket.off("order.created.v1", handleNewOrder);
       socket.off("order.status.v1", handleStatusUpdate);
     };
-  }, [user, fetchOrders, fetchAnalytics, activeTab]);
+  }, [user, fetchOrders, fetchAnalytics, activeTab, adminProfile?.kds_prefs]);
 
   // Simple tab change handler
   const handleTabChange = (tabId: string) => {

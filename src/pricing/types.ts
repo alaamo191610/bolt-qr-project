@@ -48,9 +48,9 @@ created_at?: string;
 
 
 export const DEFAULT_PRICING: PricingPrefs = {
-baseCurrency: 'QAR',
-enabledCurrencies: ['QAR', 'USD', 'JOD', 'SAR'],
-exchangeRates: { QAR: 1, USD: 0, JOD: 0, SAR: 0 }, // fill manually or via service
+baseCurrency: 'JOD',
+enabledCurrencies: ['JOD'],
+exchangeRates: { JOD: 1, USD: 0, QAR: 0, SAR: 0 }, // additional currencies require an explicit rate
 priceDisplay: 'symbol',
 rounding: 'none',
 taxInclusive: true,

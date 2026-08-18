@@ -16,6 +16,7 @@ export const isRestaurantInvitationToken = token => typeof token === 'string'
 const normalizeEmail = value => String(value || '').trim().toLowerCase();
 const normalizeName = value => String(value || '').trim();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEFAULT_CURRENCY = 'JOD';
 
 const slugFor = name => {
   const base = name.toLowerCase().normalize('NFKD')
@@ -71,7 +72,7 @@ export const createRestaurantInvitationService = ({
             code: 'MAIN',
             name: 'Main Branch',
             timezone: process.env.DEFAULT_TIMEZONE || 'Asia/Amman',
-            currency: process.env.DEFAULT_CURRENCY || 'JOD',
+            currency: DEFAULT_CURRENCY,
           },
         });
         const user = await tx.user.create({
@@ -96,6 +97,14 @@ export const createRestaurantInvitationService = ({
             subscription_status: subscription.status,
             subscription_end: subscription.subscriptionEnd,
             trial_ends_at: subscription.trialEndsAt,
+            pricing_prefs: {
+              baseCurrency: DEFAULT_CURRENCY,
+              enabledCurrencies: [DEFAULT_CURRENCY],
+              exchangeRates: { JOD: 1, USD: 0, QAR: 0, SAR: 0 },
+              priceDisplay: 'symbol',
+              rounding: 'none',
+              taxInclusive: true,
+            },
             ...subscription.limits,
           },
         });

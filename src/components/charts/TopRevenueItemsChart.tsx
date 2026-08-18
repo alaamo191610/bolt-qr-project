@@ -23,14 +23,14 @@ const COLORS = ['#10b981', '#22c55e', '#34d399', '#4ade80', '#6ee7b7'];
 
 const TopRevenueItemsChart: React.FC<Props> = ({ data, t }) => {
   const { isRTL, language } = useLanguage();
-  const locale = language === 'ar' ? 'ar-QA' : 'en-QA';
+  const locale = language === 'ar' ? 'ar-JO' : 'en-JO';
 
   const moneyFmt = useMemo(
-    () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'QAR', maximumFractionDigits: 2 }),
+    () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'JOD', maximumFractionDigits: 2 }),
     [locale]
   );
   const compactMoneyFmt = useMemo(
-    () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'QAR', notation: 'compact', maximumFractionDigits: 1 }),
+    () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'JOD', notation: 'compact', maximumFractionDigits: 1 }),
     [locale]
   );
 

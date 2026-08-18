@@ -20,7 +20,7 @@ interface AnalyticsProps {
 const Analytics: React.FC<AnalyticsProps> = ({ summary, loading = false, error, onRetry }) => {
   const { t, getLocalizedDayName, language } = useLanguage();
   const { formatPrice } = useCurrency();
-  const locale = language === 'ar' ? 'ar-QA' : 'en-QA';
+  const locale = language === 'ar' ? 'ar-JO' : 'en-JO';
   const numberFmt = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const dateFmt = useMemo(() => new Intl.DateTimeFormat(locale, {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',

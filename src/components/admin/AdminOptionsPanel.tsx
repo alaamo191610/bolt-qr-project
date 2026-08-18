@@ -23,9 +23,11 @@ import { getErrorMessage } from "../../utils/errors";
 
 export default function AdminOptionsPanel({
   menuId,
+  onModifierGroupsDirtyFieldsChange,
 }: {
   menuId: string;
   adminId?: string;
+  onModifierGroupsDirtyFieldsChange?: (fields: string[]) => void;
 }) {
   const [tab, setTab] = useState<"ingredients" | "options" | "combo">(
     "ingredients"
@@ -76,6 +78,7 @@ export default function AdminOptionsPanel({
     options: ModOption[];
   };
   const [groups, setGroups] = useState<ModGroup[]>([]);
+  const [savedGroupsSnapshot, setSavedGroupsSnapshot] = useState<string | null>(null);
 
   type ComboItem = {
     child_menu_id: string;
@@ -136,6 +139,63 @@ export default function AdminOptionsPanel({
     }>;
   };
 
+  const serializeGroups = useCallback((value: ModGroup[]) => JSON.stringify(value), []);
+
+  const getUnsavedModifierFields = useCallback(
+    (currentGroups: ModGroup[], savedSnapshot: string | null) => {
+      if (savedSnapshot === null) return [];
+
+      const savedGroups = JSON.parse(savedSnapshot) as ModGroup[];
+      const fields: string[] = [];
+      const groupCount = Math.max(currentGroups.length, savedGroups.length);
+
+      for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+        const currentGroup = currentGroups[groupIndex];
+        const savedGroup = savedGroups[groupIndex];
+        const groupLabel = `Modifier group ${groupIndex + 1}`;
+
+        if (!savedGroup) {
+          fields.push(`${groupLabel} (new group)`);
+          continue;
+        }
+        if (!currentGroup) {
+          fields.push(`${groupLabel} (removed)`);
+          continue;
+        }
+
+        if (currentGroup.name_en !== savedGroup.name_en) fields.push(`${groupLabel} name`);
+        if (currentGroup.selection_type !== savedGroup.selection_type) fields.push(`${groupLabel} selection type`);
+        if (currentGroup.min_select !== savedGroup.min_select) fields.push(`${groupLabel} minimum selection`);
+        if (currentGroup.max_select !== savedGroup.max_select) fields.push(`${groupLabel} maximum selection`);
+        if (currentGroup.required !== savedGroup.required) fields.push(`${groupLabel} required setting`);
+
+        const optionCount = Math.max(currentGroup.options.length, savedGroup.options.length);
+        for (let optionIndex = 0; optionIndex < optionCount; optionIndex += 1) {
+          const currentOption = currentGroup.options[optionIndex];
+          const savedOption = savedGroup.options[optionIndex];
+          const optionLabel = `${groupLabel} option ${optionIndex + 1}`;
+
+          if (!savedOption) {
+            fields.push(`${optionLabel} (new option)`);
+            continue;
+          }
+          if (!currentOption) {
+            fields.push(`${optionLabel} (removed)`);
+            continue;
+          }
+
+          if (currentOption.name_en !== savedOption.name_en) fields.push(`${optionLabel} name`);
+          if (currentOption.price_delta !== savedOption.price_delta) fields.push(`${optionLabel} price`);
+          if (currentOption.max_qty !== savedOption.max_qty) fields.push(`${optionLabel} maximum quantity`);
+          if (currentOption.is_default !== savedOption.is_default) fields.push(`${optionLabel} default setting`);
+        }
+      }
+
+      return fields;
+    },
+    []
+  );
+
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -165,8 +225,7 @@ export default function AdminOptionsPanel({
       const g = (data.menuModifierGroups || [])
         .map((x) => x.modifier_group)
         .filter(Boolean);
-      setGroups(
-        (g || []).map((gr) => ({
+      const loadedGroups = (g || []).map((gr) => ({
           id: String(gr.id),
           name_en: gr.name_en || "",
           name_ar: gr.name_ar,
@@ -182,8 +241,9 @@ export default function AdminOptionsPanel({
             max_qty: o.max_qty,
             is_default: !!o.is_default,
           })),
-        }))
-      );
+        }));
+      setGroups(loadedGroups);
+      setSavedGroupsSnapshot(serializeGroups(loadedGroups));
 
       setCombo(
         (data.comboGroups || []).map((grp) => ({
@@ -202,11 +262,15 @@ export default function AdminOptionsPanel({
     } finally {
       setLoading(false);
     }
-  }, [menuId]);
+  }, [menuId, serializeGroups]);
 
   useEffect(() => {
     if (menuId) void loadAll();
   }, [menuId, loadAll]);
+
+  useEffect(() => {
+    onModifierGroupsDirtyFieldsChange?.(getUnsavedModifierFields(groups, savedGroupsSnapshot));
+  }, [groups, savedGroupsSnapshot, onModifierGroupsDirtyFieldsChange, getUnsavedModifierFields]);
 
   // ---------- INGREDIENTS ----------
   const toggleIngredient = (ingredient_id: string) => {
@@ -285,6 +349,7 @@ export default function AdminOptionsPanel({
     setSaving(true);
     try {
       await api.post(`/menus/${menuId}/modifiers`, { groups });
+      setSavedGroupsSnapshot(serializeGroups(groups));
       setError(null);
     } finally {
       setSaving(false);

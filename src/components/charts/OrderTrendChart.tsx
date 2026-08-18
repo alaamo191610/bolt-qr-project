@@ -17,10 +17,10 @@ interface Props {
   data: TrendDay[];
   t: (key: string) => string;
   locale?: string;    // defaults keep it working without wiring context
-  currency?: string;  // e.g. 'QAR'
+  currency?: string;  // e.g. 'JOD'
 }
 
-const OrderTrendChart: React.FC<Props> = ({ data, t, locale = 'en-QA', currency = 'QAR' }) => {
+const OrderTrendChart: React.FC<Props> = ({ data, t, locale = 'en-JO', currency = 'JOD' }) => {
   const numberFmt = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const moneyFmt  = useMemo(() => new Intl.NumberFormat(locale, { style: 'currency', currency }), [locale, currency]);
 

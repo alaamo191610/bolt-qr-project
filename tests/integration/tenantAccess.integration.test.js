@@ -680,7 +680,7 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
   assert.equal(logout.status, 200);
   assert.match(logout.headers.get('set-cookie'), /Max-Age=0/u);
   const revokedSession = await cookieRequest(recoveryCookie, '/api/super-admin/stats');
-  assert.equal(revokedSession.status, 403);
+  assert.equal(revokedSession.status, 401);
 
   const lockLogin = await postJson('/api/super-admin/login', { email, password });
   const lockChallenge = await lockLogin.json();
@@ -791,6 +791,7 @@ test('tenant-scoped reads and writes fail closed for another tenant', async () =
   const createdTable = await createdTableResponse.json();
   assert.equal(createdTableResponse.status, 200);
   assert.equal(createdTable.organization_id, tenantA.organization.id);
+  assert.equal(createdTable.capacity, 2);
 
   const createdModifierResponse = await authenticatedRequest(
     token,
@@ -936,6 +937,10 @@ test('table capability exchange authorizes dine-in identity and ignores body ten
   assert.equal(session.organizationId, tenantA.organization.id);
   assert.equal(session.restaurantId, tenantA.admin.id);
   assert.deepEqual(session.table, { id: tenantA.table.id, code: tenantA.table.code });
+  assert.equal(
+    (await database.prisma.table.findUnique({ where: { id: tenantA.table.id } })).status,
+    'occupied',
+  );
 
   const order = await authenticatedRequest(session.token, '/api/orders', {
     method: 'POST',
@@ -1202,7 +1207,7 @@ test('capability rotation starts a new idempotency version scope', async () => {
   assert.notEqual(records[0].capability_version, records[1].capability_version);
 });
 
-test('a table session permits three open orders, replays at capacity, and releases terminal capacity', async () => {
+test('a table session permits four open orders, replays at capacity, and releases terminal capacity', async () => {
   const { session } = await createTableSession(tenantA);
   const submit = key => authenticatedRequest(session.token, '/api/orders', {
     method: 'POST',
@@ -1212,12 +1217,12 @@ test('a table session permits three open orders, replays at capacity, and releas
       items: [{ menuId: tenantA.menu.id, quantity: 1 }],
     }),
   });
-  const keys = [randomUUID(), randomUUID(), randomUUID()];
+  const keys = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
   const createdResponses = [];
 
   for (const key of keys) createdResponses.push(await submit(key));
   const createdOrders = await Promise.all(createdResponses.map(response => response.json()));
-  assert.deepEqual(createdResponses.map(response => response.status), [201, 201, 201]);
+  assert.deepEqual(createdResponses.map(response => response.status), [201, 201, 201, 201]);
   assert.ok(createdOrders.every(order => order.table_session_id === undefined));
   const persistedOrders = await database.prisma.order.findMany({
     where: { id: { in: createdOrders.map(order => order.id) } },
@@ -1251,11 +1256,11 @@ test('a table session permits three open orders, replays at capacity, and releas
         status: { in: ['pending', 'preparing', 'ready'] },
       },
     }),
-    3,
+    4,
   );
 });
 
-test('concurrent unique orders cannot cross the session cap and a new session has an independent allowance', async () => {
+test('concurrent unique orders cannot cross the session or table cap', async () => {
   const first = await createTableSession(tenantA);
   const submit = (session, key) => authenticatedRequest(session.token, '/api/orders', {
     method: 'POST',
@@ -1268,8 +1273,10 @@ test('concurrent unique orders cannot cross the session cap and a new session ha
 
   const firstOrder = await submit(first.session, randomUUID());
   const secondOrder = await submit(first.session, randomUUID());
+  const thirdOrder = await submit(first.session, randomUUID());
   assert.equal(firstOrder.status, 201);
   assert.equal(secondOrder.status, 201);
+  assert.equal(thirdOrder.status, 201);
 
   const concurrentKeys = [randomUUID(), randomUUID()];
   const concurrent = await Promise.all(concurrentKeys.map(key => submit(first.session, key)));
@@ -1278,10 +1285,10 @@ test('concurrent unique orders cannot cross the session cap and a new session ha
   assert.equal(concurrentBodies.find(body => body.code)?.code, 'ORDER_LIMIT_REACHED');
 
   const persisted = await database.prisma.order.findMany({
-    where: { id: { in: [(await firstOrder.json()).id, (await secondOrder.json()).id, ...concurrentBodies.map(body => body.id).filter(Boolean)] } },
+    where: { id: { in: [(await firstOrder.json()).id, (await secondOrder.json()).id, (await thirdOrder.json()).id, ...concurrentBodies.map(body => body.id).filter(Boolean)] } },
     select: { table_session_id: true },
   });
-  assert.equal(persisted.length, 3);
+  assert.equal(persisted.length, 4);
   assert.equal(new Set(persisted.map(order => order.table_session_id)).size, 1);
   const rejectedKey = concurrentKeys[concurrent.findIndex(response => response.status === 409)];
   assert.equal(await database.prisma.publicOrderIdempotency.count({ where: { key: rejectedKey } }), 0);
@@ -1289,15 +1296,14 @@ test('concurrent unique orders cannot cross the session cap and a new session ha
   const exchange = await postJson('/api/public/table-session', { capability: first.capability });
   const secondSession = await exchange.json();
   assert.equal(exchange.status, 200);
-  const independent = await submit(secondSession, randomUUID());
+  const independentKey = randomUUID();
+  const independent = await submit(secondSession, independentKey);
   const independentBody = await independent.json();
-  assert.equal(independent.status, 201);
-  assert.equal(independentBody.table_session_id, undefined);
-  const independentOrder = await database.prisma.order.findUnique({
-    where: { id: independentBody.id },
-    select: { table_session_id: true },
-  });
-  assert.notEqual(independentOrder.table_session_id, persisted[0].table_session_id);
+  assert.equal(independent.status, 409);
+  assert.equal(independentBody.code, 'ORDER_LIMIT_REACHED');
+  assert.equal(await database.prisma.publicOrderIdempotency.count({
+    where: { key: independentKey },
+  }), 0);
 });
 
 test('ordering-state management is role- and tenant-scoped, audited, and assigns new tables to the active branch', async () => {
@@ -1365,10 +1371,11 @@ test('ordering-state management is role- and tenant-scoped, audited, and assigns
 
   const createdTable = await authenticatedRequest(adminToken, '/api/tables', {
     method: 'POST',
-    body: JSON.stringify({ code: 'A-02', capacity: 4 }),
+    body: JSON.stringify({ code: 'A-02' }),
   });
   const tableBody = await createdTable.json();
   assert.equal(createdTable.status, 200);
+  assert.equal(tableBody.capacity, 4);
   assert.equal(tableBody.branch_id, tenantA.branchId);
 });
 

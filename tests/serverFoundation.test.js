@@ -43,6 +43,23 @@ test('unknown routes return the stable redacted error contract', async () => {
   assert.equal(body.stack, undefined);
 });
 
+test('legacy route errors are normalized to the stable error contract', async () => {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Request-Id': 'http-harness-legacy-error',
+    },
+    body: JSON.stringify({}),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error, 'Email and password required');
+  assert.equal(body.code, 'VALIDATION_ERROR');
+  assert.equal(body.requestId, 'http-harness-legacy-error');
+});
+
 test('rate limiter has deterministic retry metadata and bounded storage', () => {
   let now = 1_000;
   const limiter = createRateLimiter({

@@ -1,4 +1,3 @@
-import type { Table } from '../lib/supabase'
 import { api } from './api'
 
 // Matches the raw `tables` row Prisma returns from GET/POST/PUT /api/tables
@@ -29,6 +28,12 @@ export interface TableSessionExchange {
   table: { id: number; code: string }
 }
 
+export interface TableUpdate {
+  code?: string
+  capacity?: number
+  status?: string
+}
+
 export const tableService = {
   // Get all tables for admin
   async getTables(adminId: string): Promise<ApiTable[]> {
@@ -41,7 +46,7 @@ export const tableService = {
   },
 
   // Add new table
-  async addTable(table: Omit<Table, 'id' | 'created_at'>): Promise<ApiTable> {
+  async addTable(table: { code: string; capacity?: number }): Promise<ApiTable> {
     try {
       // Backend will get admin_id from the token
       return await api.post<ApiTable>('/tables', table);
@@ -52,7 +57,7 @@ export const tableService = {
   },
 
   // Update table
-  async updateTable(id: string, updates: Partial<Table>): Promise<ApiTable> {
+  async updateTable(id: string, updates: TableUpdate): Promise<ApiTable> {
     try {
       return await api.put<ApiTable>(`/tables/${id}`, updates);
     } catch (error) {

@@ -36,6 +36,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tableToDelete, setTableToDelete] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [savingStatusId, setSavingStatusId] = useState<number | null>(null);
   const { user } = useAuth();
 
   React.useEffect(() => {
@@ -68,6 +69,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
     try {
       const tableData = {
         code: newTable.code.trim(),
+        capacity: newTable.capacity,
       };
 
       const createdTable = await tableService.addTable(tableData);
@@ -76,7 +78,7 @@ const TableManagement: React.FC<TableManagementProps> = ({
         id: createdTable.id,
         number: createdTable.code,
         status: "available",
-        capacity: newTable.capacity,
+        capacity: createdTable.capacity ?? newTable.capacity,
         adminId: createdTable.admin_id || user?.id || '',
       };
 
@@ -118,12 +120,27 @@ const TableManagement: React.FC<TableManagementProps> = ({
     }
   };
 
-  const updateTableStatus = (tableId: number, newStatus: string) => {
-    setTables((prev) =>
-      prev.map((table) =>
-        table.id === tableId ? { ...table, status: newStatus } : table
-      )
-    );
+  const updateTableStatus = async (tableId: number, newStatus: string) => {
+    const previousStatus = tables.find(table => table.id === tableId)?.status;
+    if (!previousStatus || previousStatus === newStatus) return;
+
+    setTables((prev) => prev.map((table) =>
+      table.id === tableId ? { ...table, status: newStatus } : table
+    ));
+    setSavingStatusId(tableId);
+    try {
+      const updated = await tableService.updateTable(String(tableId), { status: newStatus });
+      setTables((prev) => prev.map((table) =>
+        table.id === tableId ? { ...table, status: updated.status || newStatus } : table
+      ));
+    } catch (error) {
+      setTables((prev) => prev.map((table) =>
+        table.id === tableId ? { ...table, status: previousStatus } : table
+      ));
+      toast.error(getErrorMessage(error, "Failed to update table status"));
+    } finally {
+      setSavingStatusId(null);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -234,7 +251,8 @@ const TableManagement: React.FC<TableManagementProps> = ({
                 <div className="relative">
                   <select
                     value={table.status}
-                    onChange={(e) => updateTableStatus(table.id, e.target.value)}
+                    onChange={(e) => void updateTableStatus(table.id, e.target.value)}
+                    disabled={savingStatusId === table.id}
                     aria-label={`Status for table ${table.number}`}
                     className={`w-full appearance-none pl-4 pr-10 py-3 rounded-xl border font-bold text-sm transition-all focus:ring-2 focus:ring-offset-2 ${getStatusColor(table.status)}`}
                   >

@@ -4,10 +4,10 @@ import { roundAmount, formatCurrency } from './money';
 import type { PricingPrefs, CurrencyCode } from './types';
 
 export function formatPrice(baseAmount: number, prefs: PricingPrefs | null | undefined, as?: CurrencyCode) {
-  // Fallback to default QAR if prefs not loaded
+  // Fallback to the system default JOD if preferences are not loaded.
   if (!prefs || !prefs.baseCurrency) {
-    const qar = CURRENCIES.find(c => c.code === 'QAR') || CURRENCIES[0];
-    return formatCurrency(baseAmount, 'QAR', qar.symbol, 'symbol');
+    const jod = CURRENCIES.find(c => c.code === 'JOD') || CURRENCIES[0];
+    return formatCurrency(baseAmount, 'JOD', jod.symbol, 'symbol');
   }
 
   const target: CurrencyCode = as && prefs.enabledCurrencies.includes(as) ? as : prefs.baseCurrency;

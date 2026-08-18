@@ -1,4 +1,8 @@
 import { verifyAuthToken } from './tokenPolicy.js';
+import { ERROR_CODES, sendError } from './errors.js';
+
+const reject = (res, req, status, message, code) =>
+  sendError(res, req, { status, message, code });
 
 export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => {
   if (!db) throw new Error('Authentication database is required');
@@ -18,13 +22,13 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
       ? authHeader.slice('Bearer '.length).trim()
       : cookieToken;
     if (!token) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return reject(res, req, 401, 'Authentication required');
     }
 
     try {
       const claims = verifyAuthToken(token, tokenSecret);
       if (!claims?.id && !claims?.sub) {
-        return res.status(403).json({ error: 'Invalid token' });
+        return reject(res, req, 401, 'Invalid token');
       }
 
       if (claims.role === 'SUPER_ADMIN') {
@@ -35,13 +39,13 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
         if (!superAdmin?.active || !superAdmin.mfa_enabled_at || claims.mfa !== true
           || !Number.isInteger(claims.sessionVersion)
           || claims.sessionVersion !== superAdmin.session_version) {
-          return res.status(403).json({ error: 'Invalid token' });
+          return reject(res, req, 401, 'Invalid token');
         }
         req.user = claims;
       } else {
         const session = await resolveTenantClaims(claims);
         if (!session) {
-          return res.status(403).json({ error: 'Tenant access is inactive or unavailable' });
+          return reject(res, req, 403, 'Tenant access is inactive or unavailable');
         }
 
         req.auth = {
@@ -60,14 +64,14 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
       }
       next();
     } catch {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+      return reject(res, req, 401, 'Invalid or expired token');
     }
   };
 };
 
 export const requireSuperAdmin = (req, res, next) => {
   if (req.user?.role !== 'SUPER_ADMIN') {
-    return res.status(403).json({ error: 'Super-admin access required' });
+    return reject(res, req, 403, 'Super-admin access required');
   }
   next();
 };
@@ -78,17 +82,20 @@ export const requireRecentSuperAdmin = (maxAgeSeconds = 10 * 60, clock = () => D
     const ageSeconds = Math.floor(clock() / 1000) - authenticatedAt;
     if (req.user?.role !== 'SUPER_ADMIN' || !Number.isInteger(authenticatedAt)
       || ageSeconds < -60 || ageSeconds > maxAgeSeconds) {
-      return res.status(401).json({
-        error: 'Recent SuperAdmin authentication is required',
-        code: 'SUPER_ADMIN_REAUTH_REQUIRED',
-      });
+      return reject(
+        res,
+        req,
+        401,
+        'Recent SuperAdmin authentication is required',
+        ERROR_CODES.SUPER_ADMIN_REAUTH_REQUIRED,
+      );
     }
     next();
   };
 
 export const requireOrganizationRole = (...roles) => (req, res, next) => {
   if (!req.auth?.membershipRole || !roles.includes(req.auth.membershipRole)) {
-    return res.status(403).json({ error: 'Insufficient organization permissions' });
+    return reject(res, req, 403, 'Insufficient organization permissions');
   }
   next();
 };

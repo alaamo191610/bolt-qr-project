@@ -80,8 +80,8 @@ const styles = StyleSheet.create({
 
 const OrderSummaryPDF: React.FC<Props> = ({ orders, t, language, dateRange }) => {
   // Locale & formatters
-  const locale = language === 'ar' ? 'ar-QA' : 'en-QA';
-  const moneyFmt  = new Intl.NumberFormat(locale, { style: 'currency', currency: 'QAR', maximumFractionDigits: 2 });
+  const locale = language === 'ar' ? 'ar-JO' : 'en-JO';
+  const moneyFmt  = new Intl.NumberFormat(locale, { style: 'currency', currency: 'JOD', maximumFractionDigits: 2 });
   const numberFmt = new Intl.NumberFormat(locale);
   const dateFmt   = (iso: string) =>
     new Date(iso).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });

@@ -14,6 +14,7 @@ export function useAdminMonetary(adminId?: string) {
   const [themeColor, setThemeColor] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let alive = true;
@@ -52,6 +53,7 @@ export function useAdminMonetary(adminId?: string) {
         }
 
         if (!alive) return;
+        setError(null);
         const newPrefs = data?.pricing_prefs ?? DEFAULT_PRICING;
         const newBilling = data?.billing_settings ?? DEFAULT_BILLING;
         const newName = data?.restaurant_name ?? null;
@@ -67,8 +69,8 @@ export function useAdminMonetary(adminId?: string) {
         setFontFamily(data?.font_family ?? null);
 
       } catch (err) {
-        console.warn('Failed to load pricing settings, using defaults:', err);
-        // Keep defaults on error
+        console.warn('Failed to load pricing settings:', err);
+        if (alive) setError(err);
       } finally {
         if (alive) setLoading(false);
       }
@@ -86,5 +88,6 @@ export function useAdminMonetary(adminId?: string) {
     themeColor,
     fontFamily,
     loading,
+    error,
   };
 }

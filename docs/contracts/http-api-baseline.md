@@ -37,9 +37,10 @@ payload returns `409 IDEMPOTENCY_CONFLICT`. First creation returns `201` and
 `Idempotency-Replayed: false`; an unchanged replay returns the same order with `200` and
 `Idempotency-Replayed: true`. Both `Idempotency-Replayed` and `X-Request-Id` are CORS-exposed.
 
-A table session may have at most three open (`pending`, `preparing`, or `ready`) orders. A new order
-at capacity returns `409 ORDER_LIMIT_REACHED` without mutation. Exact idempotency replay remains
-successful at capacity; `served` and `cancelled` orders no longer consume a slot. See the
+A table session may have at most four open (`pending`, `preparing`, or `ready`) orders, and a table
+may have at most four open public orders across all sessions. A new order at either capacity
+returns `409 ORDER_LIMIT_REACHED` without mutation. Exact idempotency replay remains successful at
+capacity; `served` and `cancelled` orders no longer consume a slot. See the
 [public order-capacity contract](order-capacity.md).
 
 Branch ordering availability is managed through tenant-scoped owner/manager GET/PUT endpoints.

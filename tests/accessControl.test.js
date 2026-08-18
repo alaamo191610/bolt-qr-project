@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
 import {
   assertCatalogOwnership,
   createAuthenticate,
@@ -88,6 +89,44 @@ test('authentication rejects missing credentials and inactive tenant access', as
   assert.equal(inactiveResponse.body.error, 'Tenant access is inactive or unavailable');
 });
 
+test('authentication treats invalid or expired credentials as unauthenticated', async () => {
+  const authenticate = createAuthenticate({
+    db: { superAdmin: { findUnique: async () => null } },
+    tokenSecret: secret,
+    resolveTenantClaims: async () => null,
+  });
+
+  const invalidResponse = createResponse();
+  await authenticate(
+    { headers: { authorization: 'Bearer invalid-token' } },
+    invalidResponse,
+    () => undefined,
+  );
+  assert.equal(invalidResponse.statusCode, 401);
+  assert.equal(invalidResponse.body.code, 'AUTHENTICATION_REQUIRED');
+
+  const expiredToken = jwt.sign({
+    id: adminId,
+    userId,
+    organizationId,
+    role: 'RESTAURANT_ADMIN',
+    purpose: TOKEN_TYPES.RESTAURANT_SESSION,
+  }, secret, {
+    issuer: 'bolt-qr-api',
+    audience: 'restaurant-api',
+    subject: userId,
+    expiresIn: -1,
+  });
+  const expiredResponse = createResponse();
+  await authenticate(
+    { headers: { authorization: `Bearer ${expiredToken}` } },
+    expiredResponse,
+    () => undefined,
+  );
+  assert.equal(expiredResponse.statusCode, 401);
+  assert.equal(expiredResponse.body.code, 'AUTHENTICATION_REQUIRED');
+});
+
 test('platform and organization role guards deny insufficient roles', () => {
   const platformResponse = createResponse();
   requireSuperAdmin({ user: { role: 'RESTAURANT_ADMIN' } }, platformResponse, () => undefined);
@@ -154,7 +193,7 @@ test('SuperAdmin authentication revalidates MFA enrollment and session version',
   });
   const staleResponse = createResponse();
   await staleAuthenticate({ headers: { authorization: `Bearer ${token}` } }, staleResponse, () => undefined);
-  assert.equal(staleResponse.statusCode, 403);
+  assert.equal(staleResponse.statusCode, 401);
 });
 
 test('sensitive SuperAdmin writes require a recent MFA authentication event', () => {

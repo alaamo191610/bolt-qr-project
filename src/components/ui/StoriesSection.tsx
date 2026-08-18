@@ -168,7 +168,7 @@ const StoryCard: React.FC<StoryCardProps> = ({ item, index, onAddToCart, isRTL }
                     )}
                     <div className="flex items-center justify-between">
                         <span className="font-bold text-amber-400">
-                            {item.price} {isRTL ? 'ر.ق' : 'QAR'}
+                            {item.price} {isRTL ? 'د.أ' : 'JOD'}
                         </span>
                         <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                             <Plus className="w-4 h-4 text-amber-600" />

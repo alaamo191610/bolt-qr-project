@@ -138,7 +138,7 @@ test('socket joins return a generic acknowledgement and join only authorized roo
   };
   const socket = {
     on(event, handler) { socketHandlers[event] = handler; },
-    async join(rooms) { joined.push(...rooms); },
+    async join(room) { joined.push(room); },
   };
   const service = createService();
   service.register(io);
@@ -150,7 +150,8 @@ test('socket joins return a generic acknowledgement and join only authorized roo
     result => { accepted = result; },
   );
   assert.deepEqual(accepted, { ok: true, protocolVersion: REALTIME_PROTOCOL_VERSION });
-  assert.deepEqual(joined, [`organization:${organizationId}:order:41`, 'order_41']);
+  assert.deepEqual(joined, [`organization:${organizationId}:order:41`]);
+  assert.equal(socketHandlers['join-menu'], undefined);
 
   let rejected;
   await socketHandlers['join-order'](

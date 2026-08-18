@@ -154,7 +154,7 @@ function MiniCard({
             </div>
             {portionGrams && (
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-                <div className="text-slate-500 dark:text-slate-400">{t('menu.value') || 'QAR/100g'}</div>
+                <div className="text-slate-500 dark:text-slate-400">{t('menu.value') || 'JOD/100g'}</div>
                 <div className="font-bold tabular-nums">
                   {((unitTotal(item) || 0) / (portionGrams / 100)).toFixed(2)}
                 </div>

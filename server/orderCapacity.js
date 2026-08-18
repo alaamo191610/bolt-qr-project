@@ -1,6 +1,7 @@
 import { ApiError, ERROR_CODES } from './errors.js';
 
-export const PUBLIC_ORDER_OPEN_LIMIT = 3;
+export const PUBLIC_ORDER_OPEN_LIMIT = 4;
+export const PUBLIC_ORDER_TABLE_OPEN_LIMIT = 4;
 export const PUBLIC_ORDER_OPEN_STATUSES = Object.freeze(['pending', 'preparing', 'ready']);
 
 export const enforcePublicOrderCapacity = async (db, {
@@ -8,7 +9,7 @@ export const enforcePublicOrderCapacity = async (db, {
   tableId,
   tableSessionId,
 }) => {
-  const openOrderCount = await db.order.count({
+  const sessionOpenOrderCount = await db.order.count({
     where: {
       organization_id: organizationId,
       table_id: tableId,
@@ -17,14 +18,44 @@ export const enforcePublicOrderCapacity = async (db, {
     },
   });
 
-  if (openOrderCount >= PUBLIC_ORDER_OPEN_LIMIT) {
-    const error = new ApiError('This table session already has the maximum number of open orders', {
+  const tableOpenOrderCount = await db.order.count({
+    where: {
+      organization_id: organizationId,
+      table_id: tableId,
+      table_session_id: { not: null },
+      status: { in: PUBLIC_ORDER_OPEN_STATUSES },
+    },
+  });
+
+  const rejectAtCapacity = (message, openOrderCount, orderLimit) => {
+    const error = new ApiError(message, {
       status: 409,
       code: ERROR_CODES.ORDER_LIMIT_REACHED,
     });
-    error.telemetryCounters = { openOrderCount, orderLimit: PUBLIC_ORDER_OPEN_LIMIT };
+    error.telemetryCounters = { openOrderCount, orderLimit };
     throw error;
+  };
+
+  if (tableOpenOrderCount >= PUBLIC_ORDER_TABLE_OPEN_LIMIT) {
+    rejectAtCapacity(
+      'This table already has the maximum number of open orders',
+      tableOpenOrderCount,
+      PUBLIC_ORDER_TABLE_OPEN_LIMIT,
+    );
   }
 
-  return { openOrderCount, limit: PUBLIC_ORDER_OPEN_LIMIT };
+  if (sessionOpenOrderCount >= PUBLIC_ORDER_OPEN_LIMIT) {
+    rejectAtCapacity(
+      'This table session already has the maximum number of open orders',
+      sessionOpenOrderCount,
+      PUBLIC_ORDER_OPEN_LIMIT,
+    );
+  }
+
+  return {
+    openOrderCount: tableOpenOrderCount,
+    limit: PUBLIC_ORDER_TABLE_OPEN_LIMIT,
+    sessionOpenOrderCount,
+    tableOpenOrderCount,
+  };
 };

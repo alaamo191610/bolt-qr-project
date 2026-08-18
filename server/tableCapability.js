@@ -7,6 +7,7 @@ import { hasRestaurantAccess } from './subscriptionPolicy.js';
 export const TABLE_SESSION_EXPIRES_IN_SECONDS = 30 * 60;
 const CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ORDERABLE_TABLE_STATUSES = new Set(['available', 'occupied']);
 
 export const generateTableCapability = () => randomBytes(32).toString('base64url');
 
@@ -67,6 +68,9 @@ const isUsable = capability => Boolean(
   && capability.organization_id === capability.table.admin.organization_id
   && hasRestaurantAccess(capability.table.admin),
 );
+
+const isExchangeable = capability => isUsable(capability)
+  && ORDERABLE_TABLE_STATUSES.has(capability.table.status);
 
 export const createTableCapabilityService = ({ db, tokenSecret }) => {
   if (!db) throw new Error('db is required');
@@ -135,10 +139,17 @@ export const createTableCapabilityService = ({ db, tokenSecret }) => {
       where: { secret_hash: hashTableCapability(rawCapability) },
       select: tableSessionSelection,
     });
-    if (!isUsable(capability)) throw invalidTableSession();
+    if (!isExchangeable(capability)) throw invalidTableSession();
 
     const table = capability.table;
     const sessionId = randomUUID();
+    const tableStatusChanged = table.status !== 'occupied';
+    if (tableStatusChanged) {
+      await db.table.updateMany({
+        where: { id: table.id, organization_id: capability.organization_id, status: 'available' },
+        data: { status: 'occupied' },
+      });
+    }
     const token = issueToken(TOKEN_TYPES.TABLE_SESSION, {
       sessionId,
       capabilityId: capability.id,
@@ -154,6 +165,7 @@ export const createTableCapabilityService = ({ db, tokenSecret }) => {
       restaurantId: table.admin_id,
       organizationId: capability.organization_id,
       table: { id: table.id, code: table.code },
+      tableStatusChanged,
     };
   };
 

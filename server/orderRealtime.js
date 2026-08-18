@@ -92,7 +92,6 @@ export const createOrderRealtimeService = ({
         organizationId: session.organization.id,
         adminId: session.admin.id,
       }),
-      legacyRoom: `admin_${session.admin.id}`,
     };
   };
 
@@ -228,7 +227,6 @@ export const createOrderRealtimeService = ({
     return {
       order,
       room: orderRealtimeRoom({ organizationId: order.organization_id, orderId: order.id }),
-      legacyRoom: `order_${order.id}`,
     };
   };
 
@@ -243,7 +241,7 @@ export const createOrderRealtimeService = ({
           socket.data = socket.data || {};
           socket.data.adminAuthorization = authorization;
           activeSockets.set(socketKey, socket);
-          await socket.join([authorization.room, authorization.legacyRoom]);
+          await socket.join(authorization.room);
           if (typeof acknowledge === 'function') {
             acknowledge({ ok: true, protocolVersion: REALTIME_PROTOCOL_VERSION });
           }
@@ -266,7 +264,7 @@ export const createOrderRealtimeService = ({
             organizationId: authorization.order.organization_id,
           };
           activeSockets.set(socketKey, socket);
-          await socket.join([authorization.room, authorization.legacyRoom]);
+          await socket.join(authorization.room);
           if (typeof acknowledge === 'function') {
             acknowledge({ ok: true, protocolVersion: REALTIME_PROTOCOL_VERSION });
           }
@@ -318,7 +316,6 @@ export const createOrderRealtimeService = ({
       organizationId: order.organization_id,
       adminId: order.admin_id,
     })).emit('order.created.v1', envelope);
-    io.to(`admin_${order.admin_id}`).emit('new-order', orderRepresentation);
     return envelope;
   };
 
@@ -331,12 +328,11 @@ export const createOrderRealtimeService = ({
       organizationId: order.organization_id,
       orderId: order.id,
     })).emit('order.status.v1', envelope);
-    io.to(`order_${order.id}`).emit('order-status-updated', { status: order.status });
-    io.to(`admin_${order.admin_id}`).emit('order-updated', order);
     return envelope;
   };
 
   return {
+    adminRealtimeRoom,
     authorizeAdmin,
     authorizeOrder,
     resolveTrackingOrder,

@@ -34,7 +34,7 @@ the current bounded in-process limiter cannot coordinate across instances.
   `409 IDEMPOTENCY_CONFLICT`.
 - Default limits: 20 capability exchanges per IP per 10 minutes, 10 per capability per 10 minutes,
   6 order attempts per table session per 10 minutes, and 120 per organization per 10 minutes.
-- Maximum 3 open orders per table session and 50 line items per order.
+- Maximum 4 open orders per table session, maximum 4 open public orders per table, and 50 line items per order.
 - Restaurant-controlled ordering pause and closed/overloaded state reject before order mutation.
 - Rejections emit request ID, organization/table identifiers, reason code, and counters without
   logging basket contents or customer secrets.
@@ -93,7 +93,7 @@ Any changed limit or session lifetime must be written explicitly with the choice
 - Authenticated rotation returns a new 256-bit secret once; rotation and revocation increment the
   version used to invalidate already-issued sessions.
 - Public exchange issues only a 30-minute `table-session`, with accepted 20/IP and 10/capability
-  exchange limits. Order creation also applies the accepted 6/individually issued session and
+  exchange limits. Order creation also applies the accepted 8/individually issued session and
   120/organization attempt limits in the current bounded local limiter.
 - Dine-in creation requires and transactionally revalidates the session under a capability-row
   lock, derives all ownership identity from it, ignores body identity for authorization, and
@@ -101,9 +101,10 @@ Any changed limit or session lifetime must be written explicitly with the choice
 - Unit, PostgreSQL integration, frontend regression, and E2E suites pass. Invalid, rotated,
   revoked, cross-tenant, cross-organization-constraint, and body-substitution cases fail closed.
 
-Durable idempotency and three-open-order enforcement are implemented. Each exchange issues a random
-session UUID, public orders persist it, and an exclusive capability lock serializes count plus
-insert. `pending`/`preparing`/`ready` consume the three slots; `served`/`cancelled` release them;
+Durable idempotency and four-open-order session/table enforcement are implemented. Each exchange
+issues a random session UUID, public orders persist it, and an exclusive capability lock serializes
+the session/table counts plus insert. `pending`/`preparing`/`ready` consume the four slots;
+`served`/`cancelled` release them;
 capacity rejection is `409 ORDER_LIMIT_REACHED` and rolls back idempotency. Branch-scoped
 `OPEN`/`PAUSED`/`CLOSED`/`OVERLOADED`, fail-closed table availability, owner/manager audit events,
 and allowlisted structured rejection telemetry are also implemented and database-tested. The

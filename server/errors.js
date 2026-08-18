@@ -86,6 +86,27 @@ export const sendError = (res, req, error) => {
   return res.status(status).json(response);
 };
 
+export const fail = (res, req, status, message, code) =>
+  sendError(res, req, new ApiError(message, { status, code }));
+
+// Route handlers should use sendError, but this final response boundary also
+// normalizes legacy handlers and third-party middleware that still call
+// res.status(...).json({ error }). This keeps every HTTP error response on the
+// same public contract while preserving non-error response bodies unchanged.
+export const errorContractMiddleware = (req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = body => {
+    if (res.statusCode < 400) return json(body);
+
+    const response = normalizeErrorResponse(body, res.statusCode, req?.requestId);
+    if (response.retryAfter !== undefined) {
+      res.setHeader('Retry-After', String(response.retryAfter));
+    }
+    return json(response);
+  };
+  next();
+};
+
 export const logSafeError = error => ({
   name: error?.name || 'Error',
   code: error?.code,

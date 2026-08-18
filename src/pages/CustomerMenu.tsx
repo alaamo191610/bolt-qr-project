@@ -29,7 +29,6 @@ import { HeaderCartPopover } from "../components/ui/Popover";
 import toast from "react-hot-toast";
 import { useAdminMonetary } from "../hooks/useAdminMonetary";
 import { formatPrice } from "../pricing/usePrice";
-import { socket, joinMenuRoom } from "../services/socket";
 import { getErrorMessage } from "../utils/errors";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -220,6 +219,7 @@ const CustomerMenu: React.FC = () => {
     themeColor,
     fontFamily,
     loading: moneyLoading,
+    error: monetaryError,
   } = useAdminMonetary(); // Get branding, pricing, and public theme
 
   useEffect(() => {
@@ -353,14 +353,15 @@ const CustomerMenu: React.FC = () => {
   const isDesktop = () =>
     typeof window !== "undefined" && window.innerWidth >= 640; // tailwind sm
 
-  // currency (default QAR; change as needed)
+  // JOD is the system default; restaurant preferences can still explicitly
+  // select another supported currency.
   const currency = useMemo(
     () =>
-      new Intl.NumberFormat(isRTL ? "ar-QA" : "en-QA", {
+      new Intl.NumberFormat(isRTL ? "ar-JO" : "en-JO", {
         style: "currency",
-        currency: "QAR",
+        currency: prefs.baseCurrency || "JOD",
       }),
-    [isRTL]
+    [isRTL, prefs.baseCurrency]
   );
 
   // bootstrap
@@ -640,40 +641,6 @@ const CustomerMenu: React.FC = () => {
     }
   }, [menuItems]);
 
-  useEffect(() => {
-    if (adminId) {
-      console.log("Socket: Joining menu room for admin:", adminId);
-      joinMenuRoom(adminId);
-
-      const handleConnect = () => {
-        console.log("Socket: Connected, joining room:", adminId);
-        joinMenuRoom(adminId);
-      };
-
-      const handleMenuUpdate = (updatedItem: Pick<MenuItem, 'id' | 'available'>) => {
-        console.log("Socket: Menu update received:", updatedItem);
-        setMenuItems((prev) =>
-          prev.map((item) => {
-            // Ensure both are strings for comparison
-            if (String(item.id) === String(updatedItem.id)) {
-              console.log(`Socket: Updating item ${item.id} availability to ${updatedItem.available}`);
-              return { ...item, available: updatedItem.available };
-            }
-            return item;
-          })
-        );
-      };
-
-      socket.on("connect", handleConnect);
-      socket.on("menu-updated", handleMenuUpdate);
-
-      return () => {
-        socket.off("connect", handleConnect);
-        socket.off("menu-updated", handleMenuUpdate);
-      };
-    }
-  }, [adminId]);
-
   // derived: featured items for stories
   const featuredItems = useMemo(() => {
     return menuItems.filter(item => item.is_featured && item.available !== false).slice(0, 8); // Max 8 stories
@@ -741,6 +708,10 @@ const CustomerMenu: React.FC = () => {
         : formatPrice(totalPrice, prefs),
     [moneyLoading, totalPrice, prefs, currency]
   );
+
+  const displayError = monetaryError
+    ? { code: "status.pricingUnavailable" }
+    : error;
 
   // cart ops
   const addToCart = useCallback((incoming: MenuItem) => {
@@ -1000,7 +971,7 @@ const CustomerMenu: React.FC = () => {
     />
   );
 
-  if (loading) {
+  if (loading || moneyLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
         <div className="text-center animate-fade-in">
@@ -1015,7 +986,7 @@ const CustomerMenu: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (displayError) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-8 text-center max-w-md w-full animate-scale-in">
@@ -1038,7 +1009,7 @@ const CustomerMenu: React.FC = () => {
             {t("status.errorLoadingMenu")}
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mb-4">
-            {t(error.code, error.params)}
+            {t(displayError.code, displayError.params)}
           </p>
           <button
             onClick={() => window.location.reload()}

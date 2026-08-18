@@ -558,6 +558,7 @@ const DigitalMenu: React.FC = () => {
 
   // Loading states
   const [formLoading, setFormLoading] = useState(false);
+  const [unsavedModifierFields, setUnsavedModifierFields] = useState<string[]>([]);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [ingredientLoading, setIngredientLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -747,6 +748,7 @@ const DigitalMenu: React.FC = () => {
 
   // Menu item management
   const openForm = (item?: MenuItem) => {
+    setUnsavedModifierFields([]);
     if (item) {
       setForm({
         id: item.id,
@@ -775,6 +777,14 @@ const DigitalMenu: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (unsavedModifierFields.length > 0) {
+      toast.error(
+        `Unsaved modifier fields: ${unsavedModifierFields.join(", ")}. Click ‘Save groups’ before saving this menu item.`,
+        { duration: 6000 }
+      );
+      return;
+    }
+
     const newErrors: Record<string, string> = {};
 
     if (!form.name_en.trim()) newErrors.name_en = t("common.required");
@@ -1456,10 +1466,27 @@ const DigitalMenu: React.FC = () => {
                   <p className="text-sm text-slate-500 mb-4">
                     Configure modifiers, add-ons, and variations.
                   </p>
-                  <AdminOptionsPanel menuId={form.id} adminId={user?.id} />
+                  <AdminOptionsPanel
+                    menuId={form.id}
+                    adminId={user?.id}
+                    onModifierGroupsDirtyFieldsChange={setUnsavedModifierFields}
+                  />
                 </div>
               )}
             </div>
+
+            {unsavedModifierFields.length > 0 && (
+              <div
+                role="alert"
+                className="mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200"
+              >
+                <p className="font-bold">Unsaved modifier fields:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {unsavedModifierFields.map((field) => <li key={field}>{field}</li>)}
+                </ul>
+                <p className="mt-2">Click “Save groups” before saving this menu item.</p>
+              </div>
+            )}
 
             {/* Footer Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 backdrop-blur-sm shrink-0">

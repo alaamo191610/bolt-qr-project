@@ -38,7 +38,7 @@ one transaction creates the order; contenders replay the committed order or rece
 conflict. A failed transaction leaves neither an idempotency reservation nor a partial order.
 
 `Idempotency-Replayed` and `X-Request-Id` are exposed through CORS so browser clients may inspect
-them. Replays do not emit a second `new-order` or `table-updated` socket event.
+them. Replays do not emit a second versioned `order.created.v1` or `table-updated` socket event.
 
 ## Database invariants
 
