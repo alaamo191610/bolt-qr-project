@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus, ShoppingCart, X, Info } from 'lucide-react';
+import { Banknote, CreditCard, Minus, Plus, ShoppingCart, Smartphone, X, Info } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAdminMonetary } from '../../hooks/useAdminMonetary';
 import { computeTotals } from '../../pricing/totals';
@@ -79,6 +79,7 @@ const CartDrawer: React.FC<Props> = ({
 
   /** NEW: live feedback toast text */
   const [flashMsg, setFlashMsg] = useState<string | null>(null);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   useEffect(() => {
     if (!flashMsg) return;
     const id = setTimeout(() => setFlashMsg(null), 900);
@@ -604,6 +605,91 @@ const CartDrawer: React.FC<Props> = ({
           )}
         </main>
 
+        {/* Payment method selection */}
+        {showPaymentOptions && (
+          <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/55 p-4 backdrop-blur-[2px] sm:items-center">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="payment-options-title"
+              className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="payment-options-title" className="text-xl font-extrabold text-slate-900 dark:text-white">
+                    {isRTL ? 'اختر طريقة الدفع' : 'Choose a payment method'}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {isRTL ? 'اختر الطريقة المناسبة لإكمال طلبك' : 'Select how you would like to pay for your order'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentOptions(false)}
+                  className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  aria-label={t('common.close') || 'Close'}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="grid gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPaymentOptions(false);
+                    onPlaceOrder({ promotionCode: appliedPromo?.code, tipPercent });
+                  }}
+                  disabled={isOrdering}
+                  className="flex items-center gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:border-primary"
+                >
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                    <Smartphone className="h-6 w-6" />
+                  </span>
+                  <span>
+                    <span className="block font-bold text-slate-900 dark:text-white">{isRTL ? 'الدفع عبر كليك' : 'Pay with CliQ'}</span>
+                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'تحويل فوري عبر كليك' : 'Instant bank transfer via CliQ'}</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPaymentOptions(false);
+                    onPlaceOrder({ promotionCode: appliedPromo?.code, tipPercent });
+                  }}
+                  disabled={isOrdering}
+                  className="flex items-center gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:border-primary"
+                >
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    <Banknote className="h-6 w-6" />
+                  </span>
+                  <span>
+                    <span className="block font-bold text-slate-900 dark:text-white">{isRTL ? 'الدفع عند النادل' : 'Pay with the waiter'}</span>
+                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'سيحضر النادل جهاز الدفع' : 'The waiter will bring the card machine'}</span>
+                  </span>
+                </button>
+
+                <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 opacity-70 dark:border-slate-700 dark:bg-slate-800/60">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                    <CreditCard className="h-6 w-6" />
+                  </span>
+                  <span>
+                    <span className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+                      {isRTL ? 'Visa / Mastercard' : 'Visa / Mastercard'}
+                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {isRTL ? 'قريباً' : 'Coming soon'}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'الدفع بالبطاقات غير متاح حالياً' : 'Card payments are not available yet'}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sticky bottom action bar */}
         <div className="fixed inset-x-0 bottom-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-t border-slate-200 dark:border-slate-800">
           <div className="mx-auto max-w-5xl px-4 py-3">
@@ -649,10 +735,7 @@ const CartDrawer: React.FC<Props> = ({
                   </div>
 
                   <button
-                    onClick={() => onPlaceOrder({
-                      promotionCode: appliedPromo?.code,
-                      tipPercent,
-                    })}
+                    onClick={() => setShowPaymentOptions(true)}
                     disabled={isOrdering || cart.length === 0 || moneyLoading || orderingDisabled}
                     className="rounded-xl bg-primary text-white py-4 px-6 font-bold text-lg shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                     title={t('menu.placeOrder')}

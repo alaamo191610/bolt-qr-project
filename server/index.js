@@ -222,11 +222,41 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Uploaded assets are returned by the API host while the dev client runs on
+// Vite's host. Serve known uploads with their stored image MIME type so the
+// browser can render them despite the API/client using different origins.
+app.get('/uploads/:filename', async (req, res, next) => {
+  const filename = path.basename(req.params.filename);
+  if (filename !== req.params.filename) return res.status(400).json({ error: 'Invalid filename' });
+
+  try {
+    const asset = await prisma.upload.findUnique({
+      where: { filename },
+      select: { mime_type: true },
+    });
+    if (!asset) return next();
+
+    res.setHeader('Content-Type', asset.mime_type);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    return res.sendFile(path.join(runtimeConfig.uploadDirectory, filename), {
+      dotfiles: 'deny',
+      maxAge: isProduction ? '1y' : 0,
+      immutable: isProduction,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.use('/uploads', express.static(runtimeConfig.uploadDirectory, {
   dotfiles: 'deny',
   index: false,
   maxAge: isProduction ? '1y' : 0,
   immutable: isProduction,
+  setHeaders: response => {
+    response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
 }));
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });

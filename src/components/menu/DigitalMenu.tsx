@@ -39,24 +39,32 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// ✅ Converts a Supabase public URL -> "object path" expected by .remove()
-function getPathFromPublicUrl(
-  url: string,
-  expectedBucket = "menu-images"
-): string | null {
+function getUploadedFilename(url: string): string | null {
   try {
-    const u = new URL(url);
-    // URL looks like: /storage/v1/object/public/<bucket>/<path...>
-    const marker = "/object/public/";
-    const i = u.pathname.indexOf(marker);
-    if (i === -1) return null;
-    const after = u.pathname.slice(i + marker.length); // "<bucket>/<path>"
-    const [bucket, ...pathParts] = after.split("/");
-    if (bucket !== expectedBucket) return null;
-    return decodeURIComponent(pathParts.join("/")); // "<path>"
+    const pathname = new URL(url, window.location.origin).pathname;
+    const marker = "/uploads/";
+    if (!pathname.startsWith(marker)) return null;
+
+    const filename = decodeURIComponent(pathname.slice(marker.length));
+    return filename && !filename.includes("/") ? filename : null;
   } catch {
     return null;
   }
+}
+
+// Older records may contain a relative upload URL. Resolve those against the
+// API server instead of the Vite dev server so the preview can load locally.
+function getImageSource(url: string): string {
+  if (!url.startsWith("/uploads/")) return url;
+
+  const configuredApiUrl = import.meta.env.VITE_API_URL;
+  const apiUrl = configuredApiUrl || (
+    import.meta.env.PROD
+      ? `${window.location.origin}/api`
+      : `${window.location.protocol}//${window.location.hostname}:3000/api`
+  );
+
+  return `${new URL(apiUrl, window.location.origin).origin}${url}`;
 }
 
 const EmptyState = ({
@@ -323,12 +331,14 @@ const DeleteConfirmModal = ({
 
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={onClose}
               className="flex-1 py-3 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               {t("common.cancel")}
             </button>
             <button
+              type="button"
               onClick={onConfirm}
               disabled={loading}
               className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
@@ -350,11 +360,12 @@ const ImageUploadField = ({
   fieldId = "file-upload",
 }: ImageUploadFieldProps) => {
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useLanguage();
-  const { user } = useAuth();
 
   const handleFileUpload = async (file: File) => {
     // Validate file size (max 5MB)
@@ -384,6 +395,7 @@ const ImageUploadField = ({
       formData.append("file", file);
 
       const data = await api.upload<{ url: string; filename: string }>('/upload', formData);
+      if (!data.url) throw new Error("Upload did not return an image URL");
       const imageUrl = data.url;
 
       onChange(imageUrl);
@@ -417,39 +429,31 @@ const ImageUploadField = ({
     }
   };
 
-  const handleRemoveImage = async () => {
+  const handleRemoveImage = () => {
     if (!value) return;
-    if (!window.confirm("Are you sure you want to delete this image?")) return;
+    setRemoveConfirmOpen(true);
+  };
 
+  const confirmRemoveImage = async () => {
+    if (!value) return;
+
+    setRemoving(true);
     try {
-      // Ensure the user is logged in (needed if your policy is "owner = auth.uid()")
-      if (!user) {
-        console.warn("No auth user; delete will be blocked by RLS.");
-        return;
+      const filename = getUploadedFilename(value);
+      if (filename) {
+        await api.delete(`/upload/${encodeURIComponent(filename)}`);
       }
 
-      // If you already store "imagePath" in DB, prefer that:
-      // const path = imagePath ?? getPathFromPublicUrl(value);
-      const path = getPathFromPublicUrl(value);
-      if (!path) {
-        console.warn("Could not resolve storage path from URL:", value);
-        return;
-      }
-
-      // Supabase storage delete not configured - skip for now
-      /*
-      const { error } = await supabase.storage
-        .from("menu-images")
-        .remove([path]);
-      if (error) {
-        console.warn("Failed to delete image from Supabase:", error);
-        return;
-      }
-      */
-
-      onChange(""); // clear the field
+      onChange("");
+      setUploadError(null);
+      setRemoveConfirmOpen(false);
+      toast.success("Image removed");
     } catch (err) {
-      console.warn("Failed to delete image from Supabase:", err);
+      const message = getErrorMessage(err, "Failed to remove image. Please try again.");
+      setUploadError(message);
+      toast.error(message);
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -480,7 +484,7 @@ const ImageUploadField = ({
           <div className="w-full flex flex-col items-center gap-2 group relative">
             <div className="relative w-full">
               <img
-                src={value}
+                src={getImageSource(value)}
                 alt={t("common.uploaded")}
                 className="h-40 w-full object-contain rounded-md"
               />
@@ -515,6 +519,15 @@ const ImageUploadField = ({
           disabled={disableManualInput || !!value}
         />
       </label>
+
+      <DeleteConfirmModal
+        isOpen={removeConfirmOpen}
+        onClose={() => setRemoveConfirmOpen(false)}
+        onConfirm={() => void confirmRemoveImage()}
+        title="Remove image?"
+        message="Are you sure you want to remove this image? This will delete it from storage."
+        loading={removing}
+      />
 
       {uploadError && (
         <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-700 dark:text-red-300 text-sm">
@@ -1130,7 +1143,7 @@ const DigitalMenu: React.FC = () => {
                     <div className="relative shrink-0">
                       {item.image_url ? (
                         <img
-                          src={item.image_url}
+                          src={getImageSource(item.image_url)}
                           className="w-20 h-20 object-cover rounded-2xl shadow-md"
                           alt={getLocalizedName(item)}
                         />
