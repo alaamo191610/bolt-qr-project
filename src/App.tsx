@@ -64,6 +64,35 @@ interface Table {
   adminId: string;
 }
 
+interface GeneratedCapability {
+  capability: string;
+  version: number;
+}
+
+const getStoredQrCapabilities = (userId?: string): Record<number, GeneratedCapability> => {
+  if (!userId || typeof window === "undefined") return {};
+
+  try {
+    const stored = window.sessionStorage.getItem(`bolt-qr:capabilities:${userId}`);
+    if (!stored) return {};
+
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([tableId, value]) => (
+        /^\d+$/.test(tableId)
+        && Boolean(value)
+        && typeof value === "object"
+        && typeof (value as { capability?: unknown }).capability === "string"
+        && typeof (value as { version?: unknown }).version === "number"
+      ))
+    ) as Record<number, GeneratedCapability>;
+  } catch {
+    return {};
+  }
+};
+
 interface Order {
   id: number;
   order_number?: number;
@@ -233,6 +262,12 @@ const AdminDashboard: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState("qr-generator");
   const [tables, setTables] = useState<Table[]>([]);
+  // Keep generated QR secrets at dashboard scope so changing tabs does not
+  // remove the QR from the table card. sessionStorage keeps them through a
+  // refresh in this browser tab without making them permanent local data.
+  const [qrCapabilities, setQrCapabilities] = useState<Record<number, GeneratedCapability>>(
+    () => getStoredQrCapabilities(user?.id)
+  );
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderScope, setOrderScope] = useState<'active' | 'history'>('active');
   const [orderNextCursor, setOrderNextCursor] = useState<string | null>(null);
@@ -246,6 +281,19 @@ const AdminDashboard: React.FC = () => {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [switchingOrganizationId, setSwitchingOrganizationId] = useState<string | null>(null);
   const subscription = useSubscription(adminProfile);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    try {
+      window.sessionStorage.setItem(
+        `bolt-qr:capabilities:${user.id}`,
+        JSON.stringify(qrCapabilities)
+      );
+    } catch {
+      // The in-memory state still keeps the QR available if storage is blocked.
+    }
+  }, [qrCapabilities, user?.id]);
 
   useEffect(() => {
     const unlockAudio = () => {
@@ -520,7 +568,7 @@ const AdminDashboard: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case "qr-generator":
-        return <QRGenerator tables={tables} />;
+        return <QRGenerator tables={tables} capabilities={qrCapabilities} setCapabilities={setQrCapabilities} />;
       case "menu":
         return <DigitalMenu />;
       case "orders":
@@ -564,7 +612,7 @@ const AdminDashboard: React.FC = () => {
       case "admin":
         return <AdminPanel adminId={user?.id || ''} />;
       default:
-        return <QRGenerator tables={tables} />;
+        return <QRGenerator tables={tables} capabilities={qrCapabilities} setCapabilities={setQrCapabilities} />;
     }
   };
 
