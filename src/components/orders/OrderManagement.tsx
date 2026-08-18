@@ -42,6 +42,7 @@ export interface Order {
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
   timestamp: Date | string;
   type?: 'dine_in' | 'take_away';
+  paymentMethod?: 'cash' | 'card_machine';
 }
 
 interface OrderManagementProps {
@@ -463,6 +464,14 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
 
               {/* Summary */}
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 space-y-3 border border-slate-100 dark:border-slate-700">
+                {selectedOrder.paymentMethod && (
+                  <div className={`rounded-xl border px-3 py-2.5 text-sm font-bold ${selectedOrder.paymentMethod === 'card_machine'
+                    ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-300'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300'
+                    }`}>
+                    Payment: {selectedOrder.paymentMethod === 'card_machine' ? 'Bring payment machine' : 'Cash payment'}
+                  </div>
+                )}
                 <div className="flex justify-between text-sm font-medium text-slate-500 dark:text-slate-400">
                   <span>Subtotal</span>
                   <span>{formatPrice(Number(selectedOrder.total))}</span>
@@ -598,6 +607,14 @@ const OrderCard = ({ order, onStatusClick, onCancelClick, onViewDetails, formatP
                     }
                   })()}
                 </span>
+                {order.paymentMethod && (
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${order.paymentMethod === 'card_machine'
+                    ? 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700/50'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/50'
+                    }`}>
+                    {order.paymentMethod === 'card_machine' ? 'Bring payment machine' : 'Cash payment'}
+                  </span>
+                )}
               </div>
             </div>
           </div>
