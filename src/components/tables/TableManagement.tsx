@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, Plus, Trash2, QrCode } from "lucide-react";
+import { Users, Plus, Trash2, QrCode, Pencil, X } from "lucide-react";
 import { tableService } from "../../services/tableService";
 import toast from "react-hot-toast";
 import { socket } from "../../services/socket";
@@ -37,6 +37,10 @@ const TableManagement: React.FC<TableManagementProps> = ({
   const [tableToDelete, setTableToDelete] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [savingStatusId, setSavingStatusId] = useState<number | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [tableToEdit, setTableToEdit] = useState<Table | null>(null);
+  const [editTable, setEditTable] = useState({ code: "", capacity: 4 });
+  const [isUpdating, setIsUpdating] = useState(false);
   const { user } = useAuth();
 
   React.useEffect(() => {
@@ -143,6 +147,46 @@ const TableManagement: React.FC<TableManagementProps> = ({
     }
   };
 
+  const openEditModal = (table: Table) => {
+    setTableToEdit(table);
+    setEditTable({ code: table.number, capacity: table.capacity });
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setTableToEdit(null);
+  };
+
+  const updateTableDetails = async () => {
+    if (!tableToEdit || !editTable.code.trim()) return;
+
+    setIsUpdating(true);
+    try {
+      const updatedTable = await tableService.updateTable(String(tableToEdit.id), {
+        code: editTable.code.trim(),
+        capacity: editTable.capacity,
+      });
+
+      setTables((prev) => prev.map((table) => (
+        table.id === tableToEdit.id
+          ? {
+              ...table,
+              number: updatedTable.code,
+              capacity: updatedTable.capacity ?? editTable.capacity,
+            }
+          : table
+      )));
+      closeEditModal();
+      toast.success("Table updated successfully!");
+    } catch (error) {
+      console.error("Error updating table:", error);
+      toast.error(getErrorMessage(error, "Failed to update table"));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "available":
@@ -234,17 +278,28 @@ const TableManagement: React.FC<TableManagementProps> = ({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => deleteTable(table.id)}
-                  disabled={table.status === 'occupied'}
-                  aria-label={`Delete table ${table.number}`}
-                  className={`p-3 rounded-xl transition-all duration-200 ${table.status === 'occupied'
-                    ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed bg-slate-50 dark:bg-slate-800'
-                    : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 bg-transparent'
-                    }`}
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(table)}
+                    aria-label={`Edit table ${table.number}`}
+                    className="p-3 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-200"
+                  >
+                    <Pencil className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteTable(table.id)}
+                    disabled={table.status === 'occupied'}
+                    aria-label={`Delete table ${table.number}`}
+                    className={`p-3 rounded-xl transition-all duration-200 ${table.status === 'occupied'
+                      ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed bg-slate-50 dark:bg-slate-800'
+                      : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 bg-transparent'
+                      }`}
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-auto space-y-4">
@@ -364,6 +419,90 @@ const TableManagement: React.FC<TableManagementProps> = ({
                 className="flex-1 py-3.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
               >
                 Create Table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && tableToEdit && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-8 animate-scale-in border border-slate-100 dark:border-slate-700">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                  Edit Table
+                </h3>
+                <p className="text-slate-500 dark:text-slate-400">
+                  Update the table name and seating capacity.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                disabled={isUpdating}
+                aria-label="Close edit table dialog"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6 mt-8">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                  Table Number / Code
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span className="text-slate-400 font-bold">#</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={editTable.code}
+                    onChange={(e) => setEditTable((prev) => ({ ...prev, code: e.target.value }))}
+                    placeholder="e.g. 12"
+                    className="w-full pl-8 pr-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                  Capacity
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={editTable.capacity}
+                    onChange={(e) => setEditTable((prev) => ({ ...prev, capacity: parseInt(e.target.value, 10) }))}
+                    className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                  />
+                  <span className="w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 font-bold text-slate-900 dark:text-white">
+                    {editTable.capacity}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-10">
+              <button
+                type="button"
+                onClick={closeEditModal}
+                disabled={isUpdating}
+                className="flex-1 py-3.5 rounded-xl font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void updateTableDetails()}
+                disabled={isUpdating || !editTable.code.trim()}
+                className="flex-1 py-3.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-emerald-50 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUpdating ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

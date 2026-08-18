@@ -357,9 +357,9 @@ const MenuItemCard: React.FC<Props> = ({
   const fmt = (v: number) => formatPrice(v, prefs);
 
   const displayName = isRTL ? item.name_ar || item.name_en : item.name_en;
-  const displayDesc = isRTL
+  const displayDesc = (isRTL
     ? item.description_ar || item.description_en || ""
-    : item.description_en || item.description_ar || "";
+    : item.description_en || item.description_ar || "").trim();
 
   const extrasTotal = useMemo(
     () =>

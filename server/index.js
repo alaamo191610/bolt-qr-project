@@ -715,7 +715,17 @@ app.get('/api/menus', authenticate, async (req, res) => {
 });
 
 app.post('/api/menus', authenticate, async (req, res) => {
-  const { name_en, name_ar, price, category_id, image_url, available, ingredients } = req.body;
+  const {
+    name_en,
+    name_ar,
+    description_en,
+    description_ar,
+    price,
+    category_id,
+    image_url,
+    available,
+    ingredients,
+  } = req.body;
   const user_id = req.user.id; // Get user ID from authenticated token
   try {
     const categoryId = category_id == null ? null : Number(category_id);
@@ -746,7 +756,15 @@ app.post('/api/menus', authenticate, async (req, res) => {
 
     const menu = await prisma.menu.create({
       data: {
-        name_en, name_ar, price, category_id: categoryId, image_url, available, user_id,
+        name_en,
+        name_ar,
+        description_en,
+        description_ar,
+        price,
+        category_id: categoryId,
+        image_url,
+        available,
+        user_id,
         organization_id: req.auth.organizationId,
         menu_ingredients: {
           create: ingredientIds.map(id => ({ ingredient_id: id }))
@@ -758,7 +776,17 @@ app.post('/api/menus', authenticate, async (req, res) => {
 });
 
 app.put('/api/menus/:id', authenticate, async (req, res) => {
-  const { name_en, name_ar, price, category_id, image_url, available, ingredients } = req.body;
+  const {
+    name_en,
+    name_ar,
+    description_en,
+    description_ar,
+    price,
+    category_id,
+    image_url,
+    available,
+    ingredients,
+  } = req.body;
   const menuId = Number(req.params.id);
   try {
     const ownedMenu = await prisma.menu.findFirst({
@@ -780,6 +808,8 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
     const data = {};
     if (name_en !== undefined) data.name_en = name_en;
     if (name_ar !== undefined) data.name_ar = name_ar;
+    if (description_en !== undefined) data.description_en = description_en;
+    if (description_ar !== undefined) data.description_ar = description_ar;
     if (price !== undefined) data.price = price;
     if (categoryId !== undefined) data.category_id = categoryId;
     if (image_url !== undefined) data.image_url = image_url;

@@ -581,6 +581,8 @@ const DigitalMenu: React.FC = () => {
     id: null as string | null,
     name_en: "",
     name_ar: "",
+    description_en: "",
+    description_ar: "",
     price: "",
     category_id: "",
     image_url: "",
@@ -767,6 +769,8 @@ const DigitalMenu: React.FC = () => {
         id: item.id,
         name_en: item.name_en,
         name_ar: item.name_ar || "",
+        description_en: item.description_en || "",
+        description_ar: item.description_ar || "",
         price: item.price.toString(),
         category_id: item.category_id,
         image_url: item.image_url || "",
@@ -779,6 +783,8 @@ const DigitalMenu: React.FC = () => {
         id: null,
         name_en: "",
         name_ar: "",
+        description_en: "",
+        description_ar: "",
         price: "",
         category_id: "",
         image_url: "",
@@ -826,6 +832,8 @@ const DigitalMenu: React.FC = () => {
     const payload = {
       name_en: name_en.trim(),
       name_ar: name_ar.trim(),
+      description_en: form.description_en.trim() || null,
+      description_ar: form.description_ar.trim() || null,
       price: parseFloat(price),
       category_id,
       available: form.available,
@@ -1326,6 +1334,41 @@ const DigitalMenu: React.FC = () => {
                         <AlertTriangle className="w-3 h-3" /> {errors.name_ar}
                       </p>
                     )}
+                  </div>
+
+                  {/* Description EN */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.description")} (EN)
+                    </label>
+                    <textarea
+                      value={form.description_en}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, description_en: e.target.value }))
+                      }
+                      placeholder="e.g. A juicy burger with fresh vegetables"
+                      rows={4}
+                      maxLength={500}
+                      className="w-full resize-y px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 focus:ring-emerald-100 dark:focus:ring-emerald-900/30 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:border-emerald-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Description AR */}
+                  <div>
+                    <label className="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {t("common.description")} (AR)
+                    </label>
+                    <textarea
+                      value={form.description_ar}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, description_ar: e.target.value }))
+                      }
+                      placeholder="مثال: برجر شهي مع خضار طازجة"
+                      rows={4}
+                      maxLength={500}
+                      dir="rtl"
+                      className="w-full resize-y px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 focus:ring-emerald-100 dark:focus:ring-emerald-900/30 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:border-emerald-500 transition-all"
+                    />
                   </div>
 
                   {/* Price */}
