@@ -13,20 +13,17 @@ import toast from 'react-hot-toast';
 import {
   QrCode,
   Download,
-  Eye,
   Copy,
   Check,
   Printer,
   Palette,
   Maximize2,
-  X,
   Settings,
   Users,
   Link2,
   Smartphone,
   RefreshCw,
-  Ban,
-  AlertTriangle
+  Ban
 } from 'lucide-react';
 import { tableService } from '../../services/tableService';
 import { getErrorMessage } from '../../utils/errors';
@@ -175,7 +172,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
   const [dotStyle, setDotStyle] = useState<DotType>('rounded');
   const [cornerStyle, setCornerStyle] = useState<CornerSquareType>('extra-rounded');
   const [copiedTable, setCopiedTable] = useState<string>('');
-  const [showPreview, setShowPreview] = useState<Table | null>(null);
 
   // Session-only: the raw capability secret is returned once by the rotate
   // endpoint and is never retrievable again, so it only ever lives in memory
@@ -194,7 +190,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
         ...prev,
         [table.id]: { capability: result.capability, version: result.version },
       }));
-      setShowPreview(table);
       toast.success('New QR code generated. Print or share it now — it will not be shown again.');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not generate a new QR code.'));
@@ -213,7 +208,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
         delete next[table.id];
         return next;
       });
-      setShowPreview((current) => (current?.id === table.id ? null : current));
       toast.success('Ordering disabled for this table until a new QR code is generated.');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not disable this table right now.'));
@@ -303,10 +297,10 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
     }
   };
 
-  const printPreview = () => {
-    const printableCard = document.getElementById('printable-card');
-    if (!printableCard) {
-      toast.error('Open the preview before printing.');
+  const printQRCode = (table: Table) => {
+    const capability = capabilities[table.id]?.capability;
+    if (!capability) {
+      toast.error('Generate a QR code for this table first.');
       return;
     }
 
@@ -316,28 +310,77 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
       return;
     }
 
-    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map((style) => style.outerHTML)
-      .join('');
-
     printWindow.document.write(`
       <!doctype html>
       <html>
         <head>
           <title>Table QR Code</title>
-          ${styles}
           <style>
             @page { margin: 0.5in; }
-            body { margin: 0; display: flex; justify-content: center; align-items: flex-start; }
+            body { margin: 0; display: flex; justify-content: center; }
+            .card { width: 3.5in; padding: 0.35in; text-align: center; font-family: Arial, sans-serif; color: #0f172a; }
+            .label { margin: 0 0 0.2in; font-size: 24px; font-weight: 700; }
+            .qr { display: flex; justify-content: center; }
+            .hint { margin-top: 0.2in; font-size: 12px; color: #64748b; }
           </style>
         </head>
-        <body>${printableCard.outerHTML}</body>
+        <body>
+          <main class="card">
+            <h1 id="table-label" class="label"></h1>
+            <div id="qr-print" class="qr"></div>
+            <p class="hint">Scan to view menu &amp; order</p>
+          </main>
+        </body>
       </html>
     `);
     printWindow.document.close();
+    const label = printWindow.document.getElementById('table-label');
+    const qrContainer = printWindow.document.getElementById('qr-print');
+    if (!label || !qrContainer) {
+      printWindow.close();
+      toast.error('Could not prepare the QR code for printing.');
+      return;
+    }
+
+    label.textContent = `Table ${table.number}`;
+    const menuURL = buildMenuUrl(table.number, table.adminId, capability);
+    const qr = new QRCodeStyling({
+      width: 360,
+      height: 360,
+      type: 'svg' as DrawType,
+      data: menuURL,
+      margin: 10,
+      qrOptions: {
+        typeNumber: 0 as TypeNumber,
+        mode: 'Byte' as Mode,
+        errorCorrectionLevel: 'Q' as ErrorCorrectionLevel,
+      },
+      dotsOptions: {
+        color: accentColor.value,
+        type: dotStyle,
+        gradient: {
+          type: 'linear',
+          rotation: 45,
+          colorStops: [
+            { offset: 0, color: accentColor.gradient[0] },
+            { offset: 1, color: accentColor.gradient[1] },
+          ],
+        },
+      },
+      cornersSquareOptions: {
+        type: cornerStyle,
+        color: accentColor.value,
+      },
+      cornersDotOptions: {
+        type: cornerStyle === 'square' ? 'square' : 'dot',
+        color: accentColor.value,
+      },
+      backgroundOptions: { color: '#ffffff' },
+    });
+    qr.append(qrContainer);
     printWindow.focus();
     printWindow.addEventListener('afterprint', () => printWindow.close(), { once: true });
-    window.setTimeout(() => printWindow.print(), 250);
+    window.setTimeout(() => printWindow.print(), 400);
   };
 
   return (
@@ -535,14 +578,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
                   {generated && (
                     <>
                       <button
-                        onClick={() => setShowPreview(table)}
-                        className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                      >
-                        <Eye className="h-4 w-4" />
-                        Preview table card
-                      </button>
-
-                      <button
                         onClick={() => copyToClipboard(table)}
                         className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-200 active:scale-[0.98] dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                       >
@@ -560,7 +595,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
                       </button>
 
                       <button
-                        onClick={() => setShowPreview(table)}
+                        onClick={() => printQRCode(table)}
                         className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                       >
                         <Printer className="h-4 w-4" />
@@ -594,107 +629,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
           );
         })}
       </div>
-
-      {/* --- Preview & Print Modal --- */}
-      {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
-
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Printer className="w-5 h-5" />
-                Print Preview
-              </h3>
-              <button
-                onClick={() => setShowPreview(null)}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
-
-            <div className="p-8 bg-slate-100 dark:bg-black/50 overflow-y-auto flex-1 flex flex-col items-center justify-center gap-4">
-
-              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/25 dark:text-amber-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>This code is shown once. Print, download, or copy the link now — regenerating replaces it and any older printed code stops working immediately.</span>
-              </div>
-
-              {/* Print Card Simulation */}
-              <div id="printable-card" className="bg-white text-slate-900 w-[300px] shadow-2xl rounded-2xl relative overflow-hidden flex flex-col items-center border border-slate-200 aspect-[3/4]">
-
-                {/* Header matching main design */}
-                <div className={`h-40 w-full ${accentColor.class} relative overflow-hidden flex flex-col items-center justify-center`}>
-                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent"></div>
-                  <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
-                  <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-black/10 rounded-full blur-2xl"></div>
-
-                  <div className="relative z-10 text-center text-white mt-4">
-                    <p className="text-white/80 font-medium text-xs uppercase tracking-[0.2em] mb-2">
-                      Table
-                    </p>
-                    <h3 className="text-5xl font-medium tracking-tight">
-                      {showPreview.number}
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="flex-1 w-full flex flex-col items-center justify-center p-8 -mt-10 relative z-10">
-                  <div className="bg-white p-4 rounded-2xl shadow-xl mb-6">
-                    {capabilities[showPreview.id] ? (
-                      <SingleQRCode
-                        tableCode={showPreview.number}
-                        adminId={showPreview.adminId}
-                        capability={capabilities[showPreview.id].capability}
-                        size={180}
-                        color={accentColor}
-                        dotStyle={dotStyle}
-                        cornerStyle={cornerStyle}
-                      />
-                    ) : (
-                      <div className="flex h-[180px] w-[180px] items-center justify-center text-center text-xs font-semibold text-slate-400">
-                        Code no longer available — generate a new one
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-1">Scan to Order</p>
-                  <p className="text-xs text-slate-400">Bon Appétit</p>
-                </div>
-
-                <div className="mb-6">
-                  <p className="text-[10px] font-medium text-slate-300 uppercase tracking-widest">Powered by Bolt QR</p>
-                </div>
-              </div>
-
-            </div>
-
-            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3">
-              <button
-                onClick={() => setShowPreview(null)}
-                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={printPreview}
-                disabled={!capabilities[showPreview.id]}
-                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Printer className="w-5 h-5" />
-                Print
-              </button>
-              <button
-                onClick={() => downloadQRCode(showPreview)}
-                disabled={!capabilities[showPreview.id]}
-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${accentColor.class}`}
-              >
-                <Download className="w-5 h-5" />
-                Download PNG
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* --- Generate confirmation --- */}
       {pendingGenerate && (
