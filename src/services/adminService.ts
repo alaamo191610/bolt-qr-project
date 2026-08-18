@@ -3,7 +3,7 @@ import type { OrderFlowRules, KDSPrefs } from '../order-admin/types';
 import type { PricingPrefs, BillingSettings, Promotion } from '../pricing/types';
 import type { User } from '../providers/AuthProvider';
 import type { SubscriptionPlan, SubscriptionStatus } from '../types/subscription';
-import { api } from './api';
+import { api, isUnauthenticatedError } from './api';
 
 interface CursorPage<T> {
   items: T[];
@@ -90,7 +90,9 @@ export const adminService = {
     try {
       return await api.get<AdminProfileResponse>('/admin/profile');
     } catch (error) {
-      console.error('Error fetching admin profile:', error);
+      if (!isUnauthenticatedError(error)) {
+        console.error('Error fetching admin profile:', error);
+      }
       throw error;
     }
   },

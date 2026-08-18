@@ -6,6 +6,8 @@ import type { Promotion } from '../pricing/types'
 // ---------------- Types (kept compatible) ----------------
 type IngredientAction = 'no' | 'normal' | 'extra'
 
+export type OrderPaymentMethod = 'cash' | 'card_machine'
+
 /** One cart line going into createOrder */
 export type CreateOrderItemInput = {
   menu_item_id: string
@@ -83,6 +85,7 @@ export interface ApiOrder {
   table?: { code?: string } | null
   status?: string
   type?: 'dine_in' | 'take_away'
+  payment_method?: 'CASH' | 'CARD_MACHINE'
   total?: number | string
   version?: number
   created_at: string
@@ -184,6 +187,7 @@ export const orderService = {
     type?: 'dine_in' | 'take_away' // Added type
     promotion_code?: string
     tip_percent?: number
+    payment_method?: OrderPaymentMethod
     /** Required for type: 'dine_in'. The 30-minute table-session bearer
      * token obtained by exchanging the scanned QR capability. See
      * docs/contracts/table-capability.md — the server derives restaurant/
@@ -225,6 +229,7 @@ export const orderService = {
         type: orderData.type,
         promotionCode: orderData.promotion_code,
         tipPercent: orderData.tip_percent ?? 0,
+        paymentMethod: orderData.payment_method ?? 'cash',
       };
 
       const idempotencyHeaders = orderData.idempotency_key
