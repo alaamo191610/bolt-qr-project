@@ -302,6 +302,43 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
     }
   };
 
+  const printPreview = () => {
+    const printableCard = document.getElementById('printable-card');
+    if (!printableCard) {
+      toast.error('Open the preview before printing.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=480,height=720');
+    if (!printWindow) {
+      toast.error('Please allow pop-ups to print the QR code.');
+      return;
+    }
+
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((style) => style.outerHTML)
+      .join('');
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Table QR Code</title>
+          ${styles}
+          <style>
+            @page { margin: 0.5in; }
+            body { margin: 0; display: flex; justify-content: center; align-items: flex-start; }
+          </style>
+        </head>
+        <body>${printableCard.outerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.addEventListener('afterprint', () => printWindow.close(), { once: true });
+    window.setTimeout(() => printWindow.print(), 250);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in p-2">
 
@@ -520,6 +557,14 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                         <Download className="h-4 w-4" />
                         Download
                       </button>
+
+                      <button
+                        onClick={() => setShowPreview(table)}
+                        className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        <Printer className="h-4 w-4" />
+                        Print QR code
+                      </button>
                     </>
                   )}
 
@@ -628,6 +673,14 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
                 className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancel
+              </button>
+              <button
+                onClick={printPreview}
+                disabled={!capabilities[showPreview.id]}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Printer className="w-5 h-5" />
+                Print
               </button>
               <button
                 onClick={() => downloadQRCode(showPreview)}
