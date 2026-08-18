@@ -13,7 +13,7 @@ import { Search, MapPin, Check, SlidersHorizontal } from "lucide-react";
 import { BsBagHeart, BsQrCode } from "react-icons/bs";
 import { useLanguage } from "../contexts/LanguageContext";
 import { menuService } from "../services/menuService";
-import { orderService } from "../services/orderService";
+import { orderService, type OrderPaymentMethod } from "../services/orderService";
 import { tableService } from "../services/tableService";
 import { ApiError } from "../services/api";
 import { trackMenuEvents } from "../lib/firebase";
@@ -158,12 +158,13 @@ const line = (item: CartItem) => unit(item) * (item.quantity || 0);
 // same-key-same-payload policy.
 const checkoutFingerprint = (
   cart: CartItem[],
-  checkout: { promotionCode?: string; tipPercent: number }
+  checkout: { promotionCode?: string; tipPercent: number; paymentMethod: OrderPaymentMethod }
 ) =>
   JSON.stringify({
     lines: cart.map((item) => `${variantKey(item)}|${item.quantity}|${item.notes || ""}`),
     promotionCode: checkout.promotionCode || null,
     tipPercent: checkout.tipPercent,
+    paymentMethod: checkout.paymentMethod,
   });
 
 const generateIdempotencyKey = () => {
@@ -759,7 +760,7 @@ const CustomerMenu: React.FC = () => {
     });
   }, []);
 
-  const placeOrder = async (checkout: { promotionCode?: string; tipPercent: number }) => {
+  const placeOrder = async (checkout: { promotionCode?: string; tipPercent: number; paymentMethod: OrderPaymentMethod }) => {
     if (tableSession.status !== "ready") {
       toast.error(
         tableSession.status === "invalid"
@@ -806,6 +807,7 @@ const CustomerMenu: React.FC = () => {
         type: "dine_in",
         promotion_code: checkout.promotionCode,
         tip_percent: checkout.tipPercent,
+        payment_method: checkout.paymentMethod,
         table_session_token: tableSession.token,
         idempotency_key: idempotencyKey,
       });

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Banknote, CreditCard, Minus, Plus, ShoppingCart, Smartphone, X, Info } from 'lucide-react';
+import { Banknote, CreditCard, Minus, Plus, ShoppingCart, X, Info } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAdminMonetary } from '../../hooks/useAdminMonetary';
 import { computeTotals } from '../../pricing/totals';
@@ -8,6 +8,7 @@ import type { MenuItem } from './MenuItemCard';
 import type { Promotion } from '../../pricing/types';
 import { HiXMark } from "react-icons/hi2";
 import { getErrorMessage } from '../../utils/errors';
+import type { OrderPaymentMethod } from '../../services/orderService';
 
 export interface CartItem extends MenuItem { quantity: number; }
 
@@ -20,7 +21,7 @@ interface Props {
   onAdd: (item: MenuItem) => void;
   onRemove: (id: string) => void;
   orderType: 'dine_in' | 'take_away';
-  onPlaceOrder: (checkout: { promotionCode?: string; tipPercent: number }) => void;
+  onPlaceOrder: (checkout: { promotionCode?: string; tipPercent: number; paymentMethod: OrderPaymentMethod }) => void;
 
   /** NEW: High-impact UX hooks */
   onEditItem?: (item: CartItem) => void;                 // open modifiers editor for this line
@@ -639,17 +640,17 @@ const CartDrawer: React.FC<Props> = ({
                   type="button"
                   onClick={() => {
                     setShowPaymentOptions(false);
-                    onPlaceOrder({ promotionCode: appliedPromo?.code, tipPercent });
+                    onPlaceOrder({ promotionCode: appliedPromo?.code, tipPercent, paymentMethod: 'cash' });
                   }}
                   disabled={isOrdering}
                   className="flex items-center gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:border-primary"
                 >
                   <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                    <Smartphone className="h-6 w-6" />
+                    <Banknote className="h-6 w-6" />
                   </span>
                   <span>
-                    <span className="block font-bold text-slate-900 dark:text-white">{isRTL ? 'الدفع عبر كليك' : 'Pay with CliQ'}</span>
-                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'تحويل فوري عبر كليك' : 'Instant bank transfer via CliQ'}</span>
+                    <span className="block font-bold text-slate-900 dark:text-white">{isRTL ? 'الدفع نقداً' : 'Pay with cash'}</span>
+                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'ادفع نقداً عند استلام طلبك' : 'Pay cash when you receive your order'}</span>
                   </span>
                 </button>
 
@@ -657,17 +658,17 @@ const CartDrawer: React.FC<Props> = ({
                   type="button"
                   onClick={() => {
                     setShowPaymentOptions(false);
-                    onPlaceOrder({ promotionCode: appliedPromo?.code, tipPercent });
+                    onPlaceOrder({ promotionCode: appliedPromo?.code, tipPercent, paymentMethod: 'card_machine' });
                   }}
                   disabled={isOrdering}
                   className="flex items-center gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:border-primary"
                 >
                   <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                    <Banknote className="h-6 w-6" />
+                    <CreditCard className="h-6 w-6" />
                   </span>
                   <span>
-                    <span className="block font-bold text-slate-900 dark:text-white">{isRTL ? 'الدفع عند النادل' : 'Pay with the waiter'}</span>
-                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'سيحضر النادل جهاز الدفع' : 'The waiter will bring the card machine'}</span>
+                    <span className="block font-bold text-slate-900 dark:text-white">{isRTL ? 'الدفع بالبطاقة' : 'Pay with card machine'}</span>
+                    <span className="mt-0.5 block text-sm text-slate-500 dark:text-slate-400">{isRTL ? 'سيحضر النادل جهاز الدفع' : 'The waiter will bring the payment machine'}</span>
                   </span>
                 </button>
 

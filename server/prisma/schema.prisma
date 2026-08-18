@@ -80,6 +80,11 @@ enum OrderSource {
   API
 }
 
+enum OrderPaymentMethod {
+  CASH
+  CARD_MACHINE
+}
+
 enum OrderItemStatus {
   ACTIVE
   VOIDED
@@ -434,6 +439,7 @@ model Order {
   tip              Decimal     @default(0) @db.Decimal(10, 2)
   promotion_id     String?     @db.Uuid
   promotion_code   String?
+  payment_method   OrderPaymentMethod?
   status           String?     @default("pending")
   type             String?     @default("dine_in") // "dine_in" or "take_away"
   source           OrderSource @default(QR)

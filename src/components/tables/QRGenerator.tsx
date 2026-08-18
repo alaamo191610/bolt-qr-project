@@ -41,6 +41,8 @@ interface Table {
 
 interface QRGeneratorProps {
   tables: Table[];
+  capabilities: Record<number, GeneratedCapability>;
+  setCapabilities: React.Dispatch<React.SetStateAction<Record<number, GeneratedCapability>>>;
 }
 
 interface GeneratedCapability {
@@ -167,7 +169,7 @@ const SingleQRCode = ({
 };
 
 
-const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
+const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapabilities }) => {
   const [qrSize, setQrSize] = useState(250);
   const [accentColor, setAccentColor] = useState(COLORS[0]);
   const [dotStyle, setDotStyle] = useState<DotType>('rounded');
@@ -178,7 +180,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables }) => {
   // Session-only: the raw capability secret is returned once by the rotate
   // endpoint and is never retrievable again, so it only ever lives in memory
   // here — never persisted. Losing it on refresh is intentional.
-  const [capabilities, setCapabilities] = useState<Record<number, GeneratedCapability>>({});
   const [pendingGenerate, setPendingGenerate] = useState<Table | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<Table | null>(null);
   const [generatingId, setGeneratingId] = useState<number | null>(null);

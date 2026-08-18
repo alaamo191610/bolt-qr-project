@@ -1344,7 +1344,12 @@ const presentPublicOrder = order => {
 };
 
 app.post('/api/orders', orderRateLimit, async (req, res) => {
-  const { items, type, promotionCode, tipPercent } = req.body;
+  const { items, type, promotionCode, tipPercent, paymentMethod } = req.body;
+  const normalizedPaymentMethod = paymentMethod == null || paymentMethod === 'cash'
+    ? 'cash'
+    : paymentMethod === 'card_machine'
+      ? 'card_machine'
+      : null;
 
   if (!Array.isArray(items) || items.length === 0 || items.length > 50) {
     return res.status(400).json({ error: 'Order must contain between 1 and 50 items' });
@@ -1360,6 +1365,9 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
   }
   if (!Number.isFinite(Number(tipPercent ?? 0)) || Number(tipPercent ?? 0) < 0 || Number(tipPercent ?? 0) > 100) {
     return res.status(400).json({ error: 'Invalid tip percentage' });
+  }
+  if (!normalizedPaymentMethod) {
+    return res.status(400).json({ error: 'Invalid payment method' });
   }
 
   try {
@@ -1382,6 +1390,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
       type,
       promotionCode: promotionCode || null,
       tipPercent: Number(tipPercent || 0),
+      paymentMethod: normalizedPaymentMethod,
     });
     const idempotencyScope = {
       organizationId: req.tableSession.organizationId,
@@ -1678,6 +1687,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
         delivery_fee: totals.deliveryFee,
         tip: totals.tip,
         promotion_code: promotion?.code || null,
+        payment_method: normalizedPaymentMethod === 'card_machine' ? 'CARD_MACHINE' : 'CASH',
         status: 'pending',
         type,
         table_session_id: tableSession.sessionId,
