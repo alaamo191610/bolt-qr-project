@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Bolt QR full-system QA checklist split between ALAA and YAZAN.">
+  <title>Bolt QR · Full System QA Checklist</title>
+  <style>
+    :root {
+      --ink: #102a2b;
+      --muted: #617475;
+      --line: #dce8e5;
+      --paper: #f6faf8;
+      --card: #ffffff;
+      --teal: #0f766e;
+      --teal-dark: #115e59;
+      --mint: #dff5ec;
+      --coral: #c2413e;
+      --amber: #b45309;
+      --shadow: 0 16px 44px rgba(16, 42, 43, .08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 92% 2%, rgba(191, 236, 220, .62), transparent 28rem),
+        var(--paper);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .wrap { width: min(1240px, calc(100% - 40px)); margin: 0 auto; }
+    .hero { padding: 54px 0 26px; }
+    .eyebrow { display: inline-flex; gap: 8px; align-items: center; color: var(--teal); font-weight: 800; letter-spacing: .11em; text-transform: uppercase; font-size: 12px; }
+    .eyebrow::before { content: ""; width: 28px; height: 3px; border-radius: 99px; background: #f59e0b; }
+    h1 { margin: 12px 0 10px; max-width: 820px; font-size: clamp(34px, 5vw, 64px); line-height: .98; letter-spacing: -.055em; }
+    .lede { max-width: 730px; margin: 0; color: var(--muted); font-size: 17px; }
+    .hero-row { display: flex; justify-content: space-between; gap: 30px; align-items: end; }
+    .stamp { min-width: 190px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.76); box-shadow: var(--shadow); }
+    .stamp strong { display: block; font-size: 20px; }
+    .stamp span { color: var(--muted); font-size: 12px; }
+    .toolbar { position: sticky; top: 0; z-index: 10; padding: 14px 0; border-top: 1px solid rgba(220,232,229,.7); border-bottom: 1px solid var(--line); background: rgba(246,250,248,.92); backdrop-filter: blur(14px); }
+    .toolbar-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .search { flex: 1 1 260px; position: relative; }
+    .search input { width: 100%; padding: 12px 14px 12px 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); outline: none; }
+    .search input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,.13); }
+    .search span { position: absolute; left: 14px; top: 9px; color: var(--muted); font-size: 19px; }
+    select, .btn { padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--card); color: var(--ink); }
+    .btn { font-weight: 750; transition: transform .16s, border-color .16s, background .16s; }
+    .btn:hover { transform: translateY(-1px); border-color: #9acdc1; }
+    .btn-primary { color: #fff; border-color: var(--teal); background: var(--teal); }
+    .btn-primary:hover { background: var(--teal-dark); }
+    .btn-quiet { color: var(--muted); }
+    .dashboard { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; padding: 24px 0 22px; }
+    .progress-card, .setup-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
+    .progress-card { padding: 22px; }
+    .setup-card { padding: 22px; background: #123b3b; color: #f6fffb; }
+    .card-kicker { margin: 0 0 4px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .setup-card .card-kicker { color: #a8d6c8; }
+    .progress-line { display: flex; justify-content: space-between; gap: 20px; align-items: baseline; }
+    .progress-line strong { font-size: 34px; letter-spacing: -.04em; }
+    .progress-track { height: 12px; margin: 15px 0 16px; overflow: hidden; border-radius: 99px; background: #e6efec; }
+    #progressBar { height: 100%; width: 0%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b, #18a47d); transition: width .3s; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stat { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 10px; background: #f5f9f7; color: var(--muted); font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #b9c8c4; }
+    .dot.pass { background: #16a06f; } .dot.fail { background: var(--coral); } .dot.blocked { background: #e59b22; }
+    .setup-card h2 { margin: 0 0 8px; font-size: 20px; }
+    .setup-card p { margin: 0 0 12px; color: #c7e3da; }
+    .setup-list { display: grid; gap: 8px; margin: 0; padding-left: 18px; color: #e6f5f0; }
+    .owner-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+    .owner-card { padding: 13px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--card); }
+    .owner-card strong { display: block; font-size: 17px; } .owner-card span { color: var(--muted); font-size: 12px; }
+    main { padding-bottom: 80px; }
+    .group { margin: 18px 0; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255,255,255,.8); box-shadow: 0 8px 25px rgba(16,42,43,.04); overflow: hidden; }
+    .group[hidden] { display: none; }
+    .group-head { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 19px 22px; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, #f1faf6, #fff); }
+    .group-head h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+    .group-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    .group-meta { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    .count-badge, .owner-pill, .priority-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 99px; font-size: 11px; font-weight: 800; }
+    .count-badge { color: var(--teal-dark); background: var(--mint); }
+    .case { display: grid; grid-template-columns: 38px 1fr 110px 145px; gap: 14px; align-items: start; padding: 18px 22px; border-bottom: 1px solid #edf3f1; }
+    .case:last-child { border-bottom: 0; }
+    .case.is-hidden { display: none; }
+    .case-number { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: var(--teal-dark); background: #e3f4ed; font-size: 12px; font-weight: 850; }
+    .case h3 { margin: 0 0 4px; font-size: 15px; line-height: 1.3; }
+    .case p { margin: 0; color: var(--muted); font-size: 13px; }
+    .expected { margin-top: 8px; padding-left: 12px; border-left: 2px solid #c7e8dc; color: #3d5d5b; font-size: 12px; }
+    .owner-pill.alaa { color: #25518d; background: #e9f1ff; } .owner-pill.yazan { color: #7b3c12; background: #fff0dc; } .owner-pill.joint { color: #664b95; background: #f1eaff; }
+    .priority-pill { color: #8a4b00; background: #fff3d7; }
+    .status-cell { display: grid; gap: 6px; }
+    .status-cell select { width: 100%; padding: 8px 7px; font-size: 12px; }
+    .status-cell select.pass { color: #0d805d; border-color: #9edac4; background: #eefaf5; }
+    .status-cell select.fail { color: #a52e2a; border-color: #efb2ad; background: #fff3f2; }
+    .status-cell select.blocked { color: #965406; border-color: #f0c779; background: #fff8e8; }
+    .notes textarea { width: 100%; min-height: 52px; resize: vertical; padding: 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: #fbfdfc; font-size: 12px; }
+    .notes label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 750; }
+    .empty { display: none; margin: 18px 0; padding: 40px; border: 1px dashed #bcd4cc; border-radius: var(--radius); text-align: center; color: var(--muted); background: rgba(255,255,255,.6); }
+    .empty.show { display: block; }
+    .footer { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 28px 0 36px; color: var(--muted); font-size: 12px; }
+    .footer strong { color: var(--ink); }
+    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 20; max-width: 340px; padding: 12px 15px; border: 1px solid #9edac4; border-radius: 12px; color: #0c594c; background: #effbf5; box-shadow: var(--shadow); transform: translateY(120px); opacity: 0; transition: .25s; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } .case { grid-template-columns: 34px 1fr 120px; } .notes { grid-column: 2 / -1; } }
+    @media (max-width: 620px) { .wrap { width: min(100% - 24px, 1240px); } .hero { padding-top: 34px; } .hero-row { display: block; } .stamp { margin-top: 20px; } .group-head { display: block; } .group-meta { margin-top: 12px; } .case { grid-template-columns: 30px 1fr; padding: 16px 14px; gap: 10px; } .status-cell, .notes { grid-column: 2; } .owner-summary { grid-template-columns: 1fr; } .toolbar-inner { align-items: stretch; } .toolbar-inner select, .toolbar-inner .btn { flex: 1; } .footer { display: block; } }
+    @media print { body { background: #fff; } .toolbar, .btn, .search, .setup-card, .notes, .footer, .toast { display: none !important; } .wrap { width: 100%; } .hero { padding: 15px 0; } h1 { font-size: 32px; } .dashboard { display: block; padding: 0 0 10px; } .progress-card { box-shadow: none; } .group { break-inside: avoid; box-shadow: none; } .case { grid-template-columns: 30px 1fr 100px; } .group[hidden] { display: block !important; } }
+  </style>
+</head>
+<body>
+  <header class="hero wrap">
+    <div class="hero-row">
+      <div>
+        <div class="eyebrow">Bolt QR · release verification</div>
+        <h1>Full-system QA checklist</h1>
+        <p class="lede">A shared, evidence-driven pass through the customer journey, restaurant workspace, platform controls, data boundaries, and production readiness.</p>
+      </div>
+      <div class="stamp"><strong id="today">20 Aug 2026</strong><span>Prepared for ALAA + YAZAN</span></div>
+    </div>
+  </header>
+
+  <section class="toolbar">
+    <div class="wrap toolbar-inner">
+      <div class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search cases, features, or expected results…" aria-label="Search test cases"></div>
+      <select id="ownerFilter" aria-label="Filter by owner"><option value="all">All owners</option><option value="ALAA">ALAA</option><option value="YAZAN">YAZAN</option><option value="JOINT">Joint</option></select>
+      <select id="statusFilter" aria-label="Filter by status"><option value="all">All statuses</option><option value="not-run">Not run</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="blocked">Blocked</option></select>
+      <button class="btn btn-quiet" id="exportBtn" type="button">Export JSON</button>
+      <button class="btn btn-quiet" id="printBtn" type="button">Print</button>
+      <button class="btn" id="resetBtn" type="button">Reset</button>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="dashboard" aria-label="Checklist progress">
+      <div class="progress-card">
+        <p class="card-kicker">Release gate progress</p>
+        <div class="progress-line"><strong id="progressText">0% complete</strong><span id="progressDetail">0 of 0 cases passed</span></div>
+        <div class="progress-track" aria-hidden="true"><div id="progressBar"></div></div>
+        <div class="stats">
+          <span class="stat"><i class="dot pass"></i><b id="passCount">0</b> pass</span>
+          <span class="stat"><i class="dot fail"></i><b id="failCount">0</b> fail</span>
+          <span class="stat"><i class="dot blocked"></i><b id="blockedCount">0</b> blocked</span>
+          <span class="stat"><i class="dot"></i><b id="notRunCount">0</b> not run</span>
+        </div>
+        <div class="owner-summary">
+          <div class="owner-card"><strong id="alaaSummary">0 / 0</strong><span>ALAA passed</span></div>
+          <div class="owner-card"><strong id="yazanSummary">0 / 0</strong><span>YAZAN passed</span></div>
+          <div class="owner-card"><strong id="jointSummary">0 / 0</strong><span>Joint passed</span></div>
+        </div>
+      </div>
+      <aside class="setup-card">
+        <p class="card-kicker">Before starting</p>
+        <h2>Use a clean, production-shaped test run</h2>
+        <p>Run ALAA’s and YAZAN’s lanes in parallel only when both are using the same seeded restaurant and table fixtures.</p>
+        <ul class="setup-list">
+          <li>Start API and web app; verify health and browser console are clean.</li>
+          <li>Prepare two isolated tenants: Alpha and Beta; use test accounts only.</li>
+          <li>Have one active OWNER, MANAGER, STAFF, Super Admin, menu, promotion, table, and QR capability.</li>
+          <li>Record environment, browser/device, request ID, and repro steps for every failure.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <main id="checklist"></main>
+    <div class="empty" id="emptyState">No cases match the current filters. Try a different owner, status, or search term.</div>
+    <div class="footer"><span><strong>Release rule:</strong> no P0/P1 failure, no unresolved tenant/security issue, and every Joint case is passed or explicitly waived.</span><span>Progress is saved in this browser only.</span></div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const cases = [
+      { group: '01 · Environment & smoke', desc: 'Prove the build, runtime, routes, and baseline observability are usable before deeper testing.', owner: 'YAZAN', tests: [
+        ['Y-01', 'Local startup and health', 'Run the API and web app from the documented commands; open the app and health endpoint.', 'Both processes start without fatal errors; health returns success; no unexpected migration or CORS failure.', 'P0'],
+        ['Y-02', 'Production build smoke', 'Run lint, typecheck, tests, and production build on the release commit.', 'All required release commands complete successfully; generated build serves the app; no source maps or secrets are exposed.', 'P0'],
+        ['Y-03', 'Route inventory', 'Open public menu, restaurant login, activation, admin workspace, and Super Admin login URLs directly and via refresh.', 'Each route resolves to the correct screen; lazy loading has a visible fallback; unknown routes have a safe result.', 'P1'],
+        ['Y-04', 'Request correlation and safe errors', 'Trigger a controlled 400, 401, 403, 404, 409, 429, and 500 response.', 'Stable error code and request ID are available where expected; server stack, SQL, tokens, and secrets are not exposed.', 'P1'],
+        ['Y-05', 'Clean browser baseline', 'Run a fresh browser profile through login and the main customer/admin flows.', 'No uncaught console errors, hydration warnings, broken image requests, or repeated failed network calls.', 'P1']
+      ]},
+      { group: '02 · Customer QR and menu journey', desc: 'ALAA owns visible customer behavior; YAZAN verifies capability/session and server boundaries underneath it.', owner: 'JOINT', tests: [
+        ['J-01', 'Scan QR → correct restaurant/table', 'Open a valid table QR in a fresh mobile browser and inspect the URL, restaurant identity, table code, and menu.', 'The customer lands at the intended restaurant/table only; no manual restaurant identity is trusted from client state.', 'P0'],
+        ['A-01', 'Dining mode landing', 'From a valid public entry, select Dine in and inspect the welcome, mode selection, and back/reload behavior.', 'Dine-in proceeds into the menu; copy, touch targets, focus, and loading states are clear; refresh does not corrupt the session.', 'P1'],
+        ['A-02', 'Menu loading, empty, and error states', 'Test populated menu, empty category, slow response, offline, and API error states.', 'Loading is intentional; empty state explains what happened; retry works; raw backend errors are not shown.', 'P1'],
+        ['A-03', 'Category filters and search', 'Switch categories, return to all, search for a menu item, and clear the search.', 'Only matching items display; state is keyboard accessible; no stale category or search results remain.', 'P1'],
+        ['A-04', 'Item customization', 'Open an item with modifiers/options, select required and optional choices, enter a note, and add it to cart.', 'Validation prevents incomplete required choices; selected options and note appear correctly in cart; price reflects selections.', 'P0'],
+        ['A-05', 'Cart editing', 'Increase/decrease quantity, remove an item, edit customization, empty the cart, and reopen it.', 'Quantities, notes, options, subtotal, and totals stay consistent; no negative quantity or ghost item remains.', 'P0'],
+        ['A-06', 'Language and RTL customer menu', 'Run the same menu/cart flow in Arabic and English; switch language mid-flow and inspect RTL layout.', 'Translation keys are present; Arabic is genuinely RTL; no clipped, reversed, overlapping, or untranslated critical controls.', 'P1'],
+        ['A-07', 'Takeaway policy', 'Select Take away from the landing screen and attempt an order if the entry is visible.', 'Release 1 behavior is explicit and consistent: takeaway is unavailable and returns the approved disabled state without creating an order.', 'P0'],
+        ['Y-06', 'Invalid, expired, rotated, and revoked QR', 'Try malformed, unknown, expired, and previously valid capabilities after rotation/revocation.', 'Exchange/order fails closed with a stable safe error; another table/tenant cannot be reached; no order mutation occurs.', 'P0'],
+        ['Y-07', 'Capability TTL and table binding', 'Exchange a valid QR session, wait/use an expired session, and try the session against another table or tenant.', 'The session is short-lived, table-bound, and tenant-bound; expired or mismatched use is rejected.', 'P0']
+      ]},
+      { group: '03 · Checkout, totals, and order tracking', desc: 'Exercise the money and state machine from cart to customer confirmation and back to operator status.', owner: 'JOINT', tests: [
+        ['A-08', 'Promotion and tip flow', 'Apply valid, invalid, expired, minimum-spend, usage-limited, percentage, and fixed promotions; add/remove tip.', 'Only eligible promotions apply; usage is shown once; tip and discount calculations are understandable and reversible.', 'P0'],
+        ['A-09', 'Tax, fees, currency, and rounding', 'Place carts at low, high, fractional, and zero-fee values across configured currency/tax/fee settings.', 'Displayed totals match the server-authoritative result; currency formatting, minor units, tax, fees, discount, and rounding are correct.', 'P0'],
+        ['A-10', 'Checkout validation', 'Submit with an empty cart, invalid note/quantity, missing required data, and over-limit line items.', 'The submit action is blocked with an actionable message; no partial order, promotion burn, or table mutation occurs.', 'P0'],
+        ['A-11', 'Single successful order', 'Submit a valid dine-in order using cash and then card-machine test variants.', 'Exactly one order is created; confirmation shows the correct number/items/total/table; payment method is retained correctly.', 'P0'],
+        ['A-12', 'Double-click and retry-safe submit', 'Double-click submit and replay the same request/idempotency key after a simulated timeout.', 'UI prevents accidental duplicate action; retry returns the original result; exactly one order and one side effect exist.', 'P0'],
+        ['Y-08', 'Order transaction atomicity', 'Force a validation, capacity, promotion, or database failure during order creation.', 'No partial order, idempotency row, promotion usage, table state, or socket event remains after rejection.', 'P0'],
+        ['Y-09', 'Open-order capacity', 'Create three open orders for one table, then submit a fourth; close one and retry.', 'The fourth is rejected with the approved limit code; no mutation occurs; retry after closing succeeds.', 'P0'],
+        ['A-13', 'Confirmation and tracking recovery', 'Refresh confirmation, close/reopen the tab, change visibility, go offline/online, and reconnect the socket.', 'Authoritative order status is recovered; UI distinguishes pending, reconnecting, offline, expired, and server-error states.', 'P0'],
+        ['A-14', 'Order status progression', 'Move an order through pending → preparing → ready → served and verify customer/admin views.', 'Only valid transitions are allowed; both views converge; timestamps/status labels are correct and accessible.', 'P0'],
+        ['Y-10', 'Order transition authorization', 'Attempt invalid transitions, repeated transitions, stale-version updates, and another tenant’s order update.', 'Server rejects invalid/stale/cross-tenant writes safely; valid transition is idempotent and auditable.', 'P0'],
+        ['A-15', 'Realtime order notifications', 'With two admin tabs/devices open, create an order and change its status.', 'New orders/status updates appear once in the right restaurant; sound preference works; reconnect refetches truth.', 'P1'],
+        ['Y-11', 'Realtime authorization and replay', 'Join the admin socket as correct and incorrect users; replay old/duplicate/out-of-order events.', 'Only authorized tenant events arrive; stale/duplicate events do not regress state or create duplicate effects.', 'P0']
+      ]},
+      { group: '04 · Restaurant admin workspace', desc: 'ALAA verifies the operator experience across every authenticated tab; YAZAN checks API ownership and limits.', owner: 'ALAA', tests: [
+        ['A-16', 'Restaurant login and logout', 'Log in with valid, invalid, inactive, and expired-session credentials; log out and use browser back.', 'Messages are clear; protected content is not briefly exposed; logout clears restaurant session and back navigation cannot restore access.', 'P0'],
+        ['A-17', 'Admin navigation and persistence', 'Open QR Studio, Menu, Orders, Tables, Analytics, Team, and Admin; reload each route/tab.', 'Correct tab loads, last tab persistence is scoped to the user, lazy fallback works, and errors stay contained to the affected area.', 'P1'],
+        ['A-18', 'QR Studio generation and download', 'Generate a QR for each table, preview it, download/print it, and scan it from a phone.', 'QR encodes the capability-backed URL, identifies the correct table, and remains scannable at printed size.', 'P0'],
+        ['A-19', 'Table management', 'Create/edit table, capacity, code, and status; attempt duplicate/invalid values; rotate and revoke capability.', 'Validation is clear; limits are enforced; status changes update correctly; QR lifecycle is visible and safe.', 'P0'],
+        ['A-20', 'Menu CRUD', 'Create/edit/delete categories and items; change price, description, image, modifiers, availability, and ordering.', 'Changes persist after reload, appear in the public menu, validate required fields, and respect subscription limits.', 'P0'],
+        ['A-21', 'Menu category filter regression', 'Create multiple categories and filter the admin menu repeatedly, including no-result state.', 'Filter returns the correct items every time and does not use stale or numeric/string mismatched IDs.', 'P1'],
+        ['A-22', 'Uploads and image failures', 'Upload valid image, oversized/invalid file, slow upload, failed upload, and replace/remove image.', 'Progress/error/retry states are clear; ownership is enforced; failed upload does not falsely report success.', 'P1'],
+        ['A-23', 'Order management controls', 'Filter orders, inspect details/customizations/notes, update valid statuses, and test empty/loading/error states.', 'Operator sees correct tenant data; actions are role-appropriate; details match the customer order and totals.', 'P0'],
+        ['A-24', 'Analytics and export', 'Change date range, inspect metrics/charts, test no data, maximum range, pagination/continuation, and export/PDF.', 'Aggregates match known orders; date boundaries/time zone are correct; bounded range and export errors are clear.', 'P1'],
+        ['A-25', 'Pricing settings', 'Edit currency, tax, service fee, payment fee, promotion, and tip settings; verify preview and public checkout.', 'Settings save once, survive reload, and affect authoritative totals without float drift or stale UI.', 'P0'],
+        ['A-26', 'Theme and preferences', 'Switch light/dark/system theme, colors, language, notification sound and preset; reload and test failed save.', 'Applied values are visible and persisted; failed save shows warning and does not claim success; audio obeys user choice.', 'P1']
+      ]},
+      { group: '05 · Team, roles, tenant boundary, and subscriptions', desc: 'Verify least privilege and that Alpha data can never be read or changed through Beta context.', owner: 'YAZAN', tests: [
+        ['Y-12', 'Owner/member provisioning', 'As OWNER, invite/add a member, set role, activate/suspend, and remove or revoke access as supported.', 'Membership changes are tenant-scoped, auditable, and reflected on next session; owner-only actions require recent auth where required.', 'P0'],
+        ['A-27', 'Role-based UI matrix', 'Open the workspace as OWNER, MANAGER, and STAFF and compare navigation, controls, and disabled states.', 'OWNER sees all allowed controls; MANAGER cannot perform owner-only actions; STAFF does not see unauthorized Team/admin controls.', 'P0'],
+        ['Y-13', 'Role-based API matrix', 'Call protected read/write endpoints as each role, including direct URLs and crafted request bodies.', 'Backend—not only UI—enforces the same permissions with safe 401/403 responses and no side effects.', 'P0'],
+        ['A-28', 'Organization switcher behavior', 'Use a user with multiple memberships; switch active organization/branch; reload and inspect all tabs.', 'Only permitted organizations appear; data, labels, and sockets switch together; prior tenant data is not briefly shown.', 'P0'],
+        ['Y-14', 'Cross-tenant read isolation', 'Using Alpha credentials and IDs, request Beta menu, table, order, analytics, members, promotions, uploads, and Super Admin routes.', 'Every unauthorized read fails closed or returns an approved non-disclosing response; no Beta data leaks.', 'P0'],
+        ['Y-15', 'Cross-tenant write/delete isolation', 'Attempt to update/delete/attach Alpha records using Beta IDs across catalog, tables, orders, promotions, and modifiers.', 'Every mutation is denied; target tenant remains unchanged; logs contain a request ID but no secrets.', 'P0'],
+        ['Y-16', 'Subscription access states', 'Test active, future/expired trial, active with end date, past-due, cancelled, and expired subscription states.', 'Access and upgrade gating match policy; expired tenants cannot create orders or bypass limits; messaging is actionable.', 'P0'],
+        ['A-29', 'Plan limits and upgrade modal', 'Fill tables, menu items, and staff to each plan ceiling; try one extra; open upgrade flow.', 'The correct limit is shown; over-limit action is blocked without partial data; upgrade modal is accurate and closable.', 'P1'],
+        ['Y-17', 'Subscription ceiling enforcement', 'Bypass UI and POST one item/table/member beyond the plan limit; test invalid plan/status input.', 'Server enforces immutable plan limits and rejects invalid input; no over-limit row is created.', 'P0']
+      ]},
+      { group: '06 · Super Admin and onboarding', desc: 'Validate the separate platform-control boundary, MFA, invitation lifecycle, and provisioning safety.', owner: 'YAZAN', tests: [
+        ['Y-18', 'Super Admin login isolation', 'Open Super Admin login with restaurant credentials, no credentials, and invalid credentials.', 'Restaurant bearer/session is never accepted as Super Admin auth; protected platform data stays hidden.', 'P0'],
+        ['Y-19', 'MFA enrollment and verification', 'Complete first-login TOTP enrollment, valid code, invalid code, replayed code, and recovery/error states.', 'MFA is mandatory per policy; secrets are not returned or logged; successful verification establishes only the intended session.', 'P0'],
+        ['Y-20', 'MFA lockout and session expiry', 'Exceed failed attempts, wait/fast-forward lock period in test mode, expire session, and revoke session.', 'Lockout and retry metadata are safe; expired/revoked sessions cannot read or write; login can recover as designed.', 'P0'],
+        ['A-30', 'Super Admin responsive/accessibility', 'Use keyboard and mobile viewport through login, MFA, restaurant list, filters, and dialogs.', 'Focus order, labels, errors, contrast, zoom, and touch behavior are usable with no clipped content.', 'P1'],
+        ['Y-21', 'Restaurant provisioning invitation', 'Provision a restaurant with valid and invalid plan/trial inputs; send invitation; use it once, twice, expired, and tampered.', 'Creation is atomic; invitation is single-use, expiring, non-enumerating, and never logged in plaintext.', 'P0'],
+        ['A-31', 'Owner activation journey', 'Open a valid invitation, set owner credentials, activate, sign in, and refresh the newly provisioned workspace.', 'Activation copy and validation are clear; owner lands in the correct tenant with expected starter data and no token leakage.', 'P0'],
+        ['Y-22', 'Platform write recent-auth gate', 'Let recent Super Admin auth age out, then attempt sensitive platform writes; repeat after re-auth.', 'Sensitive writes require recent authentication; read-only access remains according to policy; successful re-auth unlocks only intended action.', 'P0'],
+        ['Y-23', 'Super Admin directory pagination/search', 'Search/filter a large restaurant list, move through cursor pages, rapidly change filters, and inspect stale response handling.', 'Results are bounded, deterministic, tenant-safe, and latest-filter-wins; no unbounded payload or stale overwrite occurs.', 'P1']
+      ]},
+      { group: '07 · Accessibility, visual, and device coverage', desc: 'Run ALAA’s browser/device pass on public and authenticated surfaces in both supported languages.', owner: 'ALAA', tests: [
+        ['A-32', 'Keyboard-only critical paths', 'With a keyboard only, complete login, QR menu, customization, cart, submit, admin navigation, and a dialog.', 'Every action is reachable and visible; focus is not trapped incorrectly; Escape/backdrop behavior is correct.', 'P0'],
+        ['A-33', 'Screen reader semantics', 'Audit headings, landmarks, labels, live order updates, errors, dialogs, buttons, and status controls.', 'Names/roles/states are announced meaningfully; dynamic order updates are not silent or excessively noisy.', 'P1'],
+        ['A-34', 'Contrast, zoom, and reduced motion', 'Check light/dark themes at 200% zoom and with reduced-motion preference.', 'Text and controls meet contrast expectations; no horizontal loss of critical actions; motion is reduced respectfully.', 'P1'],
+        ['A-35', 'Responsive desktop/tablet/mobile', 'Test Chromium desktop, tablet width, Pixel 7-sized viewport, and a narrow phone across core flows.', 'No overlap or clipped CTA; menus, drawers, tables, charts, QR preview, and dialogs remain usable.', 'P0'],
+        ['A-36', 'Real-device browser smoke', 'Repeat QR → order → tracking on a real iOS Safari and Android Chrome device where available.', 'Camera/QR link, viewport, keyboard, background/foreground, online recovery, and audio behavior work on target devices.', 'P1'],
+        ['A-37', 'Error boundaries and recovery', 'Force render/API errors separately in customer menu and admin workspace; use retry/home/logout recovery.', 'The affected area shows a useful fallback without taking down the other area or leaking diagnostics.', 'P0'],
+        ['A-38', 'Localization completeness', 'Compare English and Arabic labels, dates, numbers, currencies, errors, toasts, PDFs, and empty states.', 'No raw translation keys or mixed language remain; pluralization, numerals, direction, and currency are correct.', 'P1']
+      ]},
+      { group: '08 · Security, resilience, performance, and operations', desc: 'YAZAN owns technical gates; ALAA confirms user-facing recovery and no-regression behavior.', owner: 'YAZAN', tests: [
+        ['Y-24', 'Token class separation', 'Try restaurant, order-tracking, table-session, MFA challenge, and Super Admin tokens against the wrong endpoint/class.', 'Issuer, audience, purpose, subject, and expiry checks fail closed; no cross-context privilege is granted.', 'P0'],
+        ['Y-25', 'Rate limits and abuse controls', 'Exercise exchange, checkout, login, tracking, and public endpoints from repeated IP/session/capability contexts.', 'Limits are bounded and fair; response includes safe retry metadata; normal traffic recovers after expiry.', 'P0'],
+        ['Y-26', 'Input and output safety', 'Send oversized payloads, invalid IDs, HTML/script strings, malformed JSON, path-like filenames, and unexpected enum values.', 'Validation rejects safely; output is escaped; no stack/SQL/secret disclosure; logs remain structured and bounded.', 'P0'],
+        ['Y-27', 'Backup and restore rehearsal', 'Create an encrypted off-VPS backup, verify freshness/integrity, restore into an isolated target, and measure elapsed time.', 'Restore is non-destructive to source; secrets/keys are handled correctly; RPO/RTO evidence and rollback steps are recorded.', 'P0'],
+        ['Y-28', 'Migration rehearsal and rollback guard', 'Apply migrations to a production-shaped copy, verify ownership counts, rerun idempotent steps, and test the documented guard.', 'Expand/backfill/verify sequence is repeatable; unresolved/cross-tenant data stops enforcement; no destructive rollback is implied.', 'P0'],
+        ['Y-29', 'Database role boundary', 'Run the app with the intended least-privilege runtime role and separately run migrations with owner role.', 'Runtime cannot perform migration/DDL operations; migrations still work with owner role; connection strings are not logged.', 'P0'],
+        ['Y-30', 'Performance and capacity gate', 'Run the documented mixed API capacity test and inspect pagination/query-plan evidence on representative data.', 'Latency/error thresholds pass; page sizes are bounded; indexed paths avoid unsafe sequential scans; no memory growth is observed.', 'P1'],
+        ['Y-31', 'Graceful shutdown and restart', 'Send termination/restart while requests and sockets are active; then reload customer/admin sessions.', 'Connections drain safely; no corrupt/duplicate order; app recovers and refetches authoritative state.', 'P0'],
+        ['Y-32', 'Telemetry and redaction', 'Trigger frontend and backend errors, inspect Sentry/telemetry payloads and structured logs.', 'Release/route/request ID context is present; tokens, notes, full bodies, MFA secrets, and payment-sensitive data are absent.', 'P0'],
+        ['Y-33', 'TLS, headers, and CORS', 'Run the hosted app over HTTPS and inspect security headers, origin allowlist, cookies, and preflight behavior.', 'Only approved origins work; secure HttpOnly/SameSite policy is correct; no mixed content or permissive wildcard remains.', 'P0'],
+        ['Y-34', 'Dependency and artifact gate', 'Run production-only audit, inspect bundle/output, and compare lockfile/runtime against supported Node range.', 'No known release-blocking vulnerability; secrets absent; supported Node version and reproducible lockfile are used.', 'P1']
+      ]},
+      { group: '09 · Joint end-to-end release gates', desc: 'Both people run these together on the same clean environment and sign off only with evidence attached.', owner: 'JOINT', tests: [
+        ['J-02', 'Golden happy path', 'Super Admin provisions Alpha → owner activates → admin creates table/menu/QR → customer scans → orders → admin progresses → customer tracks.', 'The complete journey works with authoritative totals/status, correct tenant identity, and no console/network errors.', 'P0'],
+        ['J-03', 'Tenant-negative golden path', 'While Alpha and Beta are available, attempt every practical cross-tenant route, ID, QR, socket, and browser-session crossover.', 'All attempts fail closed; neither UI nor API exposes or changes the other tenant.', 'P0'],
+        ['J-04', 'Failure-recovery golden path', 'During a valid order, simulate timeout, refresh, offline, socket disconnect, server restart, and status update.', 'The customer sees one order and the admin sees one order; recovery converges to server truth without duplicate side effects.', 'P0'],
+        ['J-05', 'Role-release matrix', 'Run the golden path as OWNER, MANAGER, STAFF, and Super Admin where each should be involved.', 'Each role can do exactly what policy allows; forbidden controls and endpoints are denied consistently.', 'P0'],
+        ['J-06', 'Billing/limits release gate', 'Exercise plan ceilings, expired access, upgrade prompts, pricing changes, and existing orders in one run.', 'Limits and subscription status are enforced without corrupting existing data or altering completed order totals.', 'P0'],
+        ['J-07', 'Accessibility release gate', 'Run the critical happy path in English/LTR and Arabic/RTL using keyboard plus mobile viewport.', 'Core journey is operable, understandable, and visually intact in both language directions.', 'P0'],
+        ['J-08', 'Evidence and defect triage', 'For every failed/blocked case, attach repro, expected/actual, environment, severity, and request ID; review jointly.', 'No ambiguous failures remain; P0/P1 defects have owners and retest criteria; approved waivers are documented.', 'P0']
+      ]}
+    ];
+
+    const STORAGE_KEY = 'bolt-qr-full-qa-checklist-v1';
+    const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const checklist = document.getElementById('checklist');
+    const statusLabel = { 'not-run': 'Not run', pass: 'Pass', fail: 'Fail', blocked: 'Blocked' };
+    const ownerClass = { ALAA: 'alaa', YAZAN: 'yazan', JOINT: 'joint' };
+
+    function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2400); }
+    function caseMatches(item, owner, status, query) {
+      const haystack = item.join(' ').toLowerCase();
+      return (!query || haystack.includes(query)) && (owner === 'all' || item.__owner === owner) && (status === 'all' || (state[item[0]]?.status || 'not-run') === status);
+    }
+    function render() {
+      checklist.innerHTML = '';
+      const owner = document.getElementById('ownerFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      const query = document.getElementById('search').value.trim().toLowerCase();
+      let visible = 0;
+      cases.forEach(section => {
+        const sectionOwner = section.owner;
+        const sectionCases = section.tests.map(item => Object.assign(item, { __owner: sectionOwner }));
+        const matching = sectionCases.filter(item => caseMatches(item, owner, status, query));
+        if (!matching.length) return;
+        visible += matching.length;
+        const el = document.createElement('section');
+        el.className = 'group';
+        el.innerHTML = `<div class="group-head"><div><h2>${section.group}</h2><p>${section.desc}</p></div><div class="group-meta"><span class="owner-pill ${ownerClass[sectionOwner]}">${sectionOwner === 'JOINT' ? 'ALAA + YAZAN' : sectionOwner}</span><span class="count-badge">${matching.length} visible</span></div></div>`;
+        matching.forEach(item => {
+          const [id, title, steps, expected, priority] = item;
+          const saved = state[id] || {};
+          const currentStatus = saved.status || 'not-run';
+          const article = document.createElement('article');
+          article.className = 'case';
+          article.dataset.caseId = id;
+          article.innerHTML = `<div class="case-number">${id.split('-')[1]}</div><div><h3>${title}</h3><p>${steps}</p><div class="expected"><b>Expected:</b> ${expected}</div></div><div class="status-cell"><span class="owner-pill ${ownerClass[sectionOwner]}">${sectionOwner}</span><span class="priority-pill">${priority}</span><select aria-label="${id} status" data-id="${id}"><option value="not-run">Not run</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="blocked">Blocked</option></select></div><div class="notes"><label for="note-${id}">Evidence / notes</label><textarea id="note-${id}" data-note="${id}" placeholder="Add browser, device, request ID, or defect notes…">${saved.note || ''}</textarea></div>`;
+          const select = article.querySelector('select'); select.value = currentStatus; select.className = currentStatus; select.addEventListener('change', event => { state[id] = { ...(state[id] || {}), status: event.target.value }; save(); updateStats(); styleStatus(select); showToast(`${id} marked ${statusLabel[event.target.value]}.`); });
+          const textarea = article.querySelector('textarea'); textarea.addEventListener('input', event => { state[id] = { ...(state[id] || {}), status: state[id]?.status || 'not-run', note: event.target.value }; save(); });
+          el.appendChild(article);
+        });
+        checklist.appendChild(el);
+      });
+      document.getElementById('emptyState').classList.toggle('show', visible === 0);
+      updateStats();
+    }
+    function styleStatus(select) { select.className = select.value; }
+    function allItems() { return cases.flatMap(section => section.tests.map(item => ({ item, owner: section.owner }))); }
+    function updateStats() {
+      const all = allItems(); const counts = { pass: 0, fail: 0, blocked: 0, 'not-run': 0 };
+      all.forEach(({ item }) => counts[state[item[0]]?.status || 'not-run']++);
+      const completed = counts.pass + counts.fail + counts.blocked; const percent = all.length ? Math.round((completed / all.length) * 100) : 0;
+      document.getElementById('progressText').textContent = `${percent}% complete`;
+      document.getElementById('progressDetail').textContent = `${counts.pass} of ${all.length} cases passed`;
+      document.getElementById('progressBar').style.width = `${percent}%`;
+      Object.entries(counts).forEach(([key, value]) => { const node = document.getElementById(key === 'not-run' ? 'notRunCount' : `${key}Count`); if (node) node.textContent = value; });
+      ['ALAA', 'YAZAN', 'JOINT'].forEach(person => { const owned = all.filter(x => x.owner === person); const passed = owned.filter(x => state[x.item[0]]?.status === 'pass').length; document.getElementById(`${person.toLowerCase()}Summary`).textContent = `${passed} / ${owned.length}`; });
+    }
+    document.getElementById('search').addEventListener('input', render);
+    document.getElementById('ownerFilter').addEventListener('change', render);
+    document.getElementById('statusFilter').addEventListener('change', render);
+    document.getElementById('printBtn').addEventListener('click', () => window.print());
+    document.getElementById('resetBtn').addEventListener('click', () => { if (confirm('Reset every saved status and note in this checklist?')) { Object.keys(state).forEach(key => delete state[key]); save(); render(); showToast('Checklist reset.'); } });
+    document.getElementById('exportBtn').addEventListener('click', () => { const output = { exportedAt: new Date().toISOString(), checklist: Object.fromEntries(allItems().map(({ item, owner }) => [item[0], { owner, title: item[1], status: state[item[0]]?.status || 'not-run', note: state[item[0]]?.note || '' }])) }; const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `bolt-qr-qa-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url); showToast('QA results exported.'); });
+    document.querySelectorAll('select').forEach(styleStatus);
+    render();
+  </script>
+</body>
+</html>
