@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Bolt QR master test plan: QA engineering track, UAT acceptance track, and joint release gates.">
+  <title>Bolt QR · QA + UAT Master Test Plan</title>
+  <style>
+    :root {
+      --ink: #102a2b;
+      --muted: #617475;
+      --faint: #8a9c9b;
+      --line: #dce8e5;
+      --line-soft: #edf3f1;
+      --paper: #f6faf8;
+      --card: #ffffff;
+      --teal: #0f766e;
+      --teal-dark: #115e59;
+      --mint: #dff5ec;
+      --coral: #c2413e;
+      --amber: #b45309;
+      --shadow: 0 16px 44px rgba(16, 42, 43, .08);
+      --shadow-soft: 0 8px 25px rgba(16, 42, 43, .04);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 92% 2%, rgba(191, 236, 220, .62), transparent 28rem),
+        var(--paper);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--teal-dark); }
+    .wrap { width: min(1280px, calc(100% - 40px)); margin: 0 auto; }
+
+    /* ---------- hero ---------- */
+    .hero { padding: 54px 0 22px; }
+    .eyebrow { display: inline-flex; gap: 8px; align-items: center; color: var(--teal); font-weight: 800; letter-spacing: .11em; text-transform: uppercase; font-size: 12px; }
+    .eyebrow::before { content: ""; width: 28px; height: 3px; border-radius: 99px; background: #f59e0b; }
+    h1 { margin: 12px 0 10px; max-width: 860px; font-size: clamp(32px, 5vw, 60px); line-height: .99; letter-spacing: -.055em; }
+    .lede { max-width: 760px; margin: 0; color: var(--muted); font-size: 17px; }
+    .hero-row { display: flex; justify-content: space-between; gap: 30px; align-items: end; }
+    .stamp { min-width: 210px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.76); box-shadow: var(--shadow); }
+    .stamp strong { display: block; font-size: 19px; letter-spacing: -.02em; }
+    .stamp span { color: var(--muted); font-size: 12px; }
+
+    /* ---------- section nav ---------- */
+    .jump { display: flex; flex-wrap: wrap; gap: 8px; padding: 18px 0 0; }
+    .jump a { padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--muted); font-size: 12.5px; font-weight: 700; text-decoration: none; transition: border-color .16s, color .16s; }
+    .jump a:hover { border-color: #9acdc1; color: var(--teal-dark); }
+
+    /* ---------- toolbar ---------- */
+    .toolbar { position: sticky; top: 0; z-index: 10; margin-top: 22px; padding: 13px 0; border-top: 1px solid rgba(220,232,229,.7); border-bottom: 1px solid var(--line); background: rgba(246,250,248,.93); backdrop-filter: blur(14px); }
+    .toolbar-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+    .search { flex: 1 1 230px; position: relative; }
+    .search input { width: 100%; padding: 11px 14px 11px 38px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); outline: none; }
+    .search input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,118,110,.13); }
+    .search span { position: absolute; left: 13px; top: 8px; color: var(--muted); font-size: 19px; }
+    select, .btn { padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--card); color: var(--ink); }
+    .btn { font-weight: 750; transition: transform .16s, border-color .16s, background .16s; }
+    .btn:hover { transform: translateY(-1px); border-color: #9acdc1; }
+    .btn:active { transform: scale(.98); }
+    .btn-quiet { color: var(--muted); }
+    .btn-danger { color: #a52e2a; border-color: #efb2ad; }
+
+    /* ---------- dashboard ---------- */
+    .dashboard { display: grid; grid-template-columns: 1.55fr 1fr; gap: 18px; padding: 24px 0 4px; }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); padding: 22px; }
+    .panel-dark { background: #123b3b; color: #f6fffb; border-color: #123b3b; }
+    .card-kicker { margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .panel-dark .card-kicker { color: #a8d6c8; }
+    .progress-line { display: flex; justify-content: space-between; gap: 20px; align-items: baseline; }
+    .progress-line strong { font-size: 34px; letter-spacing: -.04em; }
+    .progress-line span { color: var(--muted); font-size: 13px; }
+    .progress-track { height: 12px; margin: 15px 0 16px; overflow: hidden; border-radius: 99px; background: #e6efec; }
+    #progressBar { height: 100%; width: 0%; border-radius: inherit; background: linear-gradient(90deg, #f59e0b, #18a47d); transition: width .3s; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stat { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 10px; background: #f5f9f7; color: var(--muted); font-size: 13px; }
+    .stat b { color: var(--ink); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #b9c8c4; }
+    .dot.pass { background: #16a06f; } .dot.fail { background: var(--coral); } .dot.blocked { background: #e59b22; } .dot.na { background: #9b8fc4; }
+    .split-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+    .mini { padding: 12px 13px; border: 1px solid var(--line); border-radius: 13px; background: #fbfdfc; }
+    .mini strong { display: block; font-size: 17px; letter-spacing: -.02em; } .mini span { color: var(--muted); font-size: 11.5px; }
+    .mini-track { height: 5px; margin-top: 8px; border-radius: 99px; background: #e6efec; overflow: hidden; }
+    .mini-track i { display: block; height: 100%; width: 0%; background: #18a47d; transition: width .3s; }
+    .panel-dark h2 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.02em; }
+    .panel-dark p { margin: 0 0 12px; color: #c7e3da; font-size: 13.5px; }
+    .setup-list { display: grid; gap: 7px; margin: 0; padding-left: 18px; color: #e6f5f0; font-size: 13.5px; }
+    .setup-list code { padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,.12); font-size: 12px; }
+
+    /* ---------- reference blocks ---------- */
+    .ref { margin: 20px 0; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255,255,255,.8); box-shadow: var(--shadow-soft); overflow: hidden; }
+    .ref > summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 17px 22px; background: linear-gradient(100deg, #f1faf6, #fff); cursor: pointer; list-style: none; }
+    .ref > summary::-webkit-details-marker { display: none; }
+    .ref > summary h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+    .ref > summary p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+    .ref > summary::after { content: "+"; color: var(--teal); font-size: 21px; font-weight: 800; }
+    .ref[open] > summary::after { content: "\2212"; }
+    .ref[open] > summary { border-bottom: 1px solid var(--line); }
+    .ref-body { padding: 20px 22px 24px; }
+    .ref-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .ref-body h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--teal-dark); }
+    .ref-body ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); font-size: 13.5px; }
+    .ref-body ul b, .ref-body ul strong { color: var(--ink); }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { padding: 9px 10px; text-align: left; vertical-align: top; }
+    thead th { color: var(--faint); font-size: 11px; letter-spacing: .07em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+    tbody tr + tr td { border-top: 1px solid var(--line-soft); }
+    tbody td:first-child { font-weight: 700; white-space: nowrap; }
+    .table-scroll { overflow-x: auto; }
+    code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cmd { display: block; padding: 8px 10px; margin: 4px 0 0; border-radius: 8px; background: #f0f6f4; color: var(--teal-dark); font-size: 12.5px; overflow-x: auto; }
+
+    /* ---------- checklist ---------- */
+    main { padding-bottom: 20px; }
+    .group { margin: 18px 0; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255,255,255,.8); box-shadow: var(--shadow-soft); overflow: hidden; }
+    .group-head { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 18px 22px; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, #f1faf6, #fff); }
+    .group-head h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+    .group-head p { margin: 3px 0 0; color: var(--muted); font-size: 13px; max-width: 68ch; }
+    .group-meta { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 99px; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+    .pill.count { color: var(--teal-dark); background: var(--mint); }
+    .pill.alaa { color: #25518d; background: #e9f1ff; }
+    .pill.yazan { color: #7b3c12; background: #fff0dc; }
+    .pill.joint { color: #664b95; background: #f1eaff; }
+    .pill.qa { color: #7b3c12; background: #fff0dc; }
+    .pill.uat { color: #25518d; background: #e9f1ff; }
+    .pill.gate { color: #664b95; background: #f1eaff; }
+    .pill.p0 { color: #a52e2a; background: #ffe9e7; }
+    .pill.p1 { color: #8a4b00; background: #fff3d7; }
+    .pill.p2 { color: #4a5f5e; background: #eef3f1; }
+
+    .case { display: grid; grid-template-columns: 46px 1fr 150px 165px; gap: 14px; align-items: start; padding: 17px 22px; border-bottom: 1px solid var(--line-soft); }
+    .case:last-child { border-bottom: 0; }
+    .case-id { display: grid; place-items: center; min-width: 42px; height: 26px; border-radius: 8px; color: var(--teal-dark); background: #e3f4ed; font-size: 11px; font-weight: 850; letter-spacing: .02em; }
+    .case h3 { margin: 0 0 4px; font-size: 15px; line-height: 1.3; }
+    .case > div > p { margin: 0; color: var(--muted); font-size: 13px; }
+    .expected { margin-top: 8px; padding-left: 12px; border-left: 2px solid #c7e8dc; color: #3d5d5b; font-size: 12.5px; }
+    .auto { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+    .auto-label { color: var(--faint); font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .auto code { padding: 2px 7px; border-radius: 6px; background: #f0f6f4; color: var(--teal-dark); font-size: 11.5px; }
+    .meta-cell { display: flex; flex-wrap: wrap; gap: 5px; align-content: start; }
+    .status-cell select { width: 100%; margin-top: 6px; padding: 8px 7px; font-size: 12px; }
+    select.pass { color: #0d805d; border-color: #9edac4; background: #eefaf5; }
+    select.fail { color: #a52e2a; border-color: #efb2ad; background: #fff3f2; }
+    select.blocked { color: #965406; border-color: #f0c779; background: #fff8e8; }
+    select.na { color: #5a4a86; border-color: #c6bbe6; background: #f6f3ff; }
+    .notes label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 750; }
+    .notes textarea { width: 100%; min-height: 54px; resize: vertical; padding: 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: #fbfdfc; font-size: 12px; }
+    .empty { display: none; margin: 18px 0; padding: 40px; border: 1px dashed #bcd4cc; border-radius: var(--radius); text-align: center; color: var(--muted); background: rgba(255,255,255,.6); }
+    .empty.show { display: block; }
+
+    /* ---------- sign-off ---------- */
+    .signoff { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 6px; }
+    .sign-card { padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; background: #fbfdfc; }
+    .sign-card strong { display: block; font-size: 14px; }
+    .sign-card span { display: block; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+    .sign-card input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); font-size: 13px; }
+    .sign-card input + input { margin-top: 7px; }
+
+    .verdict { margin: 22px 0 10px; padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
+    .verdict-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .verdict-badge { padding: 9px 16px; border-radius: 99px; font-size: 14px; font-weight: 850; letter-spacing: .02em; }
+    .verdict-badge.go { color: #0c594c; background: #d8f5e9; }
+    .verdict-badge.nogo { color: #8c2420; background: #ffe4e1; }
+    .verdict-badge.pending { color: #7a5307; background: #fff3d7; }
+    .verdict ul { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 5px; color: var(--muted); font-size: 13.5px; }
+
+    .footer { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 26px 0 40px; color: var(--muted); font-size: 12px; }
+    .footer strong { color: var(--ink); }
+    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 20; max-width: 340px; padding: 12px 15px; border: 1px solid #9edac4; border-radius: 12px; color: #0c594c; background: #effbf5; box-shadow: var(--shadow); transform: translateY(120px); opacity: 0; transition: .25s; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    @media (max-width: 1040px) { .case { grid-template-columns: 46px 1fr 150px; } .notes { grid-column: 2 / -1; } }
+    @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) {
+      .wrap { width: min(100% - 24px, 1280px); }
+      .hero { padding-top: 34px; } .hero-row { display: block; } .stamp { margin-top: 20px; }
+      .group-head { display: block; } .group-meta { margin-top: 12px; }
+      .case { grid-template-columns: 44px 1fr; padding: 16px 14px; gap: 10px; }
+      .meta-cell, .status-cell, .notes { grid-column: 2; }
+      .split-summary { grid-template-columns: 1fr; }
+      .toolbar-inner { align-items: stretch; } .toolbar-inner select, .toolbar-inner .btn { flex: 1; }
+      .footer { display: block; }
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar, .btn, .search, .panel-dark, .notes, .toast, .jump { display: none !important; }
+      .wrap { width: 100%; } .hero { padding: 15px 0; } h1 { font-size: 30px; }
+      .dashboard { display: block; padding: 0 0 10px; } .panel { box-shadow: none; }
+      .ref { break-inside: avoid; box-shadow: none; } .ref-body { display: block !important; }
+      .group { break-inside: avoid; box-shadow: none; }
+      .case { grid-template-columns: 44px 1fr 140px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header class="hero wrap">
+    <div class="hero-row">
+      <div>
+        <div class="eyebrow">Bolt QR · release verification</div>
+        <h1>QA + UAT master test plan</h1>
+        <p class="lede">Two separate tracks over one system. The QA track proves the engine is correct, isolated, and operable. The UAT track proves a real restaurant can run a real service on it. Joint gates close the release.</p>
+      </div>
+      <div class="stamp">
+        <strong id="today">Loading</strong>
+        <span>QA lead: YAZAN · UAT lead: ALAA</span>
+      </div>
+    </div>
+    <nav class="jump">
+      <a href="#scope">Scope &amp; criteria</a>
+      <a href="#fixtures">Test data</a>
+      <a href="#matrix">Device matrix</a>
+      <a href="#defects">Defect SLA</a>
+      <a href="#automation">Automation</a>
+      <a href="#checklist">Test cases</a>
+      <a href="#signoff">Sign-off</a>
+    </nav>
+  </header>
+
+  <section class="toolbar">
+    <div class="wrap toolbar-inner">
+      <div class="search"><span aria-hidden="true">&#8981;</span><input id="search" type="search" placeholder="Search id, title, steps, or expected result…" aria-label="Search test cases"></div>
+      <select id="trackFilter" aria-label="Filter by track">
+        <option value="all">All tracks</option>
+        <option value="QA">QA track</option>
+        <option value="UAT">UAT track</option>
+        <option value="GATE">Release gates</option>
+      </select>
+      <select id="ownerFilter" aria-label="Filter by owner">
+        <option value="all">All owners</option>
+        <option value="ALAA">ALAA</option>
+        <option value="YAZAN">YAZAN</option>
+        <option value="JOINT">Joint</option>
+      </select>
+      <select id="priorityFilter" aria-label="Filter by priority">
+        <option value="all">All priorities</option>
+        <option value="P0">P0 only</option>
+        <option value="P1">P1 only</option>
+        <option value="P2">P2 only</option>
+      </select>
+      <select id="statusFilter" aria-label="Filter by status">
+        <option value="all">All statuses</option>
+        <option value="not-run">Not run</option>
+        <option value="pass">Pass</option>
+        <option value="fail">Fail</option>
+        <option value="blocked">Blocked</option>
+        <option value="na">N/A</option>
+      </select>
+      <button class="btn btn-quiet" id="exportJsonBtn" type="button">JSON</button>
+      <button class="btn btn-quiet" id="exportCsvBtn" type="button">CSV</button>
+      <button class="btn btn-quiet" id="printBtn" type="button">Print</button>
+      <button class="btn btn-danger" id="resetBtn" type="button">Reset</button>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="dashboard" aria-label="Plan progress">
+      <div class="panel">
+        <p class="card-kicker">Release gate progress</p>
+        <div class="progress-line"><strong id="progressText">0% executed</strong><span id="progressDetail">0 of 0 cases passed</span></div>
+        <div class="progress-track" aria-hidden="true"><div id="progressBar"></div></div>
+        <div class="stats">
+          <span class="stat"><i class="dot pass"></i><b id="passCount">0</b> pass</span>
+          <span class="stat"><i class="dot fail"></i><b id="failCount">0</b> fail</span>
+          <span class="stat"><i class="dot blocked"></i><b id="blockedCount">0</b> blocked</span>
+          <span class="stat"><i class="dot na"></i><b id="naCount">0</b> n/a</span>
+          <span class="stat"><i class="dot"></i><b id="notRunCount">0</b> not run</span>
+        </div>
+        <div class="split-summary" id="trackSummary"></div>
+        <div class="split-summary" id="ownerSummary"></div>
+      </div>
+      <aside class="panel panel-dark">
+        <p class="card-kicker">Before starting</p>
+        <h2>One clean, production-shaped environment</h2>
+        <p>QA and UAT run in parallel only when both lanes point at the same seeded fixtures and neither is mutating the other's tenant.</p>
+        <ul class="setup-list">
+          <li>Start API and web app; confirm health and a clean browser console.</li>
+          <li>Seed two isolated tenants, <strong>Alpha</strong> and <strong>Beta</strong>; test accounts only, never live data.</li>
+          <li>Have one active OWNER, MANAGER, STAFF, Super Admin, menu, promotion, table, and QR capability per tenant.</li>
+          <li>Run <code>npm run test:all</code> green before manual execution begins.</li>
+          <li>Record environment, browser/device, request ID, and repro steps on every failure.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ============ SCOPE & CRITERIA ============ -->
+    <details class="ref" id="scope" open>
+      <summary>
+        <div><h2>Scope, tracks, and entry / exit criteria</h2><p>What each track owns, and the conditions that open and close testing.</p></div>
+      </summary>
+      <div class="ref-body">
+        <div class="ref-grid">
+          <div>
+            <h3>QA track · YAZAN</h3>
+            <ul>
+              <li>Correctness of the engine: transactions, state machines, idempotency.</li>
+              <li>Security boundaries: tenant isolation, token classes, roles at the API.</li>
+              <li>Platform control: Super Admin, MFA, provisioning, recent-auth gates.</li>
+              <li>Operations: backup/restore, migrations, database roles, capacity, shutdown, telemetry, TLS.</li>
+              <li>Method: crafted requests, negative paths, forced failures, evidence from logs and request IDs.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>UAT track · ALAA</h3>
+            <ul>
+              <li>Can a customer scan, order, pay, and track without help?</li>
+              <li>Can an operator run a shift: menu, tables, QR, orders, analytics, pricing?</li>
+              <li>Does it work in Arabic and English, on a phone, with a keyboard, for a screen reader?</li>
+              <li>Business acceptance: real menu, real staff, real devices, peak-hour behaviour.</li>
+              <li>Method: run the product as the user would, no shortcuts, no dev tools.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Joint gates · both</h3>
+            <ul>
+              <li>Run together on one clean environment, same session.</li>
+              <li>End-to-end golden path, cross-tenant negative path, failure recovery.</li>
+              <li>Role matrix, billing limits, accessibility, rollback rehearsal.</li>
+              <li>Defect triage and the final Go / No-Go decision.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="ref-grid" style="margin-top:22px">
+          <div>
+            <h3>Entry criteria · testing may start</h3>
+            <ul>
+              <li>Release commit is tagged and frozen; no direct pushes during the run.</li>
+              <li><code>npm run lint</code>, <code>npm run typecheck</code>, <code>npm run build</code> all pass.</li>
+              <li><code>npm run test:all</code> is green on the release commit.</li>
+              <li>Alpha and Beta tenants seeded per the fixture sheet below.</li>
+              <li>Staging matches production shape: same Node range, same migrations applied.</li>
+              <li>Rollback command is documented and rehearsed at least once.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Exit criteria · release may ship</h3>
+            <ul>
+              <li>Every <strong>P0</strong> case is <strong>Pass</strong>. No exceptions, no waivers.</li>
+              <li>Every <strong>P1</strong> case is Pass, or has a written waiver signed by both leads.</li>
+              <li>Zero open tenant-isolation, authentication, or authorization defects at any severity.</li>
+              <li>Every joint gate case is Pass or explicitly waived in writing.</li>
+              <li>No case left in <strong>Blocked</strong> state.</li>
+              <li>Every Fail has a repro, an owner, a fix reference, and a retest result.</li>
+              <li>Both leads and the business owner have signed off below.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Suspension · stop the run</h3>
+            <ul>
+              <li>Any confirmed cross-tenant data leak: stop everything, fix, restart the affected sections.</li>
+              <li>Environment becomes unstable or the build changes mid-run.</li>
+              <li>More than three P0 failures in one section: the section is not ready for testing.</li>
+              <li>Fixtures are corrupted or the two lanes start colliding.</li>
+              <li>Resume only after a re-run of the entry criteria.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ============ FIXTURES ============ -->
+    <details class="ref" id="fixtures">
+      <summary>
+        <div><h2>Test data and fixture sheet</h2><p>Exactly what to seed before the run. Both lanes must agree on these values.</p></div>
+      </summary>
+      <div class="ref-body">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Fixture</th><th>Tenant Alpha</th><th>Tenant Beta</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>Restaurant</td><td>Alpha Grill</td><td>Beta Kitchen</td><td>Primary subject vs. isolation target</td></tr>
+              <tr><td>Owner</td><td>owner.alpha@test.local</td><td>owner.beta@test.local</td><td>Full-permission role</td></tr>
+              <tr><td>Manager</td><td>manager.alpha@test.local</td><td>not seeded</td><td>Mid-permission role matrix</td></tr>
+              <tr><td>Staff</td><td>staff.alpha@test.local</td><td>not seeded</td><td>Least-privilege role matrix</td></tr>
+              <tr><td>Super Admin</td><td colspan="2">platform.admin@test.local · MFA enrolled</td><td>Platform control boundary</td></tr>
+              <tr><td>Tables</td><td>T-01 … T-06 (one revoked, one rotated)</td><td>B-01, B-02</td><td>QR lifecycle and capacity limits</td></tr>
+              <tr><td>Menu</td><td>4 categories, 18 items, 3 with required modifiers, 2 unavailable</td><td>2 categories, 5 items</td><td>CRUD, filters, customization, cross-tenant IDs</td></tr>
+              <tr><td>Promotions</td><td>valid %, valid fixed, expired, min-spend, usage-limited (1 use)</td><td>1 valid %</td><td>Discount logic and promotion burn</td></tr>
+              <tr><td>Pricing</td><td>tax on, service fee on, payment fee on, tip presets</td><td>tax off, no fees</td><td>Totals, rounding, currency minor units</td></tr>
+              <tr><td>Subscription</td><td>active plan at table/item ceiling</td><td>expired plan</td><td>Limit enforcement and access gating</td></tr>
+              <tr><td>Orders</td><td>3 open on T-01, 1 served, 1 cancelled</td><td>1 open</td><td>Capacity ceiling and status progression</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ref-grid" style="margin-top:22px">
+          <div>
+            <h3>Rules</h3>
+            <ul>
+              <li>Never point either lane at production or at real customer data.</li>
+              <li>Re-seed between full passes; do not test on drifted fixtures.</li>
+              <li>Capture Beta's real record IDs before starting: the isolation cases need them.</li>
+              <li>Keep one table (T-06) untouched as a clean-state control.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Useful commands</h3>
+            <ul>
+              <li>Start API<code class="cmd">npm run server</code></li>
+              <li>Start web app<code class="cmd">npm run dev</code></li>
+              <li>Apply migrations<code class="cmd">npm run migrate:deploy</code></li>
+              <li>Verify tenant ownership<code class="cmd">npm run verify:tenant-ownership</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ============ DEVICE MATRIX ============ -->
+    <details class="ref" id="matrix">
+      <summary>
+        <div><h2>Browser and device coverage matrix</h2><p>The UAT track must complete the critical path on every row marked required.</p></div>
+      </summary>
+      <div class="ref-body">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Surface</th><th>Browser / device</th><th>Viewport</th><th>Coverage</th><th>Required</th></tr></thead>
+            <tbody>
+              <tr><td>Customer menu</td><td>iOS Safari, current major</td><td>390 × 844</td><td>Scan, order, track, Arabic RTL</td><td>Required</td></tr>
+              <tr><td>Customer menu</td><td>Android Chrome, current major</td><td>412 × 915</td><td>Scan, order, track, camera link</td><td>Required</td></tr>
+              <tr><td>Customer menu</td><td>Chromium desktop</td><td>1280 × 800</td><td>Full flow plus console check</td><td>Required</td></tr>
+              <tr><td>Admin workspace</td><td>Chromium desktop</td><td>1440 × 900</td><td>All tabs, CRUD, analytics, export</td><td>Required</td></tr>
+              <tr><td>Admin workspace</td><td>Tablet, kitchen-facing</td><td>768 × 1024</td><td>Orders board during a live shift</td><td>Required</td></tr>
+              <tr><td>Admin workspace</td><td>Android Chrome phone</td><td>412 × 915</td><td>Order status updates on the floor</td><td>Required</td></tr>
+              <tr><td>Super Admin</td><td>Chromium desktop</td><td>1280 × 800</td><td>Login, MFA, directory, provisioning</td><td>Required</td></tr>
+              <tr><td>Super Admin</td><td>Mobile viewport</td><td>390 × 844</td><td>Login, MFA, dialogs, accessibility</td><td>Best effort</td></tr>
+              <tr><td>Any</td><td>Firefox desktop</td><td>1280 × 800</td><td>Smoke of the golden path</td><td>Best effort</td></tr>
+              <tr><td>Any</td><td>Narrow phone</td><td>320 × 568</td><td>No clipped CTA, no overlap</td><td>Required</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ref-grid" style="margin-top:22px">
+          <div>
+            <h3>Also required per surface</h3>
+            <ul>
+              <li>Both themes: light and dark.</li>
+              <li>Both languages: English LTR and Arabic RTL.</li>
+              <li>200% zoom without loss of critical actions.</li>
+              <li>Reduced-motion preference honoured.</li>
+              <li>Keyboard-only traversal of every critical path.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Real-device notes</h3>
+            <ul>
+              <li>Use the phone's native camera to open the QR, not a pasted URL.</li>
+              <li>Test backgrounding and returning to the tracking screen.</li>
+              <li>Test airplane mode on and off during an active order.</li>
+              <li>Confirm notification sound behaviour with the device muted and unmuted.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ============ DEFECT SLA ============ -->
+    <details class="ref" id="defects">
+      <summary>
+        <div><h2>Defect severity, SLA, and reporting format</h2><p>How a failure is classified, how fast it must be answered, and what a valid report contains.</p></div>
+      </summary>
+      <div class="ref-body">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Severity</th><th>Definition</th><th>Examples</th><th>Response</th><th>Blocks release</th></tr></thead>
+            <tbody>
+              <tr><td>S1 · Critical</td><td>Data leak, money wrong, or the core journey is impossible.</td><td>Cross-tenant read, duplicate order charged, checkout dead.</td><td>Stop the run. Fix same day.</td><td>Always</td></tr>
+              <tr><td>S2 · Major</td><td>A P0 journey works only with a workaround, or a role boundary is loose in the UI.</td><td>Promotion applies twice then corrects, staff sees an owner-only button.</td><td>Fix before ship. 24h.</td><td>Always</td></tr>
+              <tr><td>S3 · Moderate</td><td>A secondary feature is broken; the main journey survives.</td><td>Analytics export mislabels a column, filter keeps stale state.</td><td>Fix or written waiver. 48h.</td><td>Waiver only</td></tr>
+              <tr><td>S4 · Minor</td><td>Cosmetic, copy, or polish with no functional impact.</td><td>Untranslated tooltip, 2px misalignment at 320px.</td><td>Backlog.</td><td>No</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ref-grid" style="margin-top:22px">
+          <div>
+            <h3>A defect report must contain</h3>
+            <ul>
+              <li>Case ID from this plan, plus severity and track.</li>
+              <li>Environment, build/commit, browser and device.</li>
+              <li>Numbered repro steps starting from a clean session.</li>
+              <li>Expected result vs. actual result, stated separately.</li>
+              <li>Request ID, screenshot or recording, relevant log excerpt.</li>
+              <li>Tenant and account used, and whether it reproduces on the other tenant.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Retest rule</h3>
+            <ul>
+              <li>A fix is not accepted until the original case is re-run end to end.</li>
+              <li>Any S1 or S2 fix also triggers a re-run of its whole section.</li>
+              <li>A fix that touches tenant scoping, tokens, or totals re-triggers the joint gates.</li>
+              <li>Record the retest result in the case note, do not overwrite the failure history.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Waiver rule</h3>
+            <ul>
+              <li>Only S3 and S4, and only P1 or P2 cases, can be waived.</li>
+              <li>A waiver needs both leads plus the business owner.</li>
+              <li>It must state the risk, the affected users, and the fix date.</li>
+              <li>Write it in the case note prefixed <code>WAIVED:</code> so it exports.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ============ AUTOMATION ============ -->
+    <details class="ref" id="automation">
+      <summary>
+        <div><h2>Automated coverage and how it maps to this plan</h2><p>Run these first. Cases with an automation reference need manual work only for what the suite cannot see.</p></div>
+      </summary>
+      <div class="ref-body">
+        <div class="ref-grid">
+          <div>
+            <h3>Gate commands</h3>
+            <ul>
+              <li>Static gates<code class="cmd">npm run lint &amp;&amp; npm run typecheck</code></li>
+              <li>Backend unit suite<code class="cmd">npm run test:unit</code></li>
+              <li>Frontend component suite<code class="cmd">npm run test:frontend</code></li>
+              <li>Integration suite<code class="cmd">npm run test:integration</code></li>
+              <li>End-to-end<code class="cmd">npm run test:e2e</code></li>
+              <li>Golden journey<code class="cmd">npm run test:e2e:golden</code></li>
+              <li>Everything<code class="cmd">npm run test:all</code></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Operational verifications</h3>
+            <ul>
+              <li>Tenant ownership<code class="cmd">npm run verify:tenant-ownership</code></li>
+              <li>Database roles<code class="cmd">npm run verify:database-roles</code></li>
+              <li>Query plans<code class="cmd">npm run verify:query-plans</code></li>
+              <li>Capacity<code class="cmd">npm run test:capacity</code></li>
+              <li>Backup and restore<code class="cmd">ops/bin/backup-pilot.sh · ops/bin/restore-pilot.sh</code></li>
+              <li>Release and rollback<code class="cmd">ops/bin/deploy-release.sh · ops/bin/rollback-release.sh</code></li>
+            </ul>
+          </div>
+          <div>
+            <h3>What automation does not cover</h3>
+            <ul>
+              <li>Real camera scanning from a physical phone.</li>
+              <li>Printed QR legibility at actual print size.</li>
+              <li>Arabic RTL visual correctness and copy quality.</li>
+              <li>Screen reader announcement quality and usefulness.</li>
+              <li>Whether a busy operator can actually run a shift on it.</li>
+              <li>Restore rehearsal timing and rollback confidence.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <main id="checklist"></main>
+    <div class="empty" id="emptyState">No cases match the current filters. Try a different track, owner, priority, status, or search term.</div>
+
+    <!-- ============ VERDICT ============ -->
+    <section class="verdict" id="verdict">
+      <p class="card-kicker">Release decision</p>
+      <div class="verdict-line">
+        <span class="verdict-badge pending" id="verdictBadge">Pending execution</span>
+        <span id="verdictDetail" style="color:var(--muted);font-size:13.5px">Run the plan to compute a verdict.</span>
+      </div>
+      <ul id="verdictReasons"></ul>
+    </section>
+
+    <!-- ============ SIGN-OFF ============ -->
+    <details class="ref" id="signoff" open>
+      <summary>
+        <div><h2>Sign-off</h2><p>The release is not approved until every row below is filled and the verdict above reads Go.</p></div>
+      </summary>
+      <div class="ref-body">
+        <div class="signoff">
+          <div class="sign-card">
+            <strong>QA lead</strong><span>Engineering correctness, security, operations</span>
+            <input data-sign="qa-name" type="text" placeholder="Name" aria-label="QA lead name">
+            <input data-sign="qa-date" type="date" aria-label="QA lead sign-off date">
+          </div>
+          <div class="sign-card">
+            <strong>UAT lead</strong><span>Customer and operator acceptance</span>
+            <input data-sign="uat-name" type="text" placeholder="Name" aria-label="UAT lead name">
+            <input data-sign="uat-date" type="date" aria-label="UAT lead sign-off date">
+          </div>
+          <div class="sign-card">
+            <strong>Business owner</strong><span>Accepts the release for real service</span>
+            <input data-sign="biz-name" type="text" placeholder="Name" aria-label="Business owner name">
+            <input data-sign="biz-date" type="date" aria-label="Business owner sign-off date">
+          </div>
+          <div class="sign-card">
+            <strong>Release build</strong><span>Commit or tag under test</span>
+            <input data-sign="build" type="text" placeholder="e.g. v1.0.0 / 57e220e" aria-label="Release build">
+            <input data-sign="env" type="text" placeholder="Environment (staging URL)" aria-label="Environment">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="footer">
+      <span><strong>Release rule:</strong> every P0 passed, zero open isolation or auth defects, every joint gate passed or waived in writing, three signatures present.</span>
+      <span>Progress is saved in this browser only. Export before switching machines.</span>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ============================================================
+       CASE MODEL
+       id     unique case id; prefix decides the owner (A/Y/J)
+       track  QA | UAT | GATE
+       pri    P0 | P1 | P2
+       auto   automated coverage reference, or null
+       ============================================================ */
+    const c = (id, track, pri, title, steps, expected, auto) =>
+      ({ id, track, pri, title, steps, expected, auto: auto || null });
+
+    const sections = [
+      {
+        group: '01 · Environment and smoke',
+        desc: 'Prove the build, runtime, routes, and baseline observability are usable before any deeper testing starts.',
+        tests: [
+          c('Y-01','QA','P0','Local startup and health','Run the API and web app from the documented commands; open the app and the health endpoint.','Both processes start without fatal errors; health returns success; no unexpected migration or CORS failure.','tests/runtimeConfig.test.js'),
+          c('Y-02','QA','P0','Production build smoke','Run lint, typecheck, tests, and the production build on the release commit.','All release commands complete successfully; the generated build serves the app; no source maps or secrets are exposed.','npm run lint · typecheck · build'),
+          c('Y-03','QA','P1','Route inventory','Open public menu, restaurant login, activation, admin workspace, and Super Admin login URLs directly and via refresh.','Each route resolves to the correct screen; lazy loading has a visible fallback; unknown routes end in a safe result.',null),
+          c('Y-04','QA','P1','Request correlation and safe errors','Trigger a controlled 400, 401, 403, 404, 409, 429, and 500 response.','A stable error code and request ID are available where expected; server stack, SQL, tokens, and secrets are never exposed.','tests/serverFoundation.test.js'),
+          c('Y-05','QA','P1','Clean browser baseline','Run a fresh browser profile through login and the main customer and admin flows.','No uncaught console errors, hydration warnings, broken image requests, or repeated failed network calls.',null),
+          c('Y-35','QA','P0','Automated regression gate','Run the unit, frontend, integration, and end-to-end suites on the release commit.','Every suite is green; no test is skipped without a written reason; failures are triaged before manual execution begins.','npm run test:all · test:integration · test:e2e:golden'),
+          c('Y-36','QA','P1','Observability verification','Run the observability verification script and confirm dashboards and alerts receive data.','Health, error, and latency signals arrive; alert routing is configured; no verification step reports a missing channel.','ops/bin/verify-observability.js')
+        ]
+      },
+      {
+        group: '02 · Customer QR and menu journey',
+        desc: 'UAT owns what the customer sees and feels. QA verifies the capability, session, and server boundary underneath it.',
+        tests: [
+          c('J-01','GATE','P0','Scan QR to correct restaurant and table','Open a valid table QR in a fresh mobile browser and inspect the URL, restaurant identity, table code, and menu.','The customer lands at the intended restaurant and table only; no restaurant identity is trusted from client state.','tests/e2e/table-capability-order.spec.ts'),
+          c('A-01','UAT','P1','Dining mode landing','From a valid public entry, select Dine in and inspect the welcome, mode selection, and back and reload behaviour.','Dine-in proceeds into the menu; copy, touch targets, focus, and loading states are clear; refresh does not corrupt the session.',null),
+          c('A-02','UAT','P1','Menu loading, empty, and error states','Test a populated menu, an empty category, a slow response, offline, and an API error.','Loading is intentional; the empty state explains what happened; retry works; raw backend errors are never shown.',null),
+          c('A-03','UAT','P1','Category filters and search','Switch categories, return to all, search for an item, and clear the search.','Only matching items display; the state is keyboard accessible; no stale category or search result remains.','tests/e2e/digital-menu-category-filter.spec.ts'),
+          c('A-04','UAT','P0','Item customization','Open an item with modifiers, select required and optional choices, add a note, and add it to the cart.','Validation prevents incomplete required choices; selected options and the note appear correctly in the cart; the price reflects the selection.','src/components/ui/MenuItemCustomizer.test.tsx'),
+          c('A-05','UAT','P0','Cart editing','Change quantity, remove an item, edit a customization, empty the cart, and reopen it.','Quantities, notes, options, subtotal, and totals stay consistent; no negative quantity or ghost item remains.',null),
+          c('A-06','UAT','P1','Language and RTL on the customer menu','Run the same menu and cart flow in Arabic and English; switch language mid-flow and inspect the RTL layout.','Translation keys are present; Arabic is genuinely right-to-left; no clipped, reversed, overlapping, or untranslated critical control.',null),
+          c('A-07','UAT','P0','Takeaway policy','Select Take away from the landing screen and attempt an order if the entry is visible.','Release 1 behaviour is explicit and consistent: takeaway is unavailable and returns the approved disabled state without creating an order.','tests/publicOrderAvailability.test.js'),
+          c('Y-06','QA','P0','Invalid, expired, rotated, and revoked QR','Try malformed, unknown, expired, and previously valid capabilities after rotation and revocation.','Exchange and order fail closed with a stable safe error; another table or tenant cannot be reached; no order mutation occurs.','tests/tableCapability.test.js'),
+          c('Y-07','QA','P0','Capability TTL and table binding','Exchange a valid QR session, use an expired session, and try the session against another table and another tenant.','The session is short-lived, table-bound, and tenant-bound; expired or mismatched use is rejected.','tests/tenantSession.test.js')
+        ]
+      },
+      {
+        group: '03 · Checkout, totals, and order tracking',
+        desc: 'Exercise the money and the state machine from cart to customer confirmation and back to operator status.',
+        tests: [
+          c('A-08','UAT','P0','Promotion and tip flow','Apply valid, invalid, expired, minimum-spend, usage-limited, percentage, and fixed promotions; add and remove a tip.','Only eligible promotions apply; usage is consumed once; tip and discount calculations are understandable and reversible.',null),
+          c('A-09','UAT','P0','Tax, fees, currency, and rounding','Place carts at low, high, fractional, and zero-fee values across the configured currency, tax, and fee settings.','Displayed totals match the server-authoritative result; currency formatting, minor units, tax, fees, discount, and rounding are correct.',null),
+          c('A-10','UAT','P0','Checkout validation','Submit with an empty cart, an invalid note or quantity, missing required data, and over-limit line items.','Submit is blocked with an actionable message; no partial order, promotion burn, or table mutation occurs.',null),
+          c('A-11','UAT','P0','Single successful order','Submit a valid dine-in order using cash and then the card-machine variant.','Exactly one order is created; the confirmation shows the correct number, items, total, and table; the payment method is retained.',null),
+          c('A-12','UAT','P0','Double-click and retry-safe submit','Double-click submit, then replay the same request and idempotency key after a simulated timeout.','The UI prevents an accidental duplicate action; retry returns the original result; exactly one order and one side effect exist.','tests/orderIdempotency.test.js'),
+          c('Y-08','QA','P0','Order transaction atomicity','Force a validation, capacity, promotion, or database failure during order creation.','No partial order, idempotency row, promotion usage, table state, or socket event remains after rejection.','tests/orderIdempotency.test.js'),
+          c('Y-09','QA','P0','Open-order capacity','Create three open orders for one table, then submit a fourth; close one and retry.','The fourth is rejected with the approved limit code; no mutation occurs; retry after closing succeeds.','tests/orderCapacity.test.js'),
+          c('A-13','UAT','P0','Confirmation and tracking recovery','Refresh the confirmation, close and reopen the tab, change visibility, go offline and online, and reconnect the socket.','Authoritative order status is recovered; the UI distinguishes pending, reconnecting, offline, expired, and server-error states.','src/components/ui/OrderConfirmation.test.tsx'),
+          c('A-14','UAT','P0','Order status progression','Move an order through pending, preparing, ready, and served, verifying both the customer and admin views.','Only valid transitions are allowed; both views converge; timestamps and status labels are correct and accessible.','src/components/orders/OrderingStatusControl.test.tsx'),
+          c('Y-10','QA','P0','Order transition authorization','Attempt invalid transitions, repeated transitions, stale-version updates, and another tenant’s order update.','The server rejects invalid, stale, and cross-tenant writes safely; a valid transition is idempotent and auditable.','tests/orderTransitions.test.js'),
+          c('A-15','UAT','P1','Realtime order notifications','With two admin tabs or devices open, create an order and change its status.','New orders and status updates appear once in the right restaurant; the sound preference works; reconnect refetches truth.','src/services/orderRealtime.test.ts'),
+          c('Y-11','QA','P0','Realtime authorization and replay','Join the admin socket as a correct and an incorrect user; replay old, duplicate, and out-of-order events.','Only authorized tenant events arrive; stale or duplicate events do not regress state or create duplicate effects.','tests/orderRealtime.test.js')
+        ]
+      },
+      {
+        group: '04 · Restaurant admin workspace',
+        desc: 'UAT verifies the operator experience across every authenticated tab. QA checks API ownership and limits behind it.',
+        tests: [
+          c('A-16','UAT','P0','Restaurant login and logout','Log in with valid, invalid, inactive, and expired-session credentials; log out and use browser back.','Messages are clear; protected content is never briefly exposed; logout clears the session and back navigation cannot restore access.','src/components/Auth/AuthForm.test.tsx'),
+          c('A-17','UAT','P1','Admin navigation and persistence','Open QR Studio, Menu, Orders, Tables, Analytics, Team, and Admin; reload each route and tab.','The correct tab loads; last-tab persistence is scoped to the user; the lazy fallback works; errors stay contained to the affected area.',null),
+          c('A-18','UAT','P0','QR Studio generation and download','Generate a QR for each table, preview it, download and print it, then scan it from a phone.','The QR encodes the capability-backed URL, identifies the correct table, and remains scannable at printed size.',null),
+          c('A-19','UAT','P0','Table management','Create and edit table, capacity, code, and status; attempt duplicate and invalid values; rotate and revoke the capability.','Validation is clear; limits are enforced; status changes update correctly; the QR lifecycle is visible and safe.','src/components/tables/TableManagement.test.tsx'),
+          c('A-20','UAT','P0','Menu CRUD','Create, edit, and delete categories and items; change price, description, image, modifiers, availability, and ordering.','Changes persist after reload, appear in the public menu, validate required fields, and respect subscription limits.',null),
+          c('A-21','UAT','P1','Menu category filter regression','Create multiple categories and filter the admin menu repeatedly, including the no-result state.','The filter returns the correct items every time and never uses a stale or type-mismatched category ID.','tests/e2e/digital-menu-category-filter.spec.ts'),
+          c('A-22','UAT','P1','Uploads and image failures','Upload a valid image, an oversized or invalid file, a slow upload, a failed upload, then replace and remove an image.','Progress, error, and retry states are clear; ownership is enforced; a failed upload never falsely reports success.',null),
+          c('A-23','UAT','P0','Order management controls','Filter orders, inspect details, customizations, and notes, update valid statuses, and test empty, loading, and error states.','The operator sees only their tenant’s data; actions are role-appropriate; details match the customer order and totals.','src/components/orders/OrderManagement.test.tsx'),
+          c('A-24','UAT','P1','Analytics and export','Change the date range, inspect metrics and charts, test no data, maximum range, pagination, and export to PDF.','Aggregates match known orders; date boundaries and time zone are correct; bounded range and export errors are clear.','src/components/Analytics.test.tsx'),
+          c('A-25','UAT','P0','Pricing settings','Edit currency, tax, service fee, payment fee, promotion, and tip settings; verify the preview and the public checkout.','Settings save once, survive reload, and affect authoritative totals without float drift or stale UI.',null),
+          c('A-26','UAT','P1','Theme and preferences','Switch light, dark, and system theme, colors, language, notification sound and preset; reload and test a failed save.','Applied values are visible and persisted; a failed save shows a warning and never claims success; audio obeys the user choice.','src/components/orders/KDSSettings.test.tsx')
+        ]
+      },
+      {
+        group: '05 · Team, roles, tenant boundary, and subscriptions',
+        desc: 'Verify least privilege, and that Alpha data can never be read or changed through a Beta context.',
+        tests: [
+          c('Y-12','QA','P0','Owner and member provisioning','As OWNER, invite or add a member, set a role, activate or suspend, and remove or revoke access as supported.','Membership changes are tenant-scoped, auditable, and reflected on the next session; owner-only actions require recent auth where required.','src/components/team/TeamManagement.test.tsx'),
+          c('A-27','UAT','P0','Role-based UI matrix','Open the workspace as OWNER, MANAGER, and STAFF and compare navigation, controls, and disabled states.','OWNER sees all allowed controls; MANAGER cannot perform owner-only actions; STAFF never sees unauthorized Team or admin controls.','src/components/admin/UserManagement.test.tsx'),
+          c('Y-13','QA','P0','Role-based API matrix','Call protected read and write endpoints as each role, including direct URLs and crafted request bodies.','The backend, not only the UI, enforces the same permissions with safe 401 and 403 responses and no side effects.','tests/accessControl.test.js'),
+          c('A-28','UAT','P0','Organization switcher behaviour','Use an account with multiple memberships; switch active organization or branch; reload and inspect every tab.','Only permitted organizations appear; data, labels, and sockets switch together; prior tenant data is never briefly shown.',null),
+          c('Y-14','QA','P0','Cross-tenant read isolation','Using Alpha credentials and Beta IDs, request menu, table, order, analytics, member, promotion, upload, and Super Admin routes.','Every unauthorized read fails closed or returns an approved non-disclosing response; no Beta data leaks.','tests/tenantAccess.test.js · tests/integration/tenantAccess.integration.test.js'),
+          c('Y-15','QA','P0','Cross-tenant write and delete isolation','Attempt to update, delete, or attach Alpha records using Beta IDs across catalog, tables, orders, promotions, and modifiers.','Every mutation is denied; the target tenant remains unchanged; logs contain a request ID but never a secret.','tests/tenantOwnershipVerification.test.js'),
+          c('Y-16','QA','P0','Subscription access states','Test active, future and expired trial, active with an end date, past-due, cancelled, and expired subscription states.','Access and upgrade gating match policy; expired tenants cannot create orders or bypass limits; messaging is actionable.','tests/subscriptionPolicy.test.js'),
+          c('A-29','UAT','P1','Plan limits and upgrade modal','Fill tables, menu items, and staff to each plan ceiling; try one extra; open the upgrade flow.','The correct limit is shown; the over-limit action is blocked without partial data; the upgrade modal is accurate and closable.',null),
+          c('Y-17','QA','P0','Subscription ceiling enforcement','Bypass the UI and POST one item, table, and member beyond the plan limit; test invalid plan and status input.','The server enforces immutable plan limits and rejects invalid input; no over-limit row is created.','tests/subscriptionPolicy.test.js')
+        ]
+      },
+      {
+        group: '06 · Super Admin and onboarding',
+        desc: 'Validate the separate platform-control boundary, MFA, the invitation lifecycle, and provisioning safety.',
+        tests: [
+          c('Y-18','QA','P0','Super Admin login isolation','Open the Super Admin login with restaurant credentials, no credentials, and invalid credentials.','A restaurant bearer or session is never accepted as Super Admin auth; protected platform data stays hidden.','tests/superAdminAuth.test.js'),
+          c('Y-19','QA','P0','MFA enrollment and verification','Complete first-login TOTP enrollment, then a valid code, an invalid code, a replayed code, and recovery and error states.','MFA is mandatory per policy; secrets are never returned or logged; successful verification establishes only the intended session.','tests/superAdminAuth.test.js'),
+          c('Y-20','QA','P0','MFA lockout and session expiry','Exceed the failed-attempt limit, wait out the lock period in test mode, expire a session, and revoke a session.','Lockout and retry metadata are safe; expired or revoked sessions cannot read or write; login can recover as designed.','tests/superAdminAuth.test.js'),
+          c('A-30','UAT','P1','Super Admin responsive and accessible','Use a keyboard and a mobile viewport through login, MFA, the restaurant list, filters, and dialogs.','Focus order, labels, errors, contrast, zoom, and touch behaviour are usable with no clipped content.','src/components/super-admin/SuperAdminLogin.test.tsx'),
+          c('Y-21','QA','P0','Restaurant provisioning invitation','Provision a restaurant with valid and invalid plan and trial inputs; send an invitation; use it once, twice, expired, and tampered.','Creation is atomic; the invitation is single-use, expiring, non-enumerating, and never logged in plaintext.','tests/restaurantInvitations.test.js'),
+          c('A-31','UAT','P0','Owner activation journey','Open a valid invitation, set owner credentials, activate, sign in, and refresh the newly provisioned workspace.','Activation copy and validation are clear; the owner lands in the correct tenant with the expected starter data and no token leakage.','src/components/Auth/ActivationForm.test.tsx'),
+          c('Y-22','QA','P0','Platform write recent-auth gate','Let recent Super Admin auth age out, attempt sensitive platform writes, then repeat after re-auth.','Sensitive writes require recent authentication; read-only access follows policy; a successful re-auth unlocks only the intended action.','tests/superAdminAuth.test.js'),
+          c('Y-23','QA','P1','Super Admin directory pagination and search','Search and filter a large restaurant list, move through cursor pages, rapidly change filters, and inspect stale-response handling.','Results are bounded, deterministic, tenant-safe, and latest-filter-wins; no unbounded payload or stale overwrite occurs.','tests/pagination.test.js')
+        ]
+      },
+      {
+        group: '07 · Accessibility, visual, and device coverage',
+        desc: 'The UAT browser and device pass across public and authenticated surfaces in both supported languages.',
+        tests: [
+          c('A-32','UAT','P0','Keyboard-only critical paths','With a keyboard only, complete login, the QR menu, customization, cart, submit, admin navigation, and a dialog.','Every action is reachable and visible; focus is never trapped incorrectly; Escape and backdrop behaviour are correct.','tests/e2e/auth-form-accessibility.spec.ts'),
+          c('A-33','UAT','P1','Screen reader semantics','Audit headings, landmarks, labels, live order updates, errors, dialogs, buttons, and status controls.','Names, roles, and states are announced meaningfully; dynamic order updates are neither silent nor excessively noisy.','tests/e2e/customer-menu-accessibility.spec.ts'),
+          c('A-34','UAT','P1','Contrast, zoom, and reduced motion','Check light and dark themes at 200% zoom and with the reduced-motion preference enabled.','Text and controls meet contrast expectations; no horizontal loss of critical actions; motion is reduced respectfully.','tests/e2e/admin-accessibility.spec.ts'),
+          c('A-35','UAT','P0','Responsive desktop, tablet, and mobile','Test Chromium desktop, tablet width, a Pixel-sized viewport, and a narrow phone across the core flows.','No overlap or clipped CTA; menus, drawers, tables, charts, QR preview, and dialogs remain usable.','src/components/common/ResponsiveLayout.test.tsx'),
+          c('A-36','UAT','P1','Real-device browser smoke','Repeat scan, order, and tracking on a real iOS Safari and Android Chrome device.','The camera QR link, viewport, keyboard, background and foreground, online recovery, and audio behaviour all work on target devices.',null),
+          c('A-37','UAT','P0','Error boundaries and recovery','Force render and API errors separately in the customer menu and the admin workspace; use retry, home, and logout recovery.','The affected area shows a useful fallback without taking down the other area or leaking diagnostics.','src/components/common/ErrorBoundary.test.tsx'),
+          c('A-38','UAT','P1','Localization completeness','Compare English and Arabic labels, dates, numbers, currencies, errors, toasts, PDFs, and empty states.','No raw translation key or mixed language remains; pluralization, numerals, direction, and currency are correct.',null)
+        ]
+      },
+      {
+        group: '08 · Business acceptance with real users',
+        desc: 'The part automation and synthetic fixtures can never answer: can an actual restaurant run an actual service on this.',
+        tests: [
+          c('A-39','UAT','P0','Real menu walkthrough with the owner','Load the restaurant’s real menu, prices, categories, and modifiers, then walk the owner through the public result.','The owner confirms the menu is accurate and presentable; every correction is captured; nothing about the real menu is unsupported.',null),
+          c('A-40','UAT','P0','Floor and kitchen staff acceptance','Have real staff run a simulated shift on their own devices: receive orders, update status, handle a change and a cancellation.','Staff complete every task without coaching; the orders board is readable at working distance; no step forces a workaround.',null),
+          c('A-41','UAT','P1','Peak-hour concurrent operation','Run several tables ordering at once while two or more staff update statuses from different devices.','No lost or duplicated order; status stays consistent across devices; the interface remains responsive under simultaneous use.',null),
+          c('A-42','UAT','P1','Printed QR in the real setting','Print the table QR at production size and material, place it on the table, and scan it under the venue’s actual lighting.','The code scans on the first attempt from a normal seated distance; the printed placement and instructions are understandable.',null),
+          c('A-43','UAT','P1','Customer-side first-time usability','Give an unbriefed person a table QR and observe without helping until they either order or give up.','They reach a completed order unaided; every point of hesitation is recorded; no blocker requires staff intervention.',null)
+        ]
+      },
+      {
+        group: '09 · Security, resilience, performance, and operations',
+        desc: 'QA owns the technical gates. UAT confirms the user-facing recovery behaviour that follows each one.',
+        tests: [
+          c('Y-24','QA','P0','Token class separation','Try restaurant, order-tracking, table-session, MFA challenge, and Super Admin tokens against the wrong endpoint and class.','Issuer, audience, purpose, subject, and expiry checks fail closed; no cross-context privilege is granted.','tests/tokenPolicy.test.js'),
+          c('Y-25','QA','P0','Rate limits and abuse controls','Exercise exchange, checkout, login, tracking, and public endpoints from repeated IP, session, and capability contexts.','Limits are bounded and fair; responses include safe retry metadata; normal traffic recovers after expiry.','tests/serverFoundation.test.js'),
+          c('Y-26','QA','P0','Input and output safety','Send oversized payloads, invalid IDs, HTML and script strings, malformed JSON, path-like filenames, and unexpected enum values.','Validation rejects safely; output is escaped; no stack, SQL, or secret disclosure; logs remain structured and bounded.','tests/serverFoundation.test.js'),
+          c('Y-27','QA','P0','Backup and restore rehearsal','Create an encrypted off-VPS backup, verify freshness and integrity, restore into an isolated target, and measure elapsed time.','Restore is non-destructive to the source; secrets and keys are handled correctly; RPO and RTO evidence and rollback steps are recorded.','tests/backupOperations.test.js · ops/bin/restore-pilot.sh'),
+          c('Y-28','QA','P0','Migration rehearsal and rollback guard','Apply migrations to a production-shaped copy, verify ownership counts, rerun idempotent steps, and test the documented guard.','The expand, backfill, and verify sequence is repeatable; unresolved or cross-tenant data stops enforcement; no destructive rollback is implied.','tests/integration/tenantMigrationRehearsal.integration.test.js'),
+          c('Y-29','QA','P0','Database role boundary','Run the app with the intended least-privilege runtime role, and separately run migrations with the owner role.','The runtime cannot perform migration or DDL operations; migrations still work with the owner role; connection strings are never logged.','tests/integration/databaseRoles.integration.test.js'),
+          c('Y-30','QA','P1','Performance and capacity gate','Run the documented mixed API capacity test and inspect pagination and query-plan evidence on representative data.','Latency and error thresholds pass; page sizes are bounded; indexed paths avoid unsafe sequential scans; no memory growth is observed.','tests/performanceOperations.test.js · npm run test:capacity'),
+          c('Y-31','QA','P0','Graceful shutdown and restart','Send a termination or restart while requests and sockets are active, then reload the customer and admin sessions.','Connections drain safely; no corrupt or duplicate order; the app recovers and refetches authoritative state.','tests/pilotInfrastructure.test.js'),
+          c('Y-32','QA','P0','Telemetry and redaction','Trigger frontend and backend errors, then inspect the telemetry payloads and structured logs.','Release, route, and request ID context is present; tokens, notes, full bodies, MFA secrets, and payment-sensitive data are absent.','tests/telemetry.test.js · src/telemetry.test.ts'),
+          c('Y-33','QA','P0','TLS, headers, and CORS','Run the hosted app over HTTPS and inspect security headers, the origin allowlist, cookies, and preflight behaviour.','Only approved origins work; the secure HttpOnly and SameSite policy is correct; no mixed content or permissive wildcard remains.',null),
+          c('Y-34','QA','P1','Dependency and artifact gate','Run a production-only audit, inspect the bundle output, and compare the lockfile and runtime against the supported Node range.','No known release-blocking vulnerability; secrets absent; the supported Node version and a reproducible lockfile are used.','npm audit --omit=dev · engines: node >=20 <23'),
+          c('Y-37','QA','P0','Deploy and rollback rehearsal','Deploy the release to a production-shaped target, then execute the documented rollback and verify the restored state.','Deployment is repeatable and observable; rollback returns the system to the prior working release without data loss; timings are recorded.','ops/bin/deploy-release.sh · ops/bin/rollback-release.sh')
+        ]
+      },
+      {
+        group: '10 · Joint end-to-end release gates',
+        desc: 'Both leads run these together on the same clean environment and sign off only with evidence attached.',
+        tests: [
+          c('J-02','GATE','P0','Golden happy path','Super Admin provisions Alpha, the owner activates, admin creates table, menu, and QR, the customer scans and orders, admin progresses, customer tracks.','The complete journey works with authoritative totals and status, correct tenant identity, and no console or network errors.','tests/e2e-golden/golden-order-journey.spec.ts'),
+          c('J-03','GATE','P0','Tenant-negative golden path','With Alpha and Beta both available, attempt every practical cross-tenant route, ID, QR, socket, and browser-session crossover.','All attempts fail closed; neither the UI nor the API exposes or changes the other tenant.','tests/integration/tenantAccess.integration.test.js'),
+          c('J-04','GATE','P0','Failure-recovery golden path','During a valid order, simulate a timeout, a refresh, offline, a socket disconnect, a server restart, and a status update.','The customer sees one order and the admin sees one order; recovery converges to server truth without duplicate side effects.',null),
+          c('J-05','GATE','P0','Role-release matrix','Run the golden path as OWNER, MANAGER, STAFF, and Super Admin wherever each should be involved.','Each role can do exactly what policy allows; forbidden controls and endpoints are denied consistently.',null),
+          c('J-06','GATE','P0','Billing and limits release gate','Exercise plan ceilings, expired access, upgrade prompts, pricing changes, and existing orders in one run.','Limits and subscription status are enforced without corrupting existing data or altering completed order totals.',null),
+          c('J-07','GATE','P0','Accessibility release gate','Run the critical happy path in English LTR and Arabic RTL using a keyboard plus a mobile viewport.','The core journey is operable, understandable, and visually intact in both language directions.',null),
+          c('J-08','GATE','P0','Evidence and defect triage','For every failed or blocked case, attach the repro, expected and actual, environment, severity, and request ID, then review jointly.','No ambiguous failure remains; P0 and P1 defects have owners and retest criteria; approved waivers are documented.',null),
+          c('J-09','GATE','P0','Go / No-Go decision','Review the verdict panel, the open defect list, every waiver, and the rollback readiness together with the business owner.','A recorded decision exists with named signatures; if No-Go, the blocking list and the retest plan are written down before the meeting ends.',null)
+        ]
+      }
+    ];
+
+    /* ============================================================
+       DERIVED MODEL
+       Owner comes from the case ID prefix, never from the section.
+       ============================================================ */
+    const OWNER_BY_PREFIX = { A: 'ALAA', Y: 'YAZAN', J: 'JOINT' };
+    const TRACK_LABEL = { QA: 'QA', UAT: 'UAT', GATE: 'Gate' };
+    const STATUS_LABEL = { 'not-run': 'Not run', pass: 'Pass', fail: 'Fail', blocked: 'Blocked', na: 'N/A' };
+    const STATUSES = ['not-run', 'pass', 'fail', 'blocked', 'na'];
+
+    sections.forEach(section => {
+      section.tests.forEach(t => { t.owner = OWNER_BY_PREFIX[t.id.charAt(0)]; });
+    });
+    const ALL = sections.flatMap(s => s.tests);
+
+    /* ============================================================
+       STATE
+       ============================================================ */
+    const STORAGE_KEY = 'bolt-qr-qa-uat-master-plan-v2';
+    let state = { cases: {}, sign: {} };
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      state.cases = raw.cases && typeof raw.cases === 'object' ? raw.cases : {};
+      state.sign = raw.sign && typeof raw.sign === 'object' ? raw.sign : {};
+    } catch (e) { /* corrupt storage: start clean */ }
+
+    const save = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { showToast('Could not save. Storage may be full or blocked.'); } };
+    const statusOf = id => (state.cases[id] && state.cases[id].status) || 'not-run';
+    const noteOf = id => (state.cases[id] && state.cases[id].note) || '';
+
+    const $ = id => document.getElementById(id);
+    let toastTimer;
+    function showToast(message) {
+      const toast = $('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+    }
+
+    /* ============================================================
+       RENDER
+       ============================================================ */
+    const filters = () => ({
+      track: $('trackFilter').value,
+      owner: $('ownerFilter').value,
+      priority: $('priorityFilter').value,
+      status: $('statusFilter').value,
+      query: $('search').value.trim().toLowerCase()
+    });
+
+    function matches(t, f) {
+      if (f.track !== 'all' && t.track !== f.track) return false;
+      if (f.owner !== 'all' && t.owner !== f.owner) return false;
+      if (f.priority !== 'all' && t.pri !== f.priority) return false;
+      if (f.status !== 'all' && statusOf(t.id) !== f.status) return false;
+      if (f.query) {
+        const hay = (t.id + ' ' + t.title + ' ' + t.steps + ' ' + t.expected + ' ' + (t.auto || '')).toLowerCase();
+        if (!hay.includes(f.query)) return false;
+      }
+      return true;
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function buildCase(t) {
+      const article = el('article', 'case');
+      article.dataset.caseId = t.id;
+
+      article.appendChild(el('div', 'case-id', t.id));
+
+      const body = el('div');
+      body.appendChild(el('h3', null, t.title));
+      body.appendChild(el('p', null, t.steps));
+
+      const expected = el('div', 'expected');
+      expected.appendChild(el('b', null, 'Expected: '));
+      expected.appendChild(document.createTextNode(t.expected));
+      body.appendChild(expected);
+
+      if (t.auto) {
+        const auto = el('div', 'auto');
+        auto.appendChild(el('span', 'auto-label', 'Automated'));
+        t.auto.split(' · ').forEach(ref => auto.appendChild(el('code', null, ref)));
+        body.appendChild(auto);
+      }
+      article.appendChild(body);
+
+      const meta = el('div', 'meta-cell');
+      meta.appendChild(el('span', 'pill ' + t.track.toLowerCase(), TRACK_LABEL[t.track]));
+      meta.appendChild(el('span', 'pill ' + t.owner.toLowerCase(), t.owner));
+      meta.appendChild(el('span', 'pill ' + t.pri.toLowerCase(), t.pri));
+
+      const statusWrap = el('div', 'status-cell');
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', t.id + ' status');
+      STATUSES.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = STATUS_LABEL[value];
+        select.appendChild(option);
+      });
+      select.value = statusOf(t.id);
+      select.className = select.value;
+      select.addEventListener('change', () => {
+        state.cases[t.id] = Object.assign({}, state.cases[t.id], { status: select.value });
+        select.className = select.value;
+        save();
+        updateStats();
+        showToast(t.id + ' marked ' + STATUS_LABEL[select.value] + '.');
+      });
+      statusWrap.appendChild(select);
+      meta.appendChild(statusWrap);
+      article.appendChild(meta);
+
+      const notes = el('div', 'notes');
+      const label = el('label', null, 'Evidence / notes');
+      label.setAttribute('for', 'note-' + t.id);
+      const textarea = document.createElement('textarea');
+      textarea.id = 'note-' + t.id;
+      textarea.placeholder = 'Browser, device, request ID, defect link, or WAIVED: reason…';
+      textarea.value = noteOf(t.id);
+      textarea.addEventListener('input', () => {
+        state.cases[t.id] = Object.assign({ status: statusOf(t.id) }, state.cases[t.id], { note: textarea.value });
+        save();
+      });
+      notes.appendChild(label);
+      notes.appendChild(textarea);
+      article.appendChild(notes);
+
+      return article;
+    }
+
+    function render() {
+      const checklist = $('checklist');
+      const f = filters();
+      checklist.textContent = '';
+      let visible = 0;
+
+      sections.forEach(section => {
+        const matching = section.tests.filter(t => matches(t, f));
+        if (!matching.length) return;
+        visible += matching.length;
+
+        const group = el('section', 'group');
+        const head = el('div', 'group-head');
+        const headText = el('div');
+        headText.appendChild(el('h2', null, section.group));
+        headText.appendChild(el('p', null, section.desc));
+        head.appendChild(headText);
+
+        const meta = el('div', 'group-meta');
+        const p0 = matching.filter(t => t.pri === 'P0').length;
+        if (p0) meta.appendChild(el('span', 'pill p0', p0 + ' P0'));
+        meta.appendChild(el('span', 'pill count', matching.length + ' shown'));
+        head.appendChild(meta);
+        group.appendChild(head);
+
+        matching.forEach(t => group.appendChild(buildCase(t)));
+        checklist.appendChild(group);
+      });
+
+      $('emptyState').classList.toggle('show', visible === 0);
+      updateStats();
+    }
+
+    /* ============================================================
+       STATS AND VERDICT
+       ============================================================ */
+    function bucket(list) {
+      const counts = { pass: 0, fail: 0, blocked: 0, na: 0, 'not-run': 0 };
+      list.forEach(t => { counts[statusOf(t.id)]++; });
+      return counts;
+    }
+
+    function miniCard(label, list) {
+      const counts = bucket(list);
+      const scored = list.length - counts.na;
+      const percent = scored ? Math.round((counts.pass / scored) * 100) : 0;
+      const card = el('div', 'mini');
+      card.appendChild(el('strong', null, counts.pass + ' / ' + scored));
+      card.appendChild(el('span', null, label));
+      const track = el('div', 'mini-track');
+      const fill = el('i');
+      fill.style.width = percent + '%';
+      track.appendChild(fill);
+      card.appendChild(track);
+      return card;
+    }
+
+    function updateStats() {
+      const counts = bucket(ALL);
+      const executed = counts.pass + counts.fail + counts.blocked + counts.na;
+      const percent = ALL.length ? Math.round((executed / ALL.length) * 100) : 0;
+
+      $('progressText').textContent = percent + '% executed';
+      $('progressDetail').textContent = counts.pass + ' of ' + ALL.length + ' cases passed';
+      $('progressBar').style.width = percent + '%';
+      $('passCount').textContent = counts.pass;
+      $('failCount').textContent = counts.fail;
+      $('blockedCount').textContent = counts.blocked;
+      $('naCount').textContent = counts.na;
+      $('notRunCount').textContent = counts['not-run'];
+
+      const trackSummary = $('trackSummary');
+      trackSummary.textContent = '';
+      [['QA track', 'QA'], ['UAT track', 'UAT'], ['Release gates', 'GATE']].forEach(([label, key]) => {
+        trackSummary.appendChild(miniCard(label, ALL.filter(t => t.track === key)));
+      });
+
+      const ownerSummary = $('ownerSummary');
+      ownerSummary.textContent = '';
+      ['YAZAN', 'ALAA', 'JOINT'].forEach(owner => {
+        ownerSummary.appendChild(miniCard(owner + ' passed', ALL.filter(t => t.owner === owner)));
+      });
+
+      updateVerdict(counts);
+    }
+
+    function updateVerdict(counts) {
+      const reasons = [];
+      const p0 = ALL.filter(t => t.pri === 'P0');
+      const p0NotPassed = p0.filter(t => statusOf(t.id) !== 'pass');
+      const p1 = ALL.filter(t => t.pri === 'P1');
+      const p1Open = p1.filter(t => {
+        const s = statusOf(t.id);
+        return s !== 'pass' && s !== 'na' && !noteOf(t.id).trim().toUpperCase().startsWith('WAIVED:');
+      });
+      const gates = ALL.filter(t => t.track === 'GATE');
+      const gatesOpen = gates.filter(t => statusOf(t.id) !== 'pass' && !noteOf(t.id).trim().toUpperCase().startsWith('WAIVED:'));
+      const signMissing = ['qa-name', 'uat-name', 'biz-name', 'build'].filter(k => !(state.sign[k] || '').trim());
+
+      if (p0NotPassed.length) reasons.push(p0NotPassed.length + ' P0 case(s) not passed: ' + p0NotPassed.slice(0, 6).map(t => t.id).join(', ') + (p0NotPassed.length > 6 ? ', …' : ''));
+      if (counts.fail) reasons.push(counts.fail + ' case(s) currently failing.');
+      if (counts.blocked) reasons.push(counts.blocked + ' case(s) blocked. No case may ship in Blocked state.');
+      if (p1Open.length) reasons.push(p1Open.length + ' P1 case(s) neither passed nor waived.');
+      if (gatesOpen.length) reasons.push(gatesOpen.length + ' joint release gate(s) still open.');
+      if (signMissing.length) reasons.push('Missing sign-off: ' + signMissing.join(', ') + '.');
+
+      const badge = $('verdictBadge');
+      const detail = $('verdictDetail');
+      const list = $('verdictReasons');
+      list.textContent = '';
+
+      const executed = counts.pass + counts.fail + counts.blocked + counts.na;
+      if (!executed) {
+        badge.className = 'verdict-badge pending';
+        badge.textContent = 'Pending execution';
+        detail.textContent = 'Run the plan to compute a verdict.';
+        return;
+      }
+      if (reasons.length) {
+        badge.className = 'verdict-badge nogo';
+        badge.textContent = 'No-Go';
+        detail.textContent = reasons.length + ' blocking condition(s) remain.';
+        reasons.forEach(r => list.appendChild(el('li', null, r)));
+      } else {
+        badge.className = 'verdict-badge go';
+        badge.textContent = 'Go';
+        detail.textContent = 'Every exit criterion is satisfied and all three signatures are present.';
+      }
+    }
+
+    /* ============================================================
+       EXPORT
+       ============================================================ */
+    function download(filename, text, type) {
+      const blob = new Blob([text], { type: type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+    const stamp = () => new Date().toISOString().slice(0, 10);
+
+    function exportRows() {
+      return ALL.map(t => ({
+        id: t.id, track: t.track, owner: t.owner, priority: t.pri,
+        section: sections.find(s => s.tests.includes(t)).group,
+        title: t.title, expected: t.expected, automation: t.auto || '',
+        status: statusOf(t.id), note: noteOf(t.id)
+      }));
+    }
+
+    function exportJson() {
+      const counts = bucket(ALL);
+      download('bolt-qr-qa-uat-' + stamp() + '.json', JSON.stringify({
+        exportedAt: new Date().toISOString(),
+        signOff: state.sign,
+        summary: { total: ALL.length, counts: counts },
+        cases: exportRows()
+      }, null, 2), 'application/json');
+      showToast('Exported JSON.');
+    }
+
+    function exportCsv() {
+      const cols = ['id', 'track', 'owner', 'priority', 'section', 'title', 'expected', 'automation', 'status', 'note'];
+      const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const lines = [cols.join(',')].concat(exportRows().map(row => cols.map(k => esc(row[k])).join(',')));
+      download('bolt-qr-qa-uat-' + stamp() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+      showToast('Exported CSV.');
+    }
+
+    /* ============================================================
+       WIRING
+       ============================================================ */
+    ['search', 'trackFilter', 'ownerFilter', 'priorityFilter', 'statusFilter'].forEach(id => {
+      $(id).addEventListener(id === 'search' ? 'input' : 'change', render);
+    });
+    $('printBtn').addEventListener('click', () => {
+      document.querySelectorAll('details.ref').forEach(d => { d.open = true; });
+      window.print();
+    });
+    $('exportJsonBtn').addEventListener('click', exportJson);
+    $('exportCsvBtn').addEventListener('click', exportCsv);
+    $('resetBtn').addEventListener('click', () => {
+      if (!confirm('Reset every saved status, note, and signature in this plan?')) return;
+      state = { cases: {}, sign: {} };
+      save();
+      document.querySelectorAll('[data-sign]').forEach(input => { input.value = ''; });
+      render();
+      showToast('Plan reset.');
+    });
+
+    document.querySelectorAll('[data-sign]').forEach(input => {
+      const key = input.dataset.sign;
+      if (state.sign[key]) input.value = state.sign[key];
+      input.addEventListener('input', () => {
+        state.sign[key] = input.value;
+        save();
+        updateStats();
+      });
+    });
+
+    $('today').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    render();
+  })();
+  </script>
+</body>
+</html>
