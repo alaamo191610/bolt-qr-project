@@ -730,10 +730,24 @@ const AdminDashboard: React.FC = () => {
       ...(user?.role === "OWNER" || user?.role === "MANAGER"
         ? [{ id: "team", name: t("nav.team"), icon: UserCog }]
         : []),
-      { id: "admin", name: t("nav.admin"), icon: Settings },
+      // Same reasoning as Team: the Admin panel edits pricing, promotions, the
+      // restaurant profile, and workflow rules, all of which now require
+      // OWNER/MANAGER on the API. Showing it to STAFF only offers 403s.
+      ...(user?.role === "OWNER" || user?.role === "MANAGER"
+        ? [{ id: "admin", name: t("nav.admin"), icon: Settings }]
+        : []),
     ],
     [t, user?.role],
   );
+
+  // A persisted tab from a previous session (or a role change) can point at a
+  // screen this member may no longer open. Fall back rather than render a 403.
+  useEffect(() => {
+    if (!isLoaded || !navigation.length) return;
+    if (!navigation.some((item) => item.id === activeTab)) {
+      setActiveTab(navigation[0].id);
+    }
+  }, [isLoaded, navigation, activeTab]);
 
   if (!isLoaded) {
     return (
@@ -835,6 +849,7 @@ const AdminDashboard: React.FC = () => {
             user?.email?.split("@")[0] ||
             "Restaurant",
           email: user?.email || "",
+          role: user?.role,
           subscription: adminProfile
             ? {
                 planName: subscription.planName,

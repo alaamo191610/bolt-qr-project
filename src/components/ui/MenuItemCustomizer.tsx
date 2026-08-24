@@ -579,49 +579,84 @@ export default function MenuItemCustomizer({
                         )}
                       </div>
 
-                      <div className="space-y-2">
-                        {(g.modifier_options || []).map((o) => {
+                      <div
+                        className="space-y-2"
+                        role={g.selection_type === "single" ? "radiogroup" : "group"}
+                        aria-label={g.name_en || "Options"}
+                        aria-required={g.required || undefined}
+                      >
+                        {(g.modifier_options || []).map((o, optionIndex) => {
                           const selQty = optState[o.id] ?? 0;
                           const isSelected = selQty > 0;
                           const single = g.selection_type === "single";
+                          const options = g.modifier_options || [];
+                          // Rows with a quantity stepper are containers, not controls;
+                          // their +/- buttons carry the interaction and the labels.
+                          const hasStepper = !single && !!o.max_qty && o.max_qty > 1;
+
+                          const select = () => {
+                            if (single) {
+                              setOptState((s) => {
+                                const next = { ...s };
+                                for (const other of options) next[other.id] = 0;
+                                next[o.id] = 1;
+                                return next;
+                              });
+                            } else if (!hasStepper) {
+                              setOptState((s) => ({ ...s, [o.id]: isSelected ? 0 : 1 }));
+                            }
+                          };
+
+                          // Roving tabindex: a radio group is one tab stop and the
+                          // arrow keys move between its options.
+                          const anySelected = options.some((opt) => (optState[opt.id] ?? 0) > 0);
+                          const isTabStop = single
+                            ? (isSelected || (!anySelected && optionIndex === 0))
+                            : true;
+
+                          const moveFocus = (delta: number) => {
+                            const target = options[(optionIndex + delta + options.length) % options.length];
+                            if (!target) return;
+                            setOptState((s) => {
+                              const next = { ...s };
+                              for (const other of options) next[other.id] = 0;
+                              next[target.id] = 1;
+                              return next;
+                            });
+                            const el = document.getElementById(`modifier-option-${target.id}`);
+                            el?.focus();
+                          };
+
+                          const onKeyDown = (e: React.KeyboardEvent) => {
+                            if (e.key === " " || e.key === "Enter") {
+                              e.preventDefault();
+                              select();
+                              return;
+                            }
+                            if (!single) return;
+                            if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+                              e.preventDefault();
+                              moveFocus(1);
+                            } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+                              e.preventDefault();
+                              moveFocus(-1);
+                            }
+                          };
 
                           return (
                             <div
                               key={o.id}
-                              onClick={() => {
-                                if (single) {
-                                  setOptState((s) => {
-                                    const next = { ...s };
-                                    for (const other of g.modifier_options || []) next[other.id] = 0;
-                                    next[o.id] = 1; // Toggle off not allowed for required single? usually radio behavior.
-                                    // Actually for single, clicking usually selects it. 
-                                    // If not required, maybe toggle? Let's stick to standard Select behavior.
-                                    return next;
-                                  })
-                                } else {
-                                  // Multi select: toggle on/off (1 or 0) for simple, or stepper if max_qty > 1?
-                                  // The previous UI had steppers for multi. Let's keep that logic but simplify the tap interaction.
-                                  // If max_qty is 1 (checkbox behavior), tap toggles.
-                                  // If max_qty > 1, tap increments?
-
-                                  // Let's keep the stepper UI for multi-qty items, but improve visual.
-                                  if (o.max_qty && o.max_qty > 1) {
-                                    // Use stepper logic
-                                    // Don't toggle on main click if it has complex controls.
-                                  } else {
-                                    // Toggle behavior
-                                    setOptState((s) => ({
-                                      ...s,
-                                      [o.id]: isSelected ? 0 : 1
-                                    }))
-                                  }
-                                }
-                              }}
+                              id={`modifier-option-${o.id}`}
+                              role={hasStepper ? undefined : (single ? "radio" : "checkbox")}
+                              aria-checked={hasStepper ? undefined : isSelected}
+                              tabIndex={hasStepper ? undefined : (isTabStop ? 0 : -1)}
+                              onKeyDown={hasStepper ? undefined : onKeyDown}
+                              onClick={select}
                               style={isSelected ? {
                                 borderColor: "var(--color-primary)",
                                 backgroundColor: "color-mix(in srgb, var(--color-primary) 5%, transparent)",
                               } : undefined}
-                              className={`group relative flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer ${isSelected
+                              className={`group relative flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--color-primary)] ${isSelected
                                 ? ""
                                 : "border-transparent bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
                                 }`}
@@ -649,13 +684,17 @@ export default function MenuItemCustomizer({
                               {!single && o.max_qty && o.max_qty > 1 && (
                                 <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                                   <button
+                                    type="button"
+                                    aria-label={`Remove one ${o.name_en}`}
                                     className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
                                     onClick={() => setOptState(s => ({ ...s, [o.id]: Math.max(0, (s[o.id] || 0) - 1) }))}
                                   >
                                     <Minus size={14} />
                                   </button>
-                                  <span className="w-4 text-center font-medium">{selQty}</span>
+                                  <span className="w-4 text-center font-medium" aria-live="polite" aria-label={`${o.name_en} quantity ${selQty}`}>{selQty}</span>
                                   <button
+                                    type="button"
+                                    aria-label={`Add one ${o.name_en}`}
                                     className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60"
                                     onClick={() => setOptState(s => ({ ...s, [o.id]: Math.min(o.max_qty || 99, (s[o.id] || 0) + 1) }))}
                                   >
@@ -788,14 +827,22 @@ export default function MenuItemCustomizer({
           {/* Quantity Stepper */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-700 rounded-full p-1">
             <button
+              type="button"
+              aria-label="Decrease quantity"
               className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white disabled:opacity-50"
               onClick={() => setQty(Math.max(1, qty - 1))}
               disabled={qty <= 1}
             >
               <Minus size={18} />
             </button>
-            <span className="w-12 text-center font-bold text-lg text-slate-900 dark:text-white">{qty}</span>
+            <span
+              className="w-12 text-center font-bold text-lg text-slate-900 dark:text-white"
+              aria-live="polite"
+              aria-label={`Quantity ${qty}`}
+            >{qty}</span>
             <button
+              type="button"
+              aria-label="Increase quantity"
               className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white"
               onClick={() => setQty(qty + 1)}
             >

@@ -14,6 +14,7 @@ export const ERROR_CODES = Object.freeze({
   IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
   ORDER_NOT_FOUND: 'ORDER_NOT_FOUND',
   ORDER_LIMIT_REACHED: 'ORDER_LIMIT_REACHED',
+  SUBSCRIPTION_INACTIVE: 'SUBSCRIPTION_INACTIVE',
   RESTAURANT_PAUSED: 'RESTAURANT_PAUSED',
   RESTAURANT_CLOSED: 'RESTAURANT_CLOSED',
   RESTAURANT_OVERLOADED: 'RESTAURANT_OVERLOADED',
@@ -88,6 +89,28 @@ export const sendError = (res, req, error) => {
 
 export const fail = (res, req, status, message, code) =>
   sendError(res, req, new ApiError(message, { status, code }));
+
+// Prisma surfaces expected outcomes (duplicate key, missing row, bad relation)
+// as thrown errors. Returning err.message to the client leaks table and column
+// names, so map the known codes onto the public contract and let everything
+// else fall through to a masked 500 that is logged with the request id.
+const PRISMA_ERROR_STATUS = Object.freeze({
+  P2002: { status: 409, message: 'That value is already in use', code: ERROR_CODES.CONFLICT },
+  P2003: { status: 409, message: 'A related record is missing or still in use', code: ERROR_CODES.CONFLICT },
+  P2025: { status: 404, message: 'Record not found', code: ERROR_CODES.VALIDATION_ERROR },
+});
+
+export const sendPrismaError = (res, req, err, context) => {
+  const mapped = PRISMA_ERROR_STATUS[err?.code];
+  if (mapped) {
+    return sendError(res, req, new ApiError(mapped.message, {
+      status: mapped.status,
+      code: mapped.code,
+    }));
+  }
+  console.error(context || 'Unhandled database error:', logSafeError(err));
+  return sendError(res, req, new ApiError('Internal server error', { status: 500 }));
+};
 
 // Route handlers should use sendError, but this final response boundary also
 // normalizes legacy handlers and third-party middleware that still call

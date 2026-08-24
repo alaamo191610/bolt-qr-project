@@ -22,6 +22,8 @@ interface ResponsiveLayoutProps {
     id: string;
     name: string;
     email: string;
+    /** Organization membership role, shown as the account badge. */
+    role?: string;
     subscription?: {
       planName: string;
       status: string;
@@ -323,7 +325,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                         {userInfo.name.split(" ")[0]}
                       </p>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
-                        Admin
+                        {userInfo.role || "Member"}
                       </p>
                     </div>
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">

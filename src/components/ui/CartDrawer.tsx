@@ -112,9 +112,11 @@ const CartDrawer: React.FC<Props> = ({
     const { discount, vat, service, total } = computeTotals(subtotal, billing, appliedPromo, {
       taxInclusive: prefs.taxInclusive,
       includeDelivery: orderType === 'take_away',
+      // Same rule the server applies, so this preview matches the stored order.
+      rounding: prefs.rounding,
     });
     return { discount, vat, service, delivery, total };
-  }, [subtotal, billing, appliedPromo, moneyLoading, orderType, prefs.taxInclusive]);
+  }, [subtotal, billing, appliedPromo, moneyLoading, orderType, prefs.taxInclusive, prefs.rounding]);
 
   /** NEW: tip value (visual add-on; not part of computeTotals unless you decide so) */
   const tipValue = useMemo(() => {

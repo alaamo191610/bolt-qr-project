@@ -633,11 +633,16 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({ tables, capabilities, setCapa
       {/* --- Generate confirmation --- */}
       {pendingGenerate && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-scale-in text-center">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="qr-regenerate-title"
+            className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-scale-in text-center"
+          >
             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
               <RefreshCw className="w-8 h-8 text-amber-600 dark:text-amber-400" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+            <h3 id="qr-regenerate-title" className="text-xl font-bold text-slate-900 dark:text-white mb-2">
               Generate a new QR code?
             </h3>
             <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">

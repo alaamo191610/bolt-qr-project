@@ -371,16 +371,22 @@ const OrderManagement: React.FC<OrderManagementProps> = ({
       {/* 1. Confirmation Modal */}
       {showConfirmModal && selectedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-sm p-8 animate-scale-in text-center border border-slate-100 dark:border-slate-700">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="order-confirm-title"
+            aria-describedby="order-confirm-body"
+            className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-sm p-8 animate-scale-in text-center border border-slate-100 dark:border-slate-700"
+          >
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${actionType === 'cancel' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
               }`}>
               {actionType === 'cancel' ? <AlertTriangle className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
             </div>
 
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h3 id="order-confirm-title" className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
               {actionType === 'cancel' ? 'Cancel Order?' : 'Update Status?'}
             </h3>
-            <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
+            <p id="order-confirm-body" className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
               {actionType === 'cancel'
                 ? `Are you sure you want to cancel Order #${selectedOrder.order_number || selectedOrder.id}? This action cannot be undone.`
                 : `Are you sure you want to mark Order #${selectedOrder.order_number || selectedOrder.id} as ${targetStatus?.replace('_', ' ')}?`

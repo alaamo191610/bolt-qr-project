@@ -632,12 +632,10 @@ const CustomerMenu: React.FC = () => {
 
   useEffect(() => {
     if (menuItems.length > 0) {
-      console.log("CustomerMenu: First item:", menuItems[0]);
       if (menuItems[0].user_id) {
-        console.log("CustomerMenu: Setting adminId:", menuItems[0].user_id);
         setAdminId(menuItems[0].user_id);
-      } else {
-        console.warn("CustomerMenu: Item found but NO user_id!");
+      } else if (import.meta.env.DEV) {
+        console.warn("CustomerMenu: menu item has no user_id");
       }
     }
   }, [menuItems]);

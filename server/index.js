@@ -26,7 +26,13 @@ import {
   requireSuperAdmin,
 } from './accessControl.js';
 import { createRateLimiter } from './rateLimit.js';
-import { ERROR_CODES, sendError, errorContractMiddleware, logSafeError } from './errors.js';
+import {
+  ERROR_CODES,
+  sendError,
+  sendPrismaError,
+  errorContractMiddleware,
+  logSafeError,
+} from './errors.js';
 import { createRequestContextMiddleware } from './requestContext.js';
 import {
   TOKEN_TYPES,
@@ -120,6 +126,7 @@ const superAdminSessionCookie = (token, maxAge = 30 * 60) => [
 const {
   resolveTenantSession,
   resolveTenantClaims,
+  isSubscriptionLapsed,
   issueTenantToken,
   tenantResponse,
 } = createTenantSessionService({ db: prisma, tokenSecret: JWT_SECRET });
@@ -292,6 +299,23 @@ const normalizeCatalogIds = (values = []) => [...new Set(
 
 const roundMoney = value => Number((Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2));
 
+// Mirrors roundAmount() in src/pricing/money.ts. The guest is shown prices under
+// the restaurant's rounding rule, so the stored order has to be computed under
+// the same rule or the amount collected never matches the amount recorded.
+const ROUNDING_INCREMENT = Object.freeze({
+  none: 0,
+  'nearest-0.05': 0.05,
+  'nearest-0.1': 0.1,
+  'nearest-0.5': 0.5,
+});
+
+const applyRoundingRule = (value, rule) => {
+  const increment = ROUNDING_INCREMENT[rule] || 0;
+  const amount = Number(value);
+  if (!increment) return roundMoney(amount);
+  return roundMoney(Math.round(amount / increment) * increment);
+};
+
 const finiteSetting = (value, fallback, min, max) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
@@ -337,24 +361,30 @@ const calculateOrderTotals = ({ subtotal, promotion, billingSettings, pricingPre
       : roundMoney(Math.min(subtotal, Number(promotion.value)));
   }
 
-  const afterDiscount = roundMoney(Math.max(0, subtotal - discount));
+  // Every line the guest can see is rounded under the restaurant's rule, and the
+  // total is the sum of those rounded lines rather than a separately rounded
+  // figure, so the printed receipt always adds up to what is charged.
+  const rule = ROUNDING_INCREMENT[pricing.rounding] === undefined ? 'none' : pricing.rounding;
+  const round = value => applyRoundingRule(value, rule);
+
+  const afterDiscount = round(Math.max(0, subtotal - discount));
   const serviceCharge = billing.showServiceChargeLine === false
     ? 0
-    : roundMoney(afterDiscount * (servicePercent / 100));
-  const vatBase = roundMoney(afterDiscount + serviceCharge);
+    : round(afterDiscount * (servicePercent / 100));
+  const vatBase = afterDiscount + serviceCharge;
   const taxInclusive = pricing.taxInclusive === true;
   const vat = billing.showVatLine === false || vatPercent === 0
     ? 0
     : taxInclusive
-      ? roundMoney(vatBase - (vatBase / (1 + vatPercent / 100)))
-      : roundMoney(vatBase * (vatPercent / 100));
-  const deliveryFee = type === 'take_away' ? roundMoney(configuredDelivery) : 0;
+      ? round(vatBase - (vatBase / (1 + vatPercent / 100)))
+      : round(vatBase * (vatPercent / 100));
+  const deliveryFee = type === 'take_away' ? round(configuredDelivery) : 0;
   const beforeTip = roundMoney(afterDiscount + serviceCharge + deliveryFee + (taxInclusive ? 0 : vat));
-  const tip = roundMoney(beforeTip * (safeTipPercent / 100));
+  const tip = round(beforeTip * (safeTipPercent / 100));
 
   return {
-    subtotal: roundMoney(subtotal),
-    discount,
+    subtotal: round(subtotal),
+    discount: round(discount),
     vat,
     serviceCharge,
     deliveryFee,
@@ -430,7 +460,18 @@ app.post('/api/auth/login', authRateLimit, async (req, res) => {
     }
 
     const session = await resolveTenantSession({ userId: identity.id, organizationId });
-    if (!session) return res.status(403).json({ error: 'No active restaurant membership is available' });
+    if (!session) {
+      // Tell a paying owner their subscription lapsed instead of claiming
+      // their membership does not exist. Access is already refused above.
+      if (await isSubscriptionLapsed({ userId: identity.id, organizationId })) {
+        return sendError(res, req, {
+          status: 403,
+          message: 'This restaurant\'s subscription is no longer active. Please renew it to sign in.',
+          code: ERROR_CODES.SUBSCRIPTION_INACTIVE,
+        });
+      }
+      return res.status(403).json({ error: 'No active restaurant membership is available' });
+    }
 
     await prisma.user.update({ where: { id: identity.id }, data: { last_login_at: new Date() } });
     res.json(tenantResponse(session, issueTenantToken(session)));
@@ -694,7 +735,13 @@ app.get('/api/menus', authenticate, async (req, res) => {
   try {
     const menus = await prisma.menu.findMany({
       where: { user_id: req.user.id, deleted_at: null },
-      orderBy: { created_at: 'desc' },
+      // Respect the order the restaurant curated: categories by their
+      // sort_order, then items in the order they were added.
+      orderBy: [
+        { category: { sort_order: 'asc' } },
+        { category_id: 'asc' },
+        { created_at: 'asc' },
+      ],
       include: {
         category: true,
         menu_ingredients: {
@@ -711,10 +758,10 @@ app.get('/api/menus', authenticate, async (req, res) => {
     }));
 
     res.json(mapped);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.post('/api/menus', authenticate, async (req, res) => {
+app.post('/api/menus', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const {
     name_en,
     name_ar,
@@ -775,7 +822,7 @@ app.post('/api/menus', authenticate, async (req, res) => {
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
-app.put('/api/menus/:id', authenticate, async (req, res) => {
+app.put('/api/menus/:id', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const {
     name_en,
     name_ar,
@@ -837,7 +884,7 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
-app.delete('/api/menus/:id', authenticate, async (req, res) => {
+app.delete('/api/menus/:id', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const menuId = Number(req.params.id);
   try {
     const ownedMenu = await prisma.menu.findFirst({
@@ -855,16 +902,16 @@ app.delete('/api/menus/:id', authenticate, async (req, res) => {
       });
     }
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.delete('/api/admin/reset-menu', authenticate, async (req, res) => {
+app.delete('/api/admin/reset-menu', authenticate, requireOrganizationRole('OWNER'), async (req, res) => {
   try {
     await prisma.menu.deleteMany({
       where: { user_id: req.user.id }
     });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
 // --- Advanced Menu Options ---
@@ -899,10 +946,10 @@ app.get('/api/menus/:id/options', authenticate, async (req, res) => {
       })
     ]);
     res.json({ allIngredients, allMenus, menuIngredients, menuModifierGroups, comboGroups });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.post('/api/menus/:id/ingredients', authenticate, async (req, res) => {
+app.post('/api/menus/:id/ingredients', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const menuId = Number(req.params.id);
   const { ingredients } = req.body;
   try {
@@ -946,7 +993,7 @@ app.post('/api/menus/:id/ingredients', authenticate, async (req, res) => {
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
-app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
+app.post('/api/menus/:id/modifiers', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const menuId = Number(req.params.id);
   const { groups } = req.body;
   try {
@@ -1034,7 +1081,7 @@ app.post('/api/menus/:id/modifiers', authenticate, async (req, res) => {
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
-app.post('/api/menus/:id/combos', authenticate, async (req, res) => {
+app.post('/api/menus/:id/combos', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const menuId = Number(req.params.id);
   const requestedCombos = Array.isArray(req.body.combos)
     ? req.body.combos
@@ -1152,7 +1199,7 @@ app.get('/api/public/menus/:id/config', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching menu config:', err);
-    res.status(500).json({ error: err.message });
+    sendPrismaError(res, req, err);
   }
 });
 
@@ -1165,7 +1212,7 @@ app.get('/api/categories', authenticate, async (req, res) => {
   res.json(categories);
 });
 
-app.post('/api/categories', authenticate, async (req, res) => {
+app.post('/api/categories', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const name_en = String(req.body.name_en || '').trim();
   const name_ar = req.body.name_ar ? String(req.body.name_ar).trim() : null;
   if (!name_en) return res.status(400).json({ error: 'English category name is required' });
@@ -1181,7 +1228,7 @@ app.post('/api/categories', authenticate, async (req, res) => {
     res.status(201).json(category);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Category already exists' });
-    res.status(500).json({ error: err.message });
+    sendPrismaError(res, req, err);
   }
 });
 
@@ -1193,7 +1240,7 @@ app.get('/api/ingredients', authenticate, async (req, res) => {
   res.json(ingredients);
 });
 
-app.post('/api/ingredients', authenticate, async (req, res) => {
+app.post('/api/ingredients', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const name_en = String(req.body.name_en || '').trim();
   const name_ar = req.body.name_ar ? String(req.body.name_ar).trim() : null;
   const extraPrice = req.body.extra_price == null || req.body.extra_price === ''
@@ -1216,7 +1263,7 @@ app.post('/api/ingredients', authenticate, async (req, res) => {
     res.status(201).json(ingredient);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Ingredient already exists' });
-    res.status(500).json({ error: err.message });
+    sendPrismaError(res, req, err);
   }
 });
 
@@ -1894,7 +1941,7 @@ app.get('/api/tables', authenticate, async (req, res) => {
   res.json(tables);
 });
 
-app.post('/api/tables', authenticate, async (req, res) => {
+app.post('/api/tables', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const { code, number, capacity } = req.body;
   const admin_id = req.user.id; // Get user ID from authenticated token
   // Handle frontend sending 'number' instead of 'code'
@@ -1945,7 +1992,7 @@ app.post('/api/tables', authenticate, async (req, res) => {
     res.json(table);
   } catch (err) {
     console.error('Error creating table:', err);
-    res.status(500).json({ error: err.message });
+    sendPrismaError(res, req, err);
   }
 });
 
@@ -2026,7 +2073,7 @@ app.put(
   },
 );
 
-app.put('/api/tables/:id', authenticate, async (req, res) => {
+app.put('/api/tables/:id', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const { code, capacity, status } = req.body;
   try {
     const tableId = Number(req.params.id);
@@ -2061,10 +2108,10 @@ app.put('/api/tables/:id', authenticate, async (req, res) => {
       data,
     });
     res.json(table);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.delete('/api/tables/:id', authenticate, async (req, res) => {
+app.delete('/api/tables/:id', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   try {
     const tableId = Number(req.params.id);
     const table = await prisma.table.findFirst({
@@ -2080,10 +2127,10 @@ app.delete('/api/tables/:id', authenticate, async (req, res) => {
 
     await prisma.table.delete({ where: { id: tableId } });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.post('/api/tables/:id/capability/rotate', authenticate, async (req, res) => {
+app.post('/api/tables/:id/capability/rotate', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   try {
     const result = await tableCapabilities.rotate({
       tableId: req.params.id,
@@ -2096,7 +2143,7 @@ app.post('/api/tables/:id/capability/rotate', authenticate, async (req, res) => 
   }
 });
 
-app.delete('/api/tables/:id/capability', authenticate, async (req, res) => {
+app.delete('/api/tables/:id/capability', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   try {
     const result = await tableCapabilities.revoke({
       tableId: req.params.id,
@@ -2280,7 +2327,13 @@ app.get('/api/public/menus', async (req, res) => {
         user_id: adminId,
         deleted_at: null
       },
-      orderBy: { created_at: 'desc' },
+      // Respect the order the restaurant curated: categories by their
+      // sort_order, then items in the order they were added.
+      orderBy: [
+        { category: { sort_order: 'asc' } },
+        { category_id: 'asc' },
+        { created_at: 'asc' },
+      ],
       include: {
         category: true,
         menu_ingredients: {
@@ -2328,7 +2381,7 @@ app.get('/api/admin/profile', authenticate, async (req, res) => {
       select: publicAdminSelect
     });
     res.json(admin);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
 // --- User Management (Super Admin) ---
@@ -2352,7 +2405,7 @@ app.get('/api/admins', authenticate, requireSuperAdmin, async (req, res) => {
   }
 });
 
-app.put('/api/admin/profile', authenticate, async (req, res) => {
+app.put('/api/admin/profile', authenticate, requireOrganizationRole('OWNER'), async (req, res) => {
   const allowedFields = [
     'restaurant_name', 'logo_url', 'phone', 'address', 'description', 'preferred_language'
   ];
@@ -2368,7 +2421,7 @@ app.put('/api/admin/profile', authenticate, async (req, res) => {
       select: publicAdminSelect
     });
     res.json(admin);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
 app.get('/api/admin/analytics', authenticate, async (req, res) => {
@@ -2438,10 +2491,10 @@ app.get('/api/admin/monetary', authenticate, async (req, res) => {
       }
     });
     res.json(admin);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.put('/api/admin/pricing', authenticate, async (req, res) => {
+app.put('/api/admin/pricing', authenticate, requireOrganizationRole('OWNER'), async (req, res) => {
   const { pricing_prefs } = req.body;
   const allowedCurrencies = new Set(['USD', 'QAR', 'JOD', 'SAR']);
   if (!pricing_prefs || typeof pricing_prefs !== 'object' || !allowedCurrencies.has(pricing_prefs.baseCurrency)) {
@@ -2459,10 +2512,10 @@ app.put('/api/admin/pricing', authenticate, async (req, res) => {
   try {
     await prisma.admin.update({ where: { id: req.user.id }, data: { pricing_prefs } });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
-app.put('/api/admin/billing', authenticate, async (req, res) => {
+app.put('/api/admin/billing', authenticate, requireOrganizationRole('OWNER'), async (req, res) => {
   const { billing_settings } = req.body;
   if (!billing_settings || typeof billing_settings !== 'object') {
     return res.status(400).json({ error: 'Invalid billing settings' });
@@ -2493,7 +2546,7 @@ app.put('/api/admin/billing', authenticate, async (req, res) => {
       }
     });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
 // --- Promotions ---
@@ -2519,7 +2572,7 @@ app.get('/api/promotions', authenticate, async (req, res) => {
   }
 });
 
-app.post('/api/promotions', authenticate, async (req, res) => {
+app.post('/api/promotions', authenticate, requireOrganizationRole('OWNER'), async (req, res) => {
   const { id } = req.body;
   const code = String(req.body.code || '').trim().toUpperCase();
   const type = req.body.type;
@@ -2595,11 +2648,11 @@ app.post('/api/promotions', authenticate, async (req, res) => {
     res.json(promo);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Promotion code already exists' });
-    res.status(500).json({ error: err.message });
+    sendPrismaError(res, req, err);
   }
 });
 
-app.put('/api/promotions/:id/active', authenticate, async (req, res) => {
+app.put('/api/promotions/:id/active', authenticate, requireOrganizationRole('OWNER'), async (req, res) => {
   const { active } = req.body;
   if (typeof active !== 'boolean') return res.status(400).json({ error: 'Active must be a boolean' });
   try {
@@ -2614,7 +2667,7 @@ app.put('/api/promotions/:id/active', authenticate, async (req, res) => {
       data: { active }
     });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
 app.get('/api/admin/settings', authenticate, async (req, res) => {
@@ -2625,7 +2678,7 @@ app.get('/api/admin/settings', authenticate, async (req, res) => {
   res.json(admin);
 });
 
-app.put('/api/admin/settings/order-rules', authenticate, async (req, res) => {
+app.put('/api/admin/settings/order-rules', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const { order_rules } = req.body;
   await prisma.admin.update({
     where: { id: req.user.id },
@@ -2634,7 +2687,7 @@ app.put('/api/admin/settings/order-rules', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-app.put('/api/admin/settings/kds-prefs', authenticate, async (req, res) => {
+app.put('/api/admin/settings/kds-prefs', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const { kds_prefs } = req.body;
   await prisma.admin.update({
     where: { id: req.user.id },
@@ -2643,7 +2696,7 @@ app.put('/api/admin/settings/kds-prefs', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-app.put('/api/admin/theme', authenticate, async (req, res) => {
+app.put('/api/admin/theme', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const { theme, theme_mode, theme_color, font_family } = req.body;
   try {
     const updated = await prisma.admin.update({
@@ -2652,11 +2705,11 @@ app.put('/api/admin/theme', authenticate, async (req, res) => {
       select: publicAdminSelect
     });
     res.json(updated);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendPrismaError(res, req, err); }
 });
 
 // --- Uploads ---
-app.post('/api/upload', authenticate, upload.single('file'), async (req, res) => {
+app.post('/api/upload', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const buffer = await readFile(req.file.path);
@@ -2685,7 +2738,7 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
   }
 });
 
-app.delete('/api/upload/:filename', authenticate, async (req, res) => {
+app.delete('/api/upload/:filename', authenticate, requireOrganizationRole('OWNER', 'MANAGER'), async (req, res) => {
   const filename = path.basename(req.params.filename);
   if (filename !== req.params.filename) return res.status(400).json({ error: 'Invalid filename' });
   try {
@@ -2929,7 +2982,7 @@ app.get('/api/super-admin/stats', authenticate, requireSuperAdmin, async (req, r
       growth
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendPrismaError(res, req, err);
   }
 });
 
