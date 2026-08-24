@@ -35,3 +35,6 @@ test-results/
 coverage/
 *.tsbuildinfo
 tests/e2e-golden/.fixture.json
+
+# UAT fixture report: contains live capability secrets and the shared test password
+.uat-fixtures.json

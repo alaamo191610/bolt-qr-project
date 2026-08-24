@@ -34,7 +34,8 @@
     "verify:database-roles": "node ops/bin/verify-database-roles.js",
     "test:capacity": "node ops/bin/run-capacity-check.js",
     "typecheck": "tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:uat": "node ops/bin/seed-uat.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.7",
