@@ -53,7 +53,7 @@ Successful response:
 }
 ```
 
-The JWT has issuer `bolt-qr-api` (or configured issuer), audience `table-ordering`, purpose
+The JWT has issuer `qr-api` (or configured issuer), audience `table-ordering`, purpose
 `table-session`, a 30-minute expiry, a random per-exchange `sessionId`, and
 capability/table/organization/restaurant/version claims.
 The exchange is allowed only for `available` or `occupied` tables. A successful exchange

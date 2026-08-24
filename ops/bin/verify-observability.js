@@ -31,7 +31,7 @@ if (!isServerTelemetryEnabled()) {
 }
 
 const response = await fetch(healthUrl, {
-  headers: { Accept: 'application/json', 'User-Agent': 'bolt-qr-observability-check/1' },
+  headers: { Accept: 'application/json', 'User-Agent': 'qr-observability-check/1' },
   signal: AbortSignal.timeout(10_000),
 });
 if (!response.ok) {

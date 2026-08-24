@@ -6,24 +6,24 @@ import { spawnSync } from 'node:child_process';
 const read = relativePath => readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
 test('systemd service runs one hardened unprivileged process with persistent uploads', async () => {
-  const service = await read('ops/systemd/bolt-qr.service');
+  const service = await read('ops/systemd/qr.service');
 
-  assert.match(service, /^User=boltqr$/m);
-  assert.match(service, /^Group=boltqr$/m);
-  assert.match(service, /^SupplementaryGroups=boltqruploads$/m);
-  assert.match(service, /^EnvironmentFile=\/etc\/bolt-qr\/bolt-qr\.env$/m);
-  assert.match(service, /^EnvironmentFile=-\/opt\/bolt-qr\/current\/\.release\.env$/m);
+  assert.match(service, /^User=qr$/m);
+  assert.match(service, /^Group=qr$/m);
+  assert.match(service, /^SupplementaryGroups=qruploads$/m);
+  assert.match(service, /^EnvironmentFile=\/etc\/qr\/qr\.env$/m);
+  assert.match(service, /^EnvironmentFile=-\/opt\/qr\/current\/\.release\.env$/m);
   assert.doesNotMatch(service, /migrate:deploy/);
   assert.match(service, /^ExecStart=\/usr\/bin\/npm run start:server$/m);
   assert.match(service, /^NoNewPrivileges=true$/m);
   assert.match(service, /^ProtectSystem=strict$/m);
-  assert.match(service, /^ReadWritePaths=\/var\/lib\/bolt-qr\/uploads$/m);
+  assert.match(service, /^ReadWritePaths=\/var\/lib\/qr\/uploads$/m);
   assert.match(service, /^KillSignal=SIGTERM$/m);
   assert.match(service, /^TimeoutStopSec=30s$/m);
 });
 
 test('nginx terminates TLS, preserves proxy identity, and supports Socket.IO upgrades', async () => {
-  const nginx = await read('ops/nginx/bolt-qr.conf');
+  const nginx = await read('ops/nginx/qr.conf');
 
   assert.match(nginx, /server 127\.0\.0\.1:3000;/);
   assert.match(nginx, /return 301 https:\/\/\$host\$request_uri;/);
@@ -58,22 +58,22 @@ test('deployment scripts pass shell syntax checks and exclude mutable or secret 
 });
 
 test('production environment template uses loopback and keeps uploads outside releases', async () => {
-  const environment = await read('ops/env/bolt-qr.env.example');
+  const environment = await read('ops/env/qr.env.example');
 
   assert.match(environment, /^NODE_ENV=production$/m);
   assert.match(environment, /^HOST=127\.0\.0\.1$/m);
   assert.match(environment, /^TRUST_PROXY_HOPS=1$/m);
-  assert.match(environment, /^UPLOAD_DIR=\/var\/lib\/bolt-qr\/uploads$/m);
+  assert.match(environment, /^UPLOAD_DIR=\/var\/lib\/qr\/uploads$/m);
   assert.match(environment, /^JWT_SECRET=REPLACE_/m);
   assert.match(environment, /^SUPER_ADMIN_MFA_ENCRYPTION_KEY=REPLACE_WITH_64_HEX_CHARACTERS$/m);
-  assert.match(environment, /^DATABASE_URL=postgresql:\/\/boltqr_runtime:/m);
+  assert.match(environment, /^DATABASE_URL=postgresql:\/\/qr_runtime:/m);
   assert.doesNotMatch(environment, /MIGRATION_DATABASE_URL/);
   assert.doesNotMatch(environment, /development-only-change-me/);
 });
 
 test('database migrations use a separately protected role and runtime startup never migrates', async () => {
   const packageJson = JSON.parse(await read('package.json'));
-  const migrationEnvironment = await read('ops/env/bolt-qr-migrate.env.example');
+  const migrationEnvironment = await read('ops/env/qr-migrate.env.example');
   const migrationWrapper = await read('ops/bin/migrate-deploy.js');
   const roleBootstrap = await read('ops/bin/configure-database-roles.sh');
   const roleSql = await read('ops/postgres/configure-role-boundaries.sql');
@@ -82,7 +82,7 @@ test('database migrations use a separately protected role and runtime startup ne
   assert.equal(packageJson.scripts.start, 'npm run start:server');
   assert.equal(packageJson.scripts['migrate:deploy'], 'node ops/bin/migrate-deploy.js');
   assert.equal(packageJson.scripts['verify:database-roles'], 'node ops/bin/verify-database-roles.js');
-  assert.match(migrationEnvironment, /^MIGRATION_DATABASE_URL=postgresql:\/\/boltqr_migrate:/m);
+  assert.match(migrationEnvironment, /^MIGRATION_DATABASE_URL=postgresql:\/\/qr_migrate:/m);
   assert.match(migrationWrapper, /Runtime and migration database URLs must use distinct roles/);
   assert.match(migrationWrapper, /DATABASE_URL: migrationUrl/);
   assert.match(roleBootstrap, /CURRENT_OWNER_ROLE/);
@@ -111,8 +111,8 @@ test('Sentry starts before the API and production source maps are uploaded then 
   const packageJson = JSON.parse(await read('package.json'));
   const deploy = await read('ops/bin/deploy-release.sh');
   const vite = await read('vite.config.ts');
-  const applicationEnvironment = await read('ops/env/bolt-qr.env.example');
-  const buildEnvironment = await read('ops/env/bolt-qr-sentry-build.env.example');
+  const applicationEnvironment = await read('ops/env/qr.env.example');
+  const buildEnvironment = await read('ops/env/qr-sentry-build.env.example');
 
   assert.equal(packageJson.scripts['start:server'], 'node --import ./server/instrumentation.js server/index.js');
   assert.match(packageJson.scripts.server, /--import \.\/server\/instrumentation\.js/);
@@ -140,6 +140,6 @@ test('operator synthetic validation checks HTTPS readiness and has no public tri
   assert.match(validator, /health\?\.database !== 'ok'/);
   assert.match(validator, /captureSyntheticAlert\(\)/);
   assert.match(validator, /flushServerTelemetry\(10_000\)/);
-  assert.match(telemetry, /\['bolt-qr-observability-validation', telemetryRelease\]/);
+  assert.match(telemetry, /\['qr-observability-validation', telemetryRelease\]/);
   assert.doesNotMatch(server, /synthetic(?:-|_)alert/iu);
 });

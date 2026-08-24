@@ -112,7 +112,7 @@ test('authentication treats invalid or expired credentials as unauthenticated', 
     role: 'RESTAURANT_ADMIN',
     purpose: TOKEN_TYPES.RESTAURANT_SESSION,
   }, secret, {
-    issuer: 'bolt-qr-api',
+    issuer: 'qr-api',
     audience: 'restaurant-api',
     subject: userId,
     expiresIn: -1,

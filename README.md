@@ -1,4 +1,4 @@
-# Bolt QR Restaurant Platform
+# QR Restaurant Platform
 
 ## Local development
 

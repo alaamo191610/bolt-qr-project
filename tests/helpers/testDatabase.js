@@ -7,7 +7,7 @@ import { PrismaClient } from '@prisma/client';
 const PROJECT_ROOT = resolve(process.cwd());
 const PRISMA_SCHEMA = resolve(PROJECT_ROOT, 'server/prisma/schema.prisma');
 const PRISMA_CLI = resolve(PROJECT_ROOT, 'node_modules/prisma/build/index.js');
-const TEST_DATABASE_PATTERN = /^bolt_qr_test_[a-z0-9_]+$/;
+const TEST_DATABASE_PATTERN = /^qr_test_[a-z0-9_]+$/;
 
 const databaseNameFromUrl = connectionString => {
   const url = new URL(connectionString);
@@ -76,7 +76,7 @@ const allocateTestDatabase = async ({ migrate = true } = {}) => {
   const configuredDatabase = Boolean(process.env.TEST_DATABASE_URL);
   const databaseName = configuredDatabase
     ? databaseNameFromUrl(sourceUrl)
-    : `bolt_qr_test_${process.pid}_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    : `qr_test_${process.pid}_${Date.now()}_${randomUUID().slice(0, 8)}`;
 
   if (!TEST_DATABASE_PATTERN.test(databaseName)) {
     throw new Error(`Refusing unsafe test database name: ${databaseName}`);

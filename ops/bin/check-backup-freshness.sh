@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-backup_state_directory="${BACKUP_STATE_DIR:-/var/lib/bolt-qr/backup-state}"
+backup_state_directory="${BACKUP_STATE_DIR:-/var/lib/qr/backup-state}"
 maximum_age_hours="${BACKUP_MAX_AGE_HOURS:-26}"
 marker_file="$backup_state_directory/last-success"
 

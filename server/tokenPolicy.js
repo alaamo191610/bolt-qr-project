@@ -32,7 +32,7 @@ const tokenDefinitions = Object.freeze({
   },
 });
 
-const issuer = () => process.env.TOKEN_ISSUER || 'bolt-qr-api';
+const issuer = () => process.env.TOKEN_ISSUER || 'qr-api';
 
 export const issueToken = (type, payload, secret, { subject } = {}) => {
   const definition = tokenDefinitions[type];

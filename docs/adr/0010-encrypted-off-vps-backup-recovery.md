@@ -38,9 +38,9 @@ The timer runs at 02:00 and 14:00 UTC. This is more frequent than the daily mini
 failure/retry margin inside the accepted 24-hour RPO. A success marker older than 18 hours is an
 alert. Failed units retry every 15 minutes subject to systemd start limits.
 
-The application and backup services use separate Unix identities. A dedicated `boltqruploads`
+The application and backup services use separate Unix identities. A dedicated `qruploads`
 group grants both services only the filesystem access needed for uploads; it does not grant the
-backup identity access to `/etc/bolt-qr/bolt-qr.env`. The restic and PostgreSQL passwords are passed
+backup identity access to `/etc/qr/qr.env`. The restic and PostgreSQL passwords are passed
 as systemd credentials. Provider credentials live only in the protected backup service
 configuration, never in the repository, release tree, backup payload, logs, or restore report.
 

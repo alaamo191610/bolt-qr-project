@@ -7,7 +7,7 @@ import { useAdminMonetary } from "../../hooks/useAdminMonetary";
 import LanguageToggle from "./LanguageToggle";
 import { Menu as DropdownMenu, Transition } from "@headlessui/react";
 import { Fragment } from "react";
-import type { OrganizationMembership } from "../../providers/AuthProvider";
+import type { BranchMembership, OrganizationMembership } from "../../providers/AuthProvider";
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -32,8 +32,11 @@ interface ResponsiveLayoutProps {
   onSignOut?: () => void;
   /** Only rendered when there are 2+ memberships - nothing to switch between otherwise. */
   organizations?: OrganizationMembership[];
+  branches?: BranchMembership[];
   onSwitchOrganization?: (organizationId: string) => void;
+  onSwitchBranch?: (branchId: string) => void;
   switchingOrganizationId?: string | null;
+  switchingBranchId?: string | null;
 }
 
 const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
@@ -44,8 +47,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
   userInfo,
   onSignOut,
   organizations,
+  branches,
   onSwitchOrganization,
+  onSwitchBranch,
   switchingOrganizationId,
+  switchingBranchId,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
@@ -402,6 +408,42 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                                     {isSwitching && (
                                       <span className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-slate-300 border-t-emerald-600 animate-spin" />
                                     )}
+                                  </button>
+                                )}
+                              </DropdownMenu.Item>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {branches && branches.length > 1 && (
+                        <div className="p-2 border-t border-slate-100 dark:border-slate-700">
+                          <p className="px-4 pt-2 pb-1 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                            {t("auth.branches") || "Branches"}
+                          </p>
+                          {branches.map((branch) => {
+                            const isSwitching = switchingBranchId === branch.id;
+                            return (
+                              <DropdownMenu.Item key={branch.id} disabled={branch.current || isSwitching}>
+                                {({ active }) => (
+                                  <button
+                                    type="button"
+                                    onClick={() => !branch.current && onSwitchBranch?.(branch.id)}
+                                    disabled={branch.current || isSwitching}
+                                    className={`${active && !branch.current
+                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                      : "text-slate-600 dark:text-slate-400"
+                                      } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 disabled:cursor-default`}
+                                  >
+                                    <Building2 className="w-4 h-4 shrink-0" />
+                                    <span className="flex-1 min-w-0 text-left rtl:text-right truncate">
+                                      {branch.name}
+                                      <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                        {branch.code}
+                                      </span>
+                                    </span>
+                                    {branch.current && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                                    {isSwitching && <span className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-slate-300 border-t-emerald-600 animate-spin" />}
                                   </button>
                                 )}
                               </DropdownMenu.Item>

@@ -432,7 +432,7 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
   const enrollmentCookieHeader = enrollment.headers.get('set-cookie');
   const sessionCookie = enrollmentCookieHeader?.split(';')[0];
   assert.equal(enrollment.status, 200);
-  assert.ok(sessionCookie?.startsWith('boltqr_superadmin='));
+  assert.ok(sessionCookie?.startsWith('qr_superadmin='));
   assert.match(enrollmentCookieHeader, /HttpOnly/u);
   assert.match(enrollmentCookieHeader, /SameSite=Strict/u);
   assert.match(enrollmentCookieHeader, /Path=\/api\/super-admin/u);
@@ -654,7 +654,7 @@ test('SuperAdmin requires MFA enrollment, recent authentication, recovery, and r
   const recoverySession = await recovery.json();
   const recoveryCookie = recovery.headers.get('set-cookie')?.split(';')[0];
   assert.equal(recovery.status, 200);
-  assert.ok(recoveryCookie?.startsWith('boltqr_superadmin='));
+  assert.ok(recoveryCookie?.startsWith('qr_superadmin='));
   assert.equal(recoverySession.token, undefined);
   assert.equal(
     (await database.prisma.superAdmin.findUnique({ where: { id: superAdmin.id } })).mfa_recovery_code_hashes.length,

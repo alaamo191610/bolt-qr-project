@@ -16,8 +16,8 @@ const isoTimestamp = value => {
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 };
 
-export const adminRealtimeRoom = ({ organizationId, adminId }) =>
-  `organization:${organizationId}:admin:${adminId}`;
+export const adminRealtimeRoom = ({ organizationId, adminId, branchId }) =>
+  `organization:${organizationId}${branchId ? `:branch:${branchId}` : ''}:admin:${adminId}`;
 
 export const orderRealtimeRoom = ({ organizationId, orderId }) =>
   `organization:${organizationId}:order:${orderId}`;
@@ -87,10 +87,12 @@ export const createOrderRealtimeService = ({
     return {
       organizationId: session.organization.id,
       adminId: session.admin.id,
+      branchId: session.branch?.id || null,
       userId: session.user?.id,
       room: adminRealtimeRoom({
         organizationId: session.organization.id,
         adminId: session.admin.id,
+        branchId: session.branch?.id || null,
       }),
     };
   };
@@ -315,6 +317,7 @@ export const createOrderRealtimeService = ({
     io.to(adminRealtimeRoom({
       organizationId: order.organization_id,
       adminId: order.admin_id,
+      branchId: order.branch_id,
     })).emit('order.created.v1', envelope);
     return envelope;
   };
@@ -324,6 +327,7 @@ export const createOrderRealtimeService = ({
     io.to(adminRealtimeRoom({
       organizationId: order.organization_id,
       adminId: order.admin_id,
+      branchId: order.branch_id,
     })).to(orderRealtimeRoom({
       organizationId: order.organization_id,
       orderId: order.id,

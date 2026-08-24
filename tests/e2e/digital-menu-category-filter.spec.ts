@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-const FIXTURE_PATH = '/tmp/bolt-qr-real-backend-fixture.json';
+const FIXTURE_PATH = '/tmp/qr-real-backend-fixture.json';
 
 type Fixture = { email: string; password: string };
 

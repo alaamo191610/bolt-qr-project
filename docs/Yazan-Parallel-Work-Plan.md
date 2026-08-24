@@ -49,7 +49,7 @@ The disposable PostgreSQL and tenant characterization point is complete.
 
 ### Completed
 
-- Added `tests/helpers/testDatabase.js`, which creates a uniquely named `bolt_qr_test_*`
+- Added `tests/helpers/testDatabase.js`, which creates a uniquely named `qr_test_*`
   database when `TEST_DATABASE_URL` is not supplied, applies the full Prisma migration chain,
   truncates only application tables between tests, and drops only databases created by the
   harness. Unsafe database names are rejected.
@@ -60,7 +60,7 @@ The disposable PostgreSQL and tenant characterization point is complete.
   update denial with database verification that the other tenant was unchanged.
 - Added `npm run test:integration` with automatic Prisma generation and a PostgreSQL 16 service
   in CI. The local ephemeral database was removed successfully after the passing run; no
-  `bolt_qr_test_*` databases remain.
+  `qr_test_*` databases remain.
 
 ### Evidence
 
@@ -94,7 +94,7 @@ aggregate-root ownership columns were changed in this point.
 
 `npm run test:integration` passed 4 tests. The full validation sequence passed 12 unit tests,
 5 frontend tests, ESLint, TypeScript, Prisma validation, and the production build. Ephemeral
-database cleanup completed with no `bolt_qr_test_*` databases left behind.
+database cleanup completed with no `qr_test_*` databases left behind.
 
 ### Next implementation point
 
@@ -125,7 +125,7 @@ migrated; all migration assertions ran against isolated disposable PostgreSQL da
 
 The complete validation sequence passed: 12 unit tests, 4 PostgreSQL integration/rehearsal tests,
 5 frontend tests, ESLint, TypeScript, Prisma validation, and production build. No
-`bolt_qr_test_*` databases remain after cleanup.
+`qr_test_*` databases remain after cleanup.
 
 ### Next implementation point
 
@@ -155,7 +155,7 @@ databases.
 
 `npm run test:integration` passed 5 tests: authentication/tenant characterization, direct owner
 backfill, index/FK verification, idempotent rerun, and cross-tenant modifier-group rejection.
-The failed-run cleanup path was corrected and no `bolt_qr_test_*` databases remain.
+The failed-run cleanup path was corrected and no `qr_test_*` databases remain.
 
 ### Next implementation point
 
@@ -694,7 +694,7 @@ Implemented the recovery automation in `ops/bin`: backup now acquires an overlap
 upload symlinks, stages only a custom-format PostgreSQL dump, uploads, and a versioned checksum
 manifest, then runs encrypted `restic` backup, retention pruning, repository checking, an atomic
 success marker, and dead-man monitor pings. A dedicated init unit, hardened backup service, and
-02:00/14:00 UTC persistent timer run under `boltqrbackup`; the new `boltqruploads` group gives it
+02:00/14:00 UTC persistent timer run under `qrbackup`; the new `qruploads` group gives it
 read-only upload access without access to the application secret environment. Restic and database
 passwords use systemd credentials.
 
@@ -1027,8 +1027,8 @@ SuperAdmin session whose MFA event is no more than ten minutes old; stale-MFA te
 writes without mutation.
 
 The [database-role runbook](operations/database-role-boundary.md) now defines and automates the
-single-VPS least-privilege boundary. `boltqr_runtime` is a non-owner, non-inheriting DML-only role
-with no DDL, database `TEMP`, cluster powers, or `_prisma_migrations` access. `boltqr_migrate` is a
+single-VPS least-privilege boundary. `qr_runtime` is a non-owner, non-inheriting DML-only role
+with no DDL, database `TEMP`, cluster powers, or `_prisma_migrations` access. `qr_migrate` is a
 separate non-inheriting schema owner used only by deployment. Node/systemd startup no longer runs
 migrations, the deployment wrapper exposes the migration URL only to Prisma, and a read-only
 verification gate runs before release activation. Disposable-PostgreSQL evidence converts a real

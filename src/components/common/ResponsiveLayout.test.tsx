@@ -7,6 +7,7 @@ import type { OrganizationMembership } from '../../providers/AuthProvider';
 
 const translations: Record<string, string> = {
   'auth.organizations': 'Organizations',
+  'auth.branches': 'Branches',
   'auth.signedInAs': 'Signed in as',
   'auth.signOut': 'Sign Out',
   'common.search': 'Search',
@@ -34,6 +35,11 @@ const userInfo = { id: 'admin-1', name: 'Alaa', email: 'alaa@example.com' };
 const orgs: OrganizationMembership[] = [
   { id: 'org-1', name: 'Bella Vista', slug: 'bella-vista', role: 'OWNER', current: true },
   { id: 'org-2', name: 'North Branch', slug: 'north-branch', role: 'MANAGER', current: false },
+];
+
+const branches = [
+  { id: 'branch-1', organizationId: 'org-1', code: 'MAIN', name: 'Main Branch', timezone: 'Asia/Amman', currency: 'JOD', current: true },
+  { id: 'branch-2', organizationId: 'org-1', code: 'WEST', name: 'West Branch', timezone: 'Asia/Amman', currency: 'JOD', current: false },
 ];
 
 const openProfileMenu = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -107,5 +113,31 @@ describe('ResponsiveLayout organization switcher', () => {
     await openProfileMenu(user);
     const switchingButton = screen.getByText('North Branch').closest('button');
     expect(switchingButton).toBeDisabled();
+  });
+
+  it('lists branches separately and switches the selected branch', async () => {
+    const user = userEvent.setup();
+    const onSwitchBranch = vi.fn();
+    render(
+      <ResponsiveLayout
+        navigation={navigation}
+        activeTab="qr-generator"
+        setActiveTab={vi.fn()}
+        userInfo={userInfo}
+        branches={branches}
+        onSwitchBranch={onSwitchBranch}
+      >
+        <div />
+      </ResponsiveLayout>,
+    );
+
+    await openProfileMenu(user);
+    expect(screen.getByText('Branches')).toBeInTheDocument();
+    expect(screen.getByText('Main Branch')).toBeInTheDocument();
+    expect(screen.getByText('West Branch')).toBeInTheDocument();
+    expect(screen.getByText('Main Branch').closest('button')).toBeDisabled();
+
+    await user.click(screen.getByText('West Branch'));
+    expect(onSwitchBranch).toHaveBeenCalledWith('branch-2');
   });
 });

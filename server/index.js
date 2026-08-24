@@ -109,7 +109,7 @@ const corsOptions = {
 };
 
 const superAdminSessionCookie = (token, maxAge = 30 * 60) => [
-  `boltqr_superadmin=${token || ''}`,
+  `qr_superadmin=${token || ''}`,
   'HttpOnly',
   'SameSite=Strict',
   'Path=/api/super-admin',
@@ -146,6 +146,11 @@ const orderRealtime = createOrderRealtimeService({
   tokenSecret: JWT_SECRET,
   resolveTenantClaims,
 });
+
+// Every authenticated admin session has one active branch. Keeping this
+// scope in one helper makes it difficult for list/update routes to accidentally
+// fall back to organization-wide data.
+const activeBranchScope = req => ({ branch_id: req.auth?.branchId || null });
 
 const app = express();
 const server = createServer(app);
@@ -465,6 +470,7 @@ app.get('/api/auth/session', authenticate, async (req, res) => {
     const session = await resolveTenantSession({
       userId: req.auth.userId,
       organizationId: req.auth.organizationId,
+      branchId: req.user?.branchId,
     });
     if (!session) return res.status(403).json({ error: 'Tenant access is inactive or unavailable' });
     res.json({
@@ -503,6 +509,42 @@ app.get('/api/auth/organizations', authenticate, async (req, res) => {
   }
 });
 
+app.get('/api/auth/branches', authenticate, async (req, res) => {
+  if (!req.auth?.organizationId) return res.status(403).json({ error: 'Restaurant membership required' });
+  try {
+    const membership = await prisma.organizationUser.findUnique({
+      where: {
+        organization_id_user_id: {
+          organization_id: req.auth.organizationId,
+          user_id: req.auth.userId,
+        },
+      },
+      select: { role: true, default_branch_id: true },
+    });
+    if (!membership) return res.status(403).json({ error: 'Restaurant membership required' });
+    const branches = await prisma.branch.findMany({
+      where: {
+        organization_id: req.auth.organizationId,
+        active: true,
+        ...(membership.role === 'STAFF' ? { id: membership.default_branch_id || undefined } : {}),
+      },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+    res.json(branches.map(branch => ({
+      id: branch.id,
+      organizationId: branch.organization_id,
+      code: branch.code,
+      name: branch.name,
+      timezone: branch.timezone,
+      currency: branch.currency,
+      current: branch.id === req.auth.branchId,
+    })));
+  } catch (err) {
+    console.error('Branch list failed:', err);
+    res.status(500).json({ error: 'Unable to load branches' });
+  }
+});
+
 app.post('/api/auth/switch-organization', authenticate, async (req, res) => {
   const organizationId = String(req.body.organizationId || '');
   if (!isUuid(organizationId) || !req.auth?.userId) {
@@ -515,6 +557,25 @@ app.post('/api/auth/switch-organization', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Organization switch failed:', err);
     res.status(500).json({ error: 'Unable to switch organization' });
+  }
+});
+
+app.post('/api/auth/switch-branch', authenticate, async (req, res) => {
+  const branchId = String(req.body.branchId || '');
+  if (!isUuid(branchId) || !req.auth?.userId || !req.auth?.organizationId) {
+    return res.status(400).json({ error: 'Valid branch ID required' });
+  }
+  try {
+    const session = await resolveTenantSession({
+      userId: req.auth.userId,
+      organizationId: req.auth.organizationId,
+      branchId,
+    });
+    if (!session) return res.status(403).json({ error: 'You do not have access to this branch' });
+    res.json(tenantResponse(session, issueTenantToken(session)));
+  } catch (err) {
+    console.error('Branch switch failed:', err);
+    res.status(500).json({ error: 'Unable to switch branch' });
   }
 });
 
@@ -693,7 +754,7 @@ app.patch(
 app.get('/api/menus', authenticate, async (req, res) => {
   try {
     const menus = await prisma.menu.findMany({
-      where: { user_id: req.user.id, deleted_at: null },
+      where: { user_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req), deleted_at: null },
       orderBy: { created_at: 'desc' },
       include: {
         category: true,
@@ -736,7 +797,10 @@ app.post('/api/menus', authenticate, async (req, res) => {
     if (Array.isArray(ingredients) && ingredientIds.length !== new Set(ingredients.map(Number)).size) {
       return res.status(400).json({ error: 'Invalid ingredient list' });
     }
-    await assertCatalogOwnership(prisma, user_id, categoryId, ingredientIds);
+    await assertCatalogOwnership(prisma, user_id, categoryId, ingredientIds, {
+      organizationId: req.auth.organizationId,
+      branchId: req.auth.branchId,
+    });
 
     // 🆕 Enforce Menu Item Limit
     const admin = await prisma.admin.findUnique({
@@ -766,6 +830,7 @@ app.post('/api/menus', authenticate, async (req, res) => {
         available,
         user_id,
         organization_id: req.auth.organizationId,
+        branch_id: req.auth.branchId,
         menu_ingredients: {
           create: ingredientIds.map(id => ({ ingredient_id: id }))
         }
@@ -790,7 +855,7 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
   const menuId = Number(req.params.id);
   try {
     const ownedMenu = await prisma.menu.findFirst({
-      where: { id: menuId, user_id: req.user.id },
+      where: { id: menuId, user_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
       select: { id: true }
     });
     if (!ownedMenu) return res.status(404).json({ error: 'Menu item not found' });
@@ -803,7 +868,10 @@ app.put('/api/menus/:id', authenticate, async (req, res) => {
     if (ingredients !== undefined && (!Array.isArray(ingredients) || ingredientIds.length !== new Set(ingredients.map(Number)).size)) {
       return res.status(400).json({ error: 'Invalid ingredient list' });
     }
-    await assertCatalogOwnership(prisma, req.user.id, categoryId, ingredientIds || []);
+    await assertCatalogOwnership(prisma, req.user.id, categoryId, ingredientIds || [], {
+      organizationId: req.auth.organizationId,
+      branchId: req.auth.branchId,
+    });
 
     const data = {};
     if (name_en !== undefined) data.name_en = name_en;
@@ -1159,7 +1227,7 @@ app.get('/api/public/menus/:id/config', async (req, res) => {
 // --- Categories & Ingredients ---
 app.get('/api/categories', authenticate, async (req, res) => {
   const categories = await prisma.category.findMany({
-    where: { admin_id: req.user.id },
+    where: { admin_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
     orderBy: { name_en: 'asc' }
   });
   res.json(categories);
@@ -1174,6 +1242,7 @@ app.post('/api/categories', authenticate, async (req, res) => {
       data: {
         admin_id: req.user.id,
         organization_id: req.auth.organizationId,
+        branch_id: req.auth.branchId,
         name_en,
         name_ar,
       }
@@ -1187,7 +1256,7 @@ app.post('/api/categories', authenticate, async (req, res) => {
 
 app.get('/api/ingredients', authenticate, async (req, res) => {
   const ingredients = await prisma.ingredient.findMany({
-    where: { admin_id: req.user.id },
+    where: { admin_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
     orderBy: { name_en: 'asc' }
   });
   res.json(ingredients);
@@ -1208,6 +1277,7 @@ app.post('/api/ingredients', authenticate, async (req, res) => {
       data: {
         admin_id: req.user.id,
         organization_id: req.auth.organizationId,
+        branch_id: req.auth.branchId,
         name_en,
         name_ar,
         extra_price: extraPrice,
@@ -1243,6 +1313,7 @@ app.get('/api/orders', authenticate, async (req, res) => {
     const rows = await prisma.order.findMany({
       where: {
         organization_id: req.auth.organizationId,
+        ...activeBranchScope(req),
         ...statusFilter,
         ...cursorWhere(cursor),
       },
@@ -1278,7 +1349,7 @@ app.get('/api/orders', authenticate, async (req, res) => {
 
     const [ingredients, options, comboMenus] = await Promise.all([
       ingredientIds.size ? prisma.ingredient.findMany({
-        where: { id: { in: [...ingredientIds] }, admin_id: req.user.id },
+        where: { id: { in: [...ingredientIds] }, admin_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
         select: { id: true, name_en: true, name_ar: true },
       }) : [],
       optionIds.size ? prisma.modifierOption.findMany({
@@ -1286,7 +1357,7 @@ app.get('/api/orders', authenticate, async (req, res) => {
         select: { id: true, name_en: true, name_ar: true },
       }) : [],
       comboMenuIds.size ? prisma.menu.findMany({
-        where: { id: { in: [...comboMenuIds] }, user_id: req.user.id },
+        where: { id: { in: [...comboMenuIds] }, user_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
         select: { id: true, name_en: true, name_ar: true },
       }) : [],
     ]);
@@ -1747,6 +1818,7 @@ app.post('/api/orders', orderRateLimit, async (req, res) => {
         io.to(orderRealtime.adminRealtimeRoom({
           organizationId: fullOrder.organization_id,
           adminId: fullOrder.admin_id,
+          branchId: fullOrder.branch_id,
         })).emit('table-updated', {
           ...fullOrder.table,
           status: 'occupied'
@@ -1824,8 +1896,9 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
       const current = await tx.order.findFirst({
         where: {
           id: Number(req.params.id),
-          admin_id: req.user.id,
-          organization_id: req.auth.organizationId,
+        admin_id: req.user.id,
+        organization_id: req.auth.organizationId,
+        branch_id: req.auth.branchId,
         },
         select: { id: true, status: true, version: true, table_id: true }
       });
@@ -1878,6 +1951,7 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
         io.to(orderRealtime.adminRealtimeRoom({
           organizationId: result.order.organization_id,
           adminId: result.order.admin_id,
+          branchId: result.order.branch_id,
         })).emit('table-updated', result.releasedTable);
       }
     }
@@ -1888,7 +1962,7 @@ app.put('/api/orders/:id/status', authenticate, async (req, res) => {
 // --- Tables ---
 app.get('/api/tables', authenticate, async (req, res) => {
   const tables = await prisma.table.findMany({
-    where: { admin_id: req.user.id, organization_id: req.auth.organizationId },
+    where: { admin_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
     orderBy: { created_at: 'asc' }
   });
   res.json(tables);
@@ -2031,7 +2105,7 @@ app.put('/api/tables/:id', authenticate, async (req, res) => {
   try {
     const tableId = Number(req.params.id);
     const ownedTable = await prisma.table.findFirst({
-      where: { id: tableId, admin_id: req.user.id, organization_id: req.auth.organizationId },
+      where: { id: tableId, admin_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
       select: { id: true }
     });
     if (!ownedTable) return res.status(404).json({ error: 'Table not found' });
@@ -2068,7 +2142,7 @@ app.delete('/api/tables/:id', authenticate, async (req, res) => {
   try {
     const tableId = Number(req.params.id);
     const table = await prisma.table.findFirst({
-      where: { id: tableId, admin_id: req.user.id, organization_id: req.auth.organizationId },
+      where: { id: tableId, admin_id: req.user.id, organization_id: req.auth.organizationId, ...activeBranchScope(req) },
     });
 
     if (!table) {
@@ -2120,6 +2194,7 @@ app.post(
         io.to(orderRealtime.adminRealtimeRoom({
           organizationId: result.organizationId,
           adminId: result.restaurantId,
+          branchId: result.table.branch_id,
         })).emit('table-updated', {
           id: result.table.id,
           status: 'occupied',
@@ -2375,6 +2450,7 @@ app.get('/api/admin/analytics', authenticate, async (req, res) => {
   try {
     res.json(await analyticsService.summarize({
       organizationId: req.auth.organizationId,
+      branchId: req.auth.branchId,
       query: req.query,
     }));
   } catch (err) {
@@ -2395,6 +2471,7 @@ app.get('/api/admin/analytics/orders', authenticate, async (req, res) => {
     const rows = await prisma.order.findMany({
       where: {
         organization_id: req.auth.organizationId,
+        ...activeBranchScope(req),
         created_at: { gte: start, lt: end },
         ...cursorWhere(cursor),
       },

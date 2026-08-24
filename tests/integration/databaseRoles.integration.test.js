@@ -64,9 +64,9 @@ test('runtime database role can perform application DML but cannot own or migrat
   }
 
   const suffix = `${process.pid}_${randomBytes(4).toString('hex')}`;
-  const legacyRole = `boltqr_legacy_${suffix}`.slice(0, 63);
-  const migrationRole = `boltqr_migrate_${suffix}`.slice(0, 63);
-  const runtimeRole = `boltqr_runtime_${suffix}`.slice(0, 63);
+  const legacyRole = `qr_legacy_${suffix}`.slice(0, 63);
+  const migrationRole = `qr_migrate_${suffix}`.slice(0, 63);
+  const runtimeRole = `qr_runtime_${suffix}`.slice(0, 63);
   const legacyPassword = randomBytes(24).toString('base64url');
   const migrationPassword = randomBytes(24).toString('base64url');
   const runtimePassword = randomBytes(24).toString('base64url');

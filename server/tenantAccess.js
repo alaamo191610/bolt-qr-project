@@ -10,7 +10,7 @@ export const buildTenantClaims = session => ({
   id: session.admin.id,
   userId: session.user.id,
   organizationId: session.organization.id,
-  branchId: session.membership.default_branch_id || session.admin.default_branch_id || null,
+  branchId: session.branch?.id || session.membership.default_branch_id || session.admin.default_branch_id || null,
   membershipRole: session.membership.role,
   email: session.user.email,
   role: 'RESTAURANT_ADMIN',
@@ -24,6 +24,10 @@ export const tenantUserResponse = session => ({
   name: session.user.name || session.admin.restaurant_name,
   organizationId: session.organization.id,
   organizationName: session.organization.name,
+  ...(session.branch ? {
+    branchId: session.branch.id,
+    branchName: session.branch.name,
+  } : {}),
   role: session.membership.role,
 });
 

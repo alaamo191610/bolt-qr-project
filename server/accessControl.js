@@ -16,8 +16,8 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
     const cookieToken = String(req.headers.cookie || '')
       .split(';')
       .map(value => value.trim())
-      .find(value => value.startsWith('boltqr_superadmin='))
-      ?.slice('boltqr_superadmin='.length);
+      .find(value => value.startsWith('qr_superadmin='))
+      ?.slice('qr_superadmin='.length);
     const token = authHeader?.startsWith('Bearer ')
       ? authHeader.slice('Bearer '.length).trim()
       : cookieToken;
@@ -51,7 +51,7 @@ export const createAuthenticate = ({ db, tokenSecret, resolveTenantClaims }) => 
         req.auth = {
           userId: session.user.id,
           organizationId: session.organization.id,
-          branchId: session.membership.default_branch_id || session.admin.default_branch_id || null,
+          branchId: session.branch?.id || session.membership.default_branch_id || session.admin.default_branch_id || null,
           membershipRole: session.membership.role,
         };
         req.user = {
@@ -100,10 +100,14 @@ export const requireOrganizationRole = (...roles) => (req, res, next) => {
   next();
 };
 
-export const assertCatalogOwnership = async (db, adminId, categoryId, ingredientIds = []) => {
+export const assertCatalogOwnership = async (db, adminId, categoryId, ingredientIds = [], scope = {}) => {
+  const tenantScope = {
+    ...(scope.organizationId ? { organization_id: scope.organizationId } : {}),
+    ...(scope.branchId ? { branch_id: scope.branchId } : {}),
+  };
   if (categoryId !== null && categoryId !== undefined) {
     const category = await db.category.findFirst({
-      where: { id: Number(categoryId), admin_id: adminId },
+      where: { id: Number(categoryId), admin_id: adminId, ...tenantScope },
       select: { id: true },
     });
     if (!category) throw Object.assign(new Error('Invalid category'), { status: 400 });
@@ -111,7 +115,7 @@ export const assertCatalogOwnership = async (db, adminId, categoryId, ingredient
 
   if (ingredientIds.length) {
     const ownedCount = await db.ingredient.count({
-      where: { id: { in: ingredientIds }, admin_id: adminId },
+      where: { id: { in: ingredientIds }, admin_id: adminId, ...tenantScope },
     });
     if (ownedCount !== ingredientIds.length) {
       throw Object.assign(new Error('One or more ingredients are invalid'), { status: 400 });

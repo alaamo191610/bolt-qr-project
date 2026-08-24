@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { resolveRuntimeConfig } from '../server/runtimeConfig.js';
 
 test('development runtime has safe deterministic defaults', () => {
-  const config = resolveRuntimeConfig({ env: {}, cwd: '/srv/bolt-qr' });
+  const config = resolveRuntimeConfig({ env: {}, cwd: '/srv/qr' });
 
   assert.deepEqual(config, {
     host: '0.0.0.0',
     port: 3000,
-    uploadDirectory: '/srv/bolt-qr/uploads',
+    uploadDirectory: '/srv/qr/uploads',
     releaseVersion: 'development',
     shutdownTimeoutMs: 25_000,
   });
@@ -19,15 +19,15 @@ test('production runtime binds to loopback and requires persistent absolute uplo
     env: {
       NODE_ENV: 'production',
       PORT: '3100',
-      UPLOAD_DIR: '/var/lib/bolt-qr/uploads',
+      UPLOAD_DIR: '/var/lib/qr/uploads',
       RELEASE_VERSION: '29d1e83',
     },
-    cwd: '/opt/bolt-qr/current',
+    cwd: '/opt/qr/current',
   });
 
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.port, 3100);
-  assert.equal(config.uploadDirectory, '/var/lib/bolt-qr/uploads');
+  assert.equal(config.uploadDirectory, '/var/lib/qr/uploads');
   assert.equal(config.releaseVersion, '29d1e83');
 });
 
@@ -50,7 +50,7 @@ test('production runtime rejects missing, relative, broad, and malformed configu
   );
   assert.throws(
     () => resolveRuntimeConfig({
-      env: { NODE_ENV: 'production', UPLOAD_DIR: '/var/lib/bolt-qr/uploads', RELEASE_VERSION: '../bad' },
+      env: { NODE_ENV: 'production', UPLOAD_DIR: '/var/lib/qr/uploads', RELEASE_VERSION: '../bad' },
     }),
     /RELEASE_VERSION/,
   );

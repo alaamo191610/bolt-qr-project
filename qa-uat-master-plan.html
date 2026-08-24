@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Bolt QR master test plan: QA engineering track, UAT acceptance track, and joint release gates.">
-  <title>Bolt QR · QA + UAT Master Test Plan</title>
+  <meta name="description" content="QR master test plan: QA engineering track, UAT acceptance track, and joint release gates.">
+  <title>QR · QA + UAT Master Test Plan</title>
   <style>
     :root {
       --ink: #102a2b;
@@ -205,7 +205,7 @@
   <header class="hero wrap">
     <div class="hero-row">
       <div>
-        <div class="eyebrow">Bolt QR · release verification</div>
+        <div class="eyebrow">QR · release verification</div>
         <h1>QA + UAT master test plan</h1>
         <p class="lede">Two separate tracks over one system. The QA track proves the engine is correct, isolated, and operable. The UAT track proves a real restaurant can run a real service on it. Joint gates close the release.</p>
       </div>
@@ -790,7 +790,7 @@
     /* ============================================================
        STATE
        ============================================================ */
-    const STORAGE_KEY = 'bolt-qr-qa-uat-master-plan-v2';
+    const STORAGE_KEY = 'qr-qa-uat-master-plan-v2';
     let state = { cases: {}, sign: {} };
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -1065,7 +1065,7 @@
 
     function exportJson() {
       const counts = bucket(ALL);
-      download('bolt-qr-qa-uat-' + stamp() + '.json', JSON.stringify({
+      download('qr-qa-uat-' + stamp() + '.json', JSON.stringify({
         exportedAt: new Date().toISOString(),
         signOff: state.sign,
         summary: { total: ALL.length, counts: counts },
@@ -1078,7 +1078,7 @@
       const cols = ['id', 'track', 'owner', 'priority', 'section', 'title', 'expected', 'automation', 'status', 'note'];
       const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
       const lines = [cols.join(',')].concat(exportRows().map(row => cols.map(k => esc(row[k])).join(',')));
-      download('bolt-qr-qa-uat-' + stamp() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+      download('qr-qa-uat-' + stamp() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
       showToast('Exported CSV.');
     }
 

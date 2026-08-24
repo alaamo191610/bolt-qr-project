@@ -144,7 +144,7 @@ export const verifyQueryPlans = async ({
 }) => {
   if (!databaseUrl) throw new Error('DATABASE_URL is required');
   if (!UUID.test(String(organizationId || ''))) throw new Error('QUERY_PLAN_ORGANIZATION_ID must be a UUID');
-  const client = new Client({ connectionString: databaseUrl, application_name: 'bolt-query-plan-verifier' });
+  const client = new Client({ connectionString: databaseUrl, application_name: 'QR-query-plan-verifier' });
   await client.connect();
   try {
     await client.query('SET statement_timeout = 10000');

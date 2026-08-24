@@ -16,7 +16,7 @@ test('token classes carry explicit issuer, audience, purpose, and expiry', () =>
   });
   const decoded = jwt.decode(token);
 
-  assert.equal(decoded.iss, 'bolt-qr-api');
+  assert.equal(decoded.iss, 'qr-api');
   assert.equal(decoded.aud, 'restaurant-api');
   assert.equal(decoded.purpose, TOKEN_TYPES.RESTAURANT_SESSION);
   assert.equal(decoded.sub, 'identity-1');
@@ -74,7 +74,7 @@ test('expired tokens are rejected', () => {
   const expired = jwt.sign(
     { purpose: TOKEN_TYPES.RESTAURANT_SESSION },
     secret,
-    { issuer: 'bolt-qr-api', audience: 'restaurant-api', expiresIn: -1 },
+    { issuer: 'qr-api', audience: 'restaurant-api', expiresIn: -1 },
   );
 
   assert.throws(() => verifyToken(TOKEN_TYPES.RESTAURANT_SESSION, expired, secret));

@@ -9,7 +9,7 @@ import { createTestDatabase } from '../helpers/testDatabase.js';
 // Runs as Playwright's globalSetup (not a webServer entry) so its returned
 // teardown function executes in the same process: an http.Server managing a
 // live Socket.IO connection can hang well past a cross-process webServer
-// teardown window (confirmed - disposable bolt_qr_test_* databases were
+// teardown window (confirmed - disposable qr_test_* databases were
 // leaking on every run), but only the database drop actually needs to
 // complete reliably here, and an in-process function call guarantees that.
 
@@ -17,7 +17,7 @@ const port = Number(process.env.REAL_E2E_PORT || 3100);
 // tests/e2e/real-backend-golden.spec.ts reads this same fixed path directly
 // (it has no access to this process's env). Not os.tmpdir()-derived: that
 // resolves outside /tmp on macOS, which would silently desync the two.
-const fixturePath = process.env.REAL_E2E_FIXTURE || '/tmp/bolt-qr-real-backend-fixture.json';
+const fixturePath = process.env.REAL_E2E_FIXTURE || '/tmp/qr-real-backend-fixture.json';
 
 const seedFixture = async prisma => {
   const organizationId = randomUUID();
@@ -125,7 +125,7 @@ const withTimeout = (promise, ms) => Promise.race([
 export default async function globalSetup() {
   process.env.NODE_ENV = 'test'; // keeps server/index.js's own auto-listen disabled; we listen explicitly below
   process.env.PORT = String(port);
-  const uploadDirectory = await mkdtemp(path.join(os.tmpdir(), 'bolt-qr-real-e2e-uploads-'));
+  const uploadDirectory = await mkdtemp(path.join(os.tmpdir(), 'qr-real-e2e-uploads-'));
   process.env.UPLOAD_DIR = uploadDirectory;
 
   const database = await createTestDatabase();

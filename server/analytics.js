@@ -54,13 +54,17 @@ const normalizeAnalytics = value => {
 };
 
 export const createAnalyticsService = ({ database, clock = () => new Date() }) => ({
-  async summarize({ organizationId, query = {} }) {
+  async summarize({ organizationId, branchId, query = {} }) {
     const range = resolveAnalyticsRange(query, clock);
+    const branchFilter = branchId
+      ? Prisma.sql`AND branch_id = ${branchId}::uuid`
+      : Prisma.sql`AND branch_id IS NULL`;
     const rows = await database.$queryRaw(Prisma.sql`
       WITH scoped_orders AS MATERIALIZED (
         SELECT id, status, total, table_id, created_at
         FROM orders
         WHERE organization_id = ${organizationId}::uuid
+          ${branchFilter}
           AND created_at >= ${range.start}
           AND created_at < ${range.end}
       ),

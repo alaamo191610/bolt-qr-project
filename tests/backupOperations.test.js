@@ -39,7 +39,7 @@ test('backup stages only database/uploads, enforces retention, verifies restic, 
   assert.match(backup, /keep_daily < 7/);
   assert.match(backup, /restic check/);
   assert.match(backup, /Another backup is already running/);
-  assert.doesNotMatch(backup, /JWT_SECRET|SUPER_ADMIN_MFA_ENCRYPTION_KEY|bolt-qr\.env/);
+  assert.doesNotMatch(backup, /JWT_SECRET|SUPER_ADMIN_MFA_ENCRYPTION_KEY|qr\.env/);
 
   const checkPosition = backup.indexOf('restic check');
   const markerPosition = backup.indexOf('last-success.tmp');
@@ -49,7 +49,7 @@ test('backup stages only database/uploads, enforces retention, verifies restic, 
 });
 
 test('freshness check accepts a current marker and rejects stale or malformed state', async t => {
-  const workingDirectory = await mkdtemp(path.join(tmpdir(), 'bolt-backup-status-'));
+  const workingDirectory = await mkdtemp(path.join(tmpdir(), 'QR-backup-status-'));
   t.after(() => rm(workingDirectory, { recursive: true, force: true }));
   const marker = path.join(workingDirectory, 'last-success');
 
@@ -88,7 +88,7 @@ test('freshness check accepts a current marker and rejects stale or malformed st
 });
 
 test('restore script refuses production and non-empty targets before invoking restore tools', async t => {
-  const workingDirectory = await mkdtemp(path.join(tmpdir(), 'bolt-restore-guard-'));
+  const workingDirectory = await mkdtemp(path.join(tmpdir(), 'QR-restore-guard-'));
   t.after(() => rm(workingDirectory, { recursive: true, force: true }));
   const password = path.join(workingDirectory, 'credential');
   const productionUploads = path.join(workingDirectory, 'uploads');
@@ -144,11 +144,11 @@ test('restore validates database isolation, integrity, uploads, and measured RTO
   assert.match(restore, /Restored uploads contain a symbolic link/);
   assert.match(restore, /pg_restore[\s\S]*--exit-on-error/);
   assert.match(restore, /rto_met/);
-  assert.match(restore, /bolt-qr-restore-report-v1/);
+  assert.match(restore, /qr-restore-report-v1/);
 });
 
 test('backup and isolated restore orchestration completes with controlled command doubles', async t => {
-  const workingDirectory = await mkdtemp(path.join(tmpdir(), 'bolt-recovery-rehearsal-'));
+  const workingDirectory = await mkdtemp(path.join(tmpdir(), 'QR-recovery-rehearsal-'));
   t.after(() => rm(workingDirectory, { recursive: true, force: true }));
   const fakeBin = path.join(workingDirectory, 'bin');
   const uploads = path.join(workingDirectory, 'uploads');
@@ -249,7 +249,7 @@ touch "${'$'}FAKE_RESTORED_FLAG"
   });
   assert.equal(backupResult.status, 0, backupResult.stderr);
   assert.match(await readFile(path.join(state, 'last-success'), 'utf8'), /completed_epoch=/);
-  assert.match(await readFile(path.join(repository, 'payload', 'manifest.txt'), 'utf8'), /format=bolt-qr-backup-v1/);
+  assert.match(await readFile(path.join(repository, 'payload', 'manifest.txt'), 'utf8'), /format=qr-backup-v1/);
   assert.deepEqual((await readFile(resticLog, 'utf8')).trim().split('\n'), ['backup', 'forget', 'check']);
 
   const restoreResult = spawnSync(script('ops/bin/restore-pilot.sh'), ['latest'], {
@@ -279,24 +279,24 @@ touch "${'$'}FAKE_RESTORED_FLAG"
 });
 
 test('systemd schedules a hardened twice-daily backup with retries and a four-hour ceiling', async () => {
-  const service = await read('ops/systemd/bolt-qr-backup.service');
-  const initService = await read('ops/systemd/bolt-qr-backup-init.service');
-  const timer = await read('ops/systemd/bolt-qr-backup.timer');
-  const environment = await read('ops/env/bolt-qr-backup.env.example');
+  const service = await read('ops/systemd/qr-backup.service');
+  const initService = await read('ops/systemd/qr-backup-init.service');
+  const timer = await read('ops/systemd/qr-backup.timer');
+  const environment = await read('ops/env/qr-backup.env.example');
 
-  assert.match(service, /^User=boltqrbackup$/m);
-  assert.match(service, /^Group=boltqrbackup$/m);
-  assert.match(service, /^SupplementaryGroups=boltqruploads$/m);
+  assert.match(service, /^User=qrbackup$/m);
+  assert.match(service, /^Group=qrbackup$/m);
+  assert.match(service, /^SupplementaryGroups=qruploads$/m);
   assert.match(service, /^LoadCredential=restic-password:/m);
   assert.match(service, /^LoadCredential=postgres-passfile:/m);
   assert.match(service, /^NoNewPrivileges=true$/m);
   assert.match(service, /^ProtectSystem=strict$/m);
-  assert.match(service, /^ReadOnlyPaths=\/var\/lib\/bolt-qr\/uploads$/m);
+  assert.match(service, /^ReadOnlyPaths=\/var\/lib\/qr\/uploads$/m);
   assert.match(service, /^Restart=on-failure$/m);
   assert.match(service, /^TimeoutStartSec=4h$/m);
   assert.match(initService, /^ExecStart=\/usr\/bin\/restic init$/m);
   assert.match(initService, /^LoadCredential=restic-password:/m);
-  assert.match(initService, /^User=boltqrbackup$/m);
+  assert.match(initService, /^User=qrbackup$/m);
   assert.match(timer, /^OnCalendar=\*-\*-\* 02,14:00:00 UTC$/m);
   assert.match(timer, /^Persistent=true$/m);
 

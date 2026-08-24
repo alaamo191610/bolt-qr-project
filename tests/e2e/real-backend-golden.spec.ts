@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 const BACKEND_URL = 'http://127.0.0.1:3100';
-const FIXTURE_PATH = '/tmp/bolt-qr-real-backend-fixture.json';
+const FIXTURE_PATH = '/tmp/qr-real-backend-fixture.json';
 
 type Fixture = {
   adminId: string;

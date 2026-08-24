@@ -24,8 +24,8 @@ if [[ -n "${BACKUP_HEALTHCHECK_URL:-}" ]] && ! command -v curl >/dev/null 2>&1; 
   exit 69
 fi
 
-backup_state_directory="${BACKUP_STATE_DIR:-/var/lib/bolt-qr/backup-state}"
-backup_staging_root="${BACKUP_STAGING_ROOT:-/var/cache/bolt-qr-backup}"
+backup_state_directory="${BACKUP_STATE_DIR:-/var/lib/qr/backup-state}"
+backup_staging_root="${BACKUP_STAGING_ROOT:-/var/cache/qr-backup}"
 backup_host="${BACKUP_HOST:-$(hostname -f)}"
 keep_daily="${BACKUP_KEEP_DAILY:-7}"
 keep_weekly="${BACKUP_KEEP_WEEKLY:-4}"
@@ -120,7 +120,7 @@ completed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 completed_epoch="$(date -u +'%s')"
 
 printf '%s\n' \
-  'format=bolt-qr-backup-v1' \
+  'format=qr-backup-v1' \
   "created_at=$completed_at" \
   "backup_host=$backup_host" \
   "source_database_fingerprint=$source_database_fingerprint" \
@@ -131,12 +131,12 @@ printf '%s\n' \
 
 (
   cd "$payload_directory"
-  restic backup --host "$backup_host" --tag bolt-qr --tag scheduled .
+  restic backup --host "$backup_host" --tag qr --tag scheduled .
 )
 
 restic forget \
   --host "$backup_host" \
-  --tag bolt-qr \
+  --tag qr \
   --keep-daily "$keep_daily" \
   --keep-weekly "$keep_weekly" \
   --keep-monthly "$keep_monthly" \

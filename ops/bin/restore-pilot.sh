@@ -87,8 +87,8 @@ if [[ "$target_table_count" != "0" ]]; then
   exit 65
 fi
 
-restore_staging_root="${RESTORE_STAGING_ROOT:-/var/cache/bolt-qr-restore}"
-restore_report_directory="${RESTORE_REPORT_DIR:-/var/lib/bolt-qr/restore-reports}"
+restore_staging_root="${RESTORE_STAGING_ROOT:-/var/cache/qr-restore}"
+restore_report_directory="${RESTORE_REPORT_DIR:-/var/lib/qr/restore-reports}"
 if [[ "$restore_staging_root" != /* || "$restore_report_directory" != /* ]]; then
   echo "Restore staging and report directories must be absolute" >&2
   exit 64
@@ -104,7 +104,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 started_epoch="$(date -u +'%s')"
-restic restore "$snapshot_id" --host "$BACKUP_HOST" --tag bolt-qr --target "$restore_parent"
+restic restore "$snapshot_id" --host "$BACKUP_HOST" --tag qr --target "$restore_parent"
 
 payload_directory="$restore_parent"
 if [[ -d "$restore_parent/payload" ]]; then
@@ -114,10 +114,10 @@ database_dump="$payload_directory/database.dump"
 manifest="$payload_directory/manifest.txt"
 restored_uploads="$payload_directory/uploads"
 if [[ ! -f "$database_dump" || ! -f "$manifest" || ! -d "$restored_uploads" ]]; then
-  echo "Restored snapshot does not contain the Bolt QR backup payload" >&2
+  echo "Restored snapshot does not contain the QR backup payload" >&2
   exit 65
 fi
-if ! grep -qx 'format=bolt-qr-backup-v1' "$manifest"; then
+if ! grep -qx 'format=qr-backup-v1' "$manifest"; then
   echo "Unsupported or invalid backup manifest" >&2
   exit 65
 fi
@@ -161,7 +161,7 @@ if (( elapsed_seconds <= rto_seconds )); then rto_met=true; fi
 report_timestamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 report_file="$restore_report_directory/restore-${completed_epoch}.txt"
 printf '%s\n' \
-  'format=bolt-qr-restore-report-v1' \
+  'format=qr-restore-report-v1' \
   "completed_at=$report_timestamp" \
   "snapshot=$snapshot_id" \
   "target=$target_fingerprint" \

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-release_root="${BOLT_QR_RELEASE_ROOT:-/opt/bolt-qr/releases}"
-current_link="${BOLT_QR_CURRENT_LINK:-/opt/bolt-qr/current}"
-previous_link="${BOLT_QR_PREVIOUS_LINK:-/opt/bolt-qr/previous}"
-health_url="${BOLT_QR_HEALTH_URL:-http://127.0.0.1:3000/api/health/ready}"
+release_root="${qr_RELEASE_ROOT:-/opt/qr/releases}"
+current_link="${qr_CURRENT_LINK:-/opt/qr/current}"
+previous_link="${qr_PREVIOUS_LINK:-/opt/qr/previous}"
+health_url="${qr_HEALTH_URL:-http://127.0.0.1:3000/api/health/ready}"
 
 if [[ ! -L "$current_link" || ! -L "$previous_link" ]]; then
   echo "Both current and previous release links are required" >&2
@@ -28,7 +28,7 @@ mv -Tf "$current_next_link" "$current_link"
 mv -Tf "$previous_next_link" "$previous_link"
 
 # This rolls back application code only. Database migrations must remain backward compatible.
-systemctl restart bolt-qr.service
+systemctl restart qr.service
 curl --fail --silent --show-error --retry 12 --retry-delay 2 "$health_url" >/dev/null
 echo "Rolled back application to $(basename "$previous_target")"
 

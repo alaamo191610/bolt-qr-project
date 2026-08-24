@@ -10,6 +10,8 @@ export interface User {
   name?: string;
   organizationId?: string;
   organizationName?: string;
+  branchId?: string;
+  branchName?: string;
   role?: "OWNER" | "MANAGER" | "STAFF";
 }
 
@@ -18,6 +20,16 @@ export interface OrganizationMembership {
   name: string;
   slug: string;
   role: "OWNER" | "MANAGER" | "STAFF";
+  current: boolean;
+}
+
+export interface BranchMembership {
+  id: string;
+  organizationId: string;
+  code: string;
+  name: string;
+  timezone: string;
+  currency: string;
   current: boolean;
 }
 
@@ -34,18 +46,22 @@ interface SessionResponse {
 type AuthCtxType = {
   user: User | null;
   organizations: OrganizationMembership[];
+  branches: BranchMembership[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   switchOrganization: (organizationId: string) => Promise<void>;
+  switchBranch: (branchId: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthCtx = React.createContext<AuthCtxType>({
   user: null,
   organizations: [],
+  branches: [],
   loading: true,
   signIn: async () => {},
   switchOrganization: async () => {},
+  switchBranch: async () => {},
   signOut: async () => {},
 });
 
@@ -54,11 +70,17 @@ export const useAuth = () => React.useContext(AuthCtx);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [organizations, setOrganizations] = React.useState<OrganizationMembership[]>([]);
+  const [branches, setBranches] = React.useState<BranchMembership[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   const loadOrganizations = React.useCallback(async () => {
     const memberships = await api.get<OrganizationMembership[]>("/auth/organizations");
     setOrganizations(Array.isArray(memberships) ? memberships : []);
+  }, []);
+
+  const loadBranches = React.useCallback(async () => {
+    const availableBranches = await api.get<BranchMembership[]>('/auth/branches');
+    setBranches(Array.isArray(availableBranches) ? availableBranches : []);
   }, []);
 
   const initAuth = React.useCallback(async () => {
@@ -73,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         setUser(session.user);
         await loadOrganizations();
+        await loadBranches();
 
         // Handle language preference
         const pref = session.profile?.preferredLanguage;
@@ -99,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [loadOrganizations]);
+  }, [loadBranches, loadOrganizations]);
 
   React.useEffect(() => {
     void initAuth();
@@ -115,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("auth_token", token);
       setUser(authUser);
       await loadOrganizations();
+      await loadBranches();
     } catch (error) {
       console.error("Login failed:", error);
       throw error;
@@ -126,6 +150,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("auth_token", token);
     setUser(authUser);
     await loadOrganizations();
+    await loadBranches();
+  };
+
+  const switchBranch = async (branchId: string) => {
+    const { token, user: authUser } = await api.post<LoginResponse>('/auth/switch-branch', { branchId });
+    localStorage.setItem('auth_token', token);
+    setUser(authUser);
+    await loadBranches();
   };
 
   const signOut = async () => {
@@ -133,10 +165,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.clear();
     setUser(null);
     setOrganizations([]);
+    setBranches([]);
   };
 
   return (
-    <AuthCtx.Provider value={{ user, organizations, loading, signIn, switchOrganization, signOut }}>
+    <AuthCtx.Provider value={{ user, organizations, branches, loading, signIn, switchOrganization, switchBranch, signOut }}>
       {children}
     </AuthCtx.Provider>
   );

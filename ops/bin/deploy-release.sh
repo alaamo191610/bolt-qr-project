@@ -8,17 +8,17 @@ fi
 
 source_directory="$(cd "$1" && pwd -P)"
 release_id="$2"
-release_root="${BOLT_QR_RELEASE_ROOT:-/opt/bolt-qr/releases}"
-current_link="${BOLT_QR_CURRENT_LINK:-/opt/bolt-qr/current}"
-previous_link="${BOLT_QR_PREVIOUS_LINK:-/opt/bolt-qr/previous}"
-health_url="${BOLT_QR_HEALTH_URL:-http://127.0.0.1:3000/api/health/ready}"
+release_root="${qr_RELEASE_ROOT:-/opt/qr/releases}"
+current_link="${qr_CURRENT_LINK:-/opt/qr/current}"
+previous_link="${qr_PREVIOUS_LINK:-/opt/qr/previous}"
+health_url="${qr_HEALTH_URL:-http://127.0.0.1:3000/api/health/ready}"
 
 if [[ ! "$release_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
   echo "Release ID must use 1-128 letters, numbers, dots, underscores, or hyphens" >&2
   exit 65
 fi
 if [[ ! -f "$source_directory/package-lock.json" || ! -f "$source_directory/server/index.js" ]]; then
-  echo "Source directory is not a Bolt QR release" >&2
+  echo "Source directory is not a QR release" >&2
   exit 66
 fi
 
@@ -75,6 +75,6 @@ if [[ -n "$current_target" ]]; then
   mv -Tf "$previous_next_link" "$previous_link"
 fi
 
-systemctl restart bolt-qr.service
+systemctl restart qr.service
 curl --fail --silent --show-error --retry 12 --retry-delay 2 "$health_url" >/dev/null
 echo "Deployed release $release_id"

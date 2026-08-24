@@ -41,7 +41,7 @@ describe('SuperAdmin MFA login', () => {
       challengeToken: 'challenge-token',
       enrollment: {
         secret: 'BASE32SETUPSECRET',
-        otpauthUri: 'otpauth://totp/Bolt',
+        otpauthUri: 'otpauth://totp/QR',
       },
     });
     mocks.verifyMfa.mockResolvedValue({

@@ -8,41 +8,41 @@ Recovery objectives: RPO 24 hours; RTO 4 hours.
 ## Filesystem and service layout
 
 ```text
-/opt/bolt-qr/releases/<release-id>   immutable versioned releases
-/opt/bolt-qr/current                active release symlink
-/opt/bolt-qr/previous               previous application release symlink
-/var/lib/bolt-qr/uploads            persistent application uploads
-/var/lib/bolt-qr/backup-state       non-secret backup success state
-/var/lib/bolt-qr/restore-reports    non-secret isolated restore evidence
-/var/cache/bolt-qr-backup           private temporary backup staging/cache
-/var/cache/bolt-qr-restore          private temporary restore staging
-/etc/bolt-qr/bolt-qr.env            production secrets/configuration
-/etc/bolt-qr/bolt-qr-migrate.env    root-only migration database URL
-/etc/bolt-qr/sentry-build.env       root-only browser source-map upload configuration
-/etc/bolt-qr/bolt-qr-backup.env     protected backup configuration
-/etc/bolt-qr/restic-password        root-only repository encryption password
-/etc/bolt-qr/postgres-passfile      root-only libpq password file
+/opt/qr/releases/<release-id>   immutable versioned releases
+/opt/qr/current                active release symlink
+/opt/qr/previous               previous application release symlink
+/var/lib/qr/uploads            persistent application uploads
+/var/lib/qr/backup-state       non-secret backup success state
+/var/lib/qr/restore-reports    non-secret isolated restore evidence
+/var/cache/qr-backup           private temporary backup staging/cache
+/var/cache/qr-restore          private temporary restore staging
+/etc/qr/qr.env            production secrets/configuration
+/etc/qr/qr-migrate.env    root-only migration database URL
+/etc/qr/sentry-build.env       root-only browser source-map upload configuration
+/etc/qr/qr-backup.env     protected backup configuration
+/etc/qr/restic-password        root-only repository encryption password
+/etc/qr/postgres-passfile      root-only libpq password file
 ```
 
-Create a dedicated `boltqr` system user. PostgreSQL listens only on localhost. The Node process
+Create a dedicated `qr` system user. PostgreSQL listens only on localhost. The Node process
 listens on `127.0.0.1:3000`; nginx is the only public application listener. Permit only required
 SSH, HTTP, and HTTPS traffic at both provider and host firewalls.
 
 ## Installation sequence
 
 1. Install supported Node.js 22, PostgreSQL, nginx, `restic`, rsync, curl, and Certbot.
-2. Create `boltqr`, a system `boltqrbackup` user, and a dedicated `boltqruploads` group containing
+2. Create `qr`, a system `qrbackup` user, and a dedicated `qruploads` group containing
    both users. Create the layout above and `/var/www/certbot`. Set the upload directory to
-   `root:boltqruploads` mode `2770`; this preserves the shared upload group without exposing the
+   `root:qruploads` mode `2770`; this preserves the shared upload group without exposing the
    application environment to the backup user.
 3. Configure PostgreSQL using [the database-role runbook](database-role-boundary.md). Copy
-   `ops/env/bolt-qr.env.example` to `/etc/bolt-qr/bolt-qr.env`, replace every placeholder, and set
-   owner `root:boltqr`, mode `0640`. Copy `ops/env/bolt-qr-migrate.env.example` to
-   `/etc/bolt-qr/bolt-qr-migrate.env`, set the separate migration URL, and set owner `root:root`,
+   `ops/env/qr.env.example` to `/etc/qr/qr.env`, replace every placeholder, and set
+   owner `root:qr`, mode `0640`. Copy `ops/env/qr-migrate.env.example` to
+   `/etc/qr/qr-migrate.env`, set the separate migration URL, and set owner `root:root`,
    mode `0600`.
 4. Replace `example.com` in the nginx configuration, obtain TLS certificates, run `nginx -t`, and
    enable the site.
-5. Install the systemd unit, run `systemctl daemon-reload`, and enable `bolt-qr.service`.
+5. Install the systemd unit, run `systemctl daemon-reload`, and enable `qr.service`.
 6. Deploy a commit SHA or immutable release ID with `ops/bin/deploy-release.sh`.
 7. Verify `/api/health/live`, `/api/health/ready`, login, Socket.IO reconnect, and one authorized
    disposable order flow.
@@ -52,7 +52,7 @@ SSH, HTTP, and HTTPS traffic at both provider and host firewalls.
 Do not put secrets in `.release.env` or in the repository.
 
 Generate `SUPER_ADMIN_MFA_ENCRYPTION_KEY` independently with `openssl rand -hex 32`. Keep it in
-`/etc/bolt-qr/bolt-qr.env`, include it in the protected secret-recovery record, and never place it
+`/etc/qr/qr.env`, include it in the protected secret-recovery record, and never place it
 inside the database/upload backup. Losing this key makes enrolled TOTP seeds unrecoverable.
 
 ## Deployment and rollback
@@ -71,8 +71,8 @@ previous application until the rollback window closes.
 Useful checks:
 
 ```bash
-systemctl status bolt-qr.service
-journalctl -u bolt-qr.service --since '30 minutes ago'
+systemctl status qr.service
+journalctl -u qr.service --since '30 minutes ago'
 curl --fail https://example.com/api/health/live
 curl --fail https://example.com/api/health/ready
 nginx -t
@@ -90,45 +90,45 @@ protected secret-recovery record; losing it makes every snapshot unreadable.
 Create identities and directories before installing the units:
 
 ```bash
-groupadd --system boltqruploads
-useradd --system --home-dir /var/cache/bolt-qr-backup --shell /usr/sbin/nologin boltqrbackup
-usermod --append --groups boltqruploads boltqr
-usermod --append --groups boltqruploads boltqrbackup
-install -d -o root -g boltqruploads -m 2770 /var/lib/bolt-qr/uploads
-install -d -o boltqrbackup -g boltqrbackup -m 0700 /var/lib/bolt-qr/backup-state
-install -d -o boltqrbackup -g boltqrbackup -m 0700 /var/cache/bolt-qr-backup
-install -d -o root -g root -m 0700 /var/lib/bolt-qr/restore-reports /var/cache/bolt-qr-restore
+groupadd --system qruploads
+useradd --system --home-dir /var/cache/qr-backup --shell /usr/sbin/nologin qrbackup
+usermod --append --groups qruploads qr
+usermod --append --groups qruploads qrbackup
+install -d -o root -g qruploads -m 2770 /var/lib/qr/uploads
+install -d -o qrbackup -g qrbackup -m 0700 /var/lib/qr/backup-state
+install -d -o qrbackup -g qrbackup -m 0700 /var/cache/qr-backup
+install -d -o root -g root -m 0700 /var/lib/qr/restore-reports /var/cache/qr-restore
 ```
 
-Copy `ops/env/bolt-qr-backup.env.example` to `/etc/bolt-qr/bolt-qr-backup.env`, select the remote
-repository, add only backend-required credentials, and set owner `root:boltqrbackup`, mode `0640`.
+Copy `ops/env/qr-backup.env.example` to `/etc/qr/qr-backup.env`, select the remote
+repository, add only backend-required credentials, and set owner `root:qrbackup`, mode `0640`.
 Generate a separate high-entropy restic password and write the PostgreSQL libpq passfile:
 
 ```bash
-openssl rand -base64 48 > /etc/bolt-qr/restic-password
-printf '127.0.0.1:5432:restaurant_db:boltqr:REPLACE_DATABASE_PASSWORD\n' > /etc/bolt-qr/postgres-passfile
-chown root:root /etc/bolt-qr/restic-password /etc/bolt-qr/postgres-passfile
-chmod 0600 /etc/bolt-qr/restic-password /etc/bolt-qr/postgres-passfile
+openssl rand -base64 48 > /etc/qr/restic-password
+printf '127.0.0.1:5432:restaurant_db:qr:REPLACE_DATABASE_PASSWORD\n' > /etc/qr/postgres-passfile
+chown root:root /etc/qr/restic-password /etc/qr/postgres-passfile
+chmod 0600 /etc/qr/restic-password /etc/qr/postgres-passfile
 ```
 
 Do not type the real database password into shared terminal output or retain it in shell history;
 write the passfile through the server's approved secret-provisioning channel. For S3-compatible
 storage, add `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and endpoint/region settings only to the
 installed protected backup environment. For SFTP, use a dedicated remote account/key and a
-systemd drop-in that exposes only that key to `boltqrbackup`.
+systemd drop-in that exposes only that key to `qrbackup`.
 
-Install `bolt-qr-backup-init.service`, `bolt-qr-backup.service`, and `bolt-qr-backup.timer` under
+Install `qr-backup-init.service`, `qr-backup.service`, and `qr-backup.timer` under
 `/etc/systemd/system`. Initialize the selected repository exactly once with the dedicated init unit,
 then run the first backup manually and enable automation:
 
 ```bash
 systemctl daemon-reload
-systemctl start bolt-qr-backup-init.service
-systemctl start bolt-qr-backup.service
-systemctl status bolt-qr-backup.service
-/opt/bolt-qr/current/ops/bin/check-backup-freshness.sh
-systemctl enable --now bolt-qr-backup.timer
-systemctl list-timers bolt-qr-backup.timer
+systemctl start qr-backup-init.service
+systemctl start qr-backup.service
+systemctl status qr-backup.service
+/opt/qr/current/ops/bin/check-backup-freshness.sh
+systemctl enable --now qr-backup.timer
+systemctl list-timers qr-backup.timer
 ```
 
 After successful initialization, disable or remove the init unit so it cannot be started casually;
@@ -144,10 +144,10 @@ headroom.
 Useful recovery checks:
 
 ```bash
-systemctl status bolt-qr-backup.timer bolt-qr-backup.service
-journalctl -u bolt-qr-backup.service --since '24 hours ago'
-sudo -u boltqrbackup /opt/bolt-qr/current/ops/bin/check-backup-freshness.sh
-systemctl start bolt-qr-backup.service
+systemctl status qr-backup.timer qr-backup.service
+journalctl -u qr-backup.service --since '24 hours ago'
+sudo -u qrbackup /opt/qr/current/ops/bin/check-backup-freshness.sh
+systemctl start qr-backup.service
 ```
 
 ## Timed isolated restore rehearsal
@@ -159,18 +159,18 @@ metadata, then run the restore command:
 
 ```bash
 set -a
-source /etc/bolt-qr/bolt-qr-backup.env
+source /etc/qr/qr-backup.env
 set +a
-export RESTIC_PASSWORD_FILE=/etc/bolt-qr/restic-password
-export PGPASSFILE=/etc/bolt-qr/postgres-passfile
+export RESTIC_PASSWORD_FILE=/etc/qr/restic-password
+export PGPASSFILE=/etc/qr/postgres-passfile
 export RESTORE_PGHOST=127.0.0.1
 export RESTORE_PGPORT=5432
 export RESTORE_PGDATABASE=restaurant_db_restore_rehearsal
-export RESTORE_PGUSER=boltqr_restore
-export RESTORE_PGPASSFILE=/etc/bolt-qr/restore-postgres-passfile
-export RESTORE_UPLOAD_DIR=/var/lib/bolt-qr/restore-rehearsal/uploads
+export RESTORE_PGUSER=qr_restore
+export RESTORE_PGPASSFILE=/etc/qr/restore-postgres-passfile
+export RESTORE_UPLOAD_DIR=/var/lib/qr/restore-rehearsal/uploads
 export RESTORE_CONFIRMATION=isolated-non-production
-/opt/bolt-qr/current/ops/bin/restore-pilot.sh latest
+/opt/qr/current/ops/bin/restore-pilot.sh latest
 ```
 
 The command compares the target database fingerprint to the live source when available and to the
@@ -178,7 +178,7 @@ source fingerprint stored in every backup manifest, so the guard still works whe
 down. It requires an empty target, validates the versioned manifest and dump checksum, rejects
 upload symlinks, restores with ownership/privilege statements disabled, verifies application
 tables, and writes a report under
-`/var/lib/bolt-qr/restore-reports`. Start the restored application against only these isolated
+`/var/lib/qr/restore-reports`. Start the restored application against only these isolated
 targets and verify readiness, migration status, SuperAdmin MFA login, restaurant login, one menu
 image, one disposable dine-in order, tracking, and Socket.IO updates. Record snapshot ID, start/end
 time, report, data checks, operator, and cleanup. The measured end-to-end exercise must finish in
@@ -194,8 +194,8 @@ days. Configure issue alerts for new/regressed pilot errors and route them to a 
 a separate fallback destination. Never include an authentication token, DSN, customer data, or
 notification address in retained screenshots or reports.
 
-Put the server-project DSN in `/etc/bolt-qr/bolt-qr.env`. Copy
-`ops/env/bolt-qr-sentry-build.env.example` to `/etc/bolt-qr/sentry-build.env`; add the browser-project
+Put the server-project DSN in `/etc/qr/qr.env`. Copy
+`ops/env/qr-sentry-build.env.example` to `/etc/qr/sentry-build.env`; add the browser-project
 DSN and a narrowly scoped release/source-map upload token, then set owner `root:root`, mode `0600`.
 Load build-only values only around deployment so the running process cannot read the upload token.
 The deployment command also removes upload credentials from dependency-install, Prisma-generation,
@@ -203,18 +203,18 @@ and migration subprocesses; only the Vite build receives them:
 
 ```bash
 set -a
-source /etc/bolt-qr/bolt-qr.env
-source /etc/bolt-qr/bolt-qr-migrate.env
-source /etc/bolt-qr/sentry-build.env
+source /etc/qr/qr.env
+source /etc/qr/qr-migrate.env
+source /etc/qr/sentry-build.env
 set +a
-/opt/bolt-qr/source/ops/bin/deploy-release.sh /opt/bolt-qr/source RELEASE_ID
+/opt/qr/source/ops/bin/deploy-release.sh /opt/qr/source RELEASE_ID
 unset DATABASE_URL MIGRATION_DATABASE_URL JWT_SECRET SUPER_ADMIN_MFA_ENCRYPTION_KEY SENTRY_DSN
 unset SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT VITE_SENTRY_DSN VITE_SENTRY_ENVIRONMENT
 ```
 
 The authenticated build uploads hidden source maps tagged with `RELEASE_ID` and removes maps from
 the deployed `dist` tree. Confirm that Sentry contains the same release for both projects and that
-`find /opt/bolt-qr/current/dist -name '*.map' -print` returns no files.
+`find /opt/qr/current/dist -name '*.map' -print` returns no files.
 
 Configure an external monitor—not a cron job on this VPS—with these settings:
 
@@ -229,10 +229,10 @@ release metadata, run the operator-only validator, and immediately clear the she
 
 ```bash
 set -a
-source /etc/bolt-qr/bolt-qr.env
-source /opt/bolt-qr/current/.release.env
+source /etc/qr/qr.env
+source /opt/qr/current/.release.env
 set +a
-node /opt/bolt-qr/current/ops/bin/verify-observability.js
+node /opt/qr/current/ops/bin/verify-observability.js
 unset DATABASE_URL JWT_SECRET SUPER_ADMIN_MFA_ENCRYPTION_KEY SENTRY_DSN
 ```
 

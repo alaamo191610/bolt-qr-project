@@ -153,7 +153,7 @@ export const initializeServerTelemetry = ({ env = process.env, logger = console.
       breadcrumb.category === 'console' ? null : scrubValue(breadcrumb)
     ),
     initialScope: {
-      tags: { service: 'bolt-qr-api' },
+      tags: { service: 'qr-api' },
     },
   });
   logger(JSON.stringify({
@@ -187,12 +187,12 @@ export const captureServerException = (error, {
 };
 
 export const captureSyntheticAlert = () => {
-  const error = new Error('Bolt QR synthetic Sentry alert');
-  error.name = 'BoltQrSyntheticAlert';
+  const error = new Error('QR synthetic Sentry alert');
+  error.name = 'qrSyntheticAlert';
   return captureServerException(error, {
     synthetic: true,
     path: 'operator-local-validation',
-    fingerprint: ['bolt-qr-observability-validation', telemetryRelease],
+    fingerprint: ['qr-observability-validation', telemetryRelease],
   });
 };
 

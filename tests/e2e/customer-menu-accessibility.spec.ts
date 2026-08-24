@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 
-const FIXTURE_PATH = '/tmp/bolt-qr-real-backend-fixture.json';
+const FIXTURE_PATH = '/tmp/qr-real-backend-fixture.json';
 
 type Fixture = {
   adminId: string;

@@ -1,14 +1,14 @@
 [Unit]
-Description=Initialize the Bolt QR encrypted off-VPS restic repository once
+Description=Initialize the QR encrypted off-VPS restic repository once
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=boltqrbackup
-Group=boltqrbackup
-EnvironmentFile=/etc/bolt-qr/bolt-qr-backup.env
-LoadCredential=restic-password:/etc/bolt-qr/restic-password
+User=qrbackup
+Group=qrbackup
+EnvironmentFile=/etc/qr/qr-backup.env
+LoadCredential=restic-password:/etc/qr/restic-password
 Environment=RESTIC_PASSWORD_FILE=%d/restic-password
 ExecStart=/usr/bin/restic init
 TimeoutStartSec=15m
@@ -25,7 +25,7 @@ ProtectKernelLogs=true
 ProtectKernelModules=true
 ProtectKernelTunables=true
 ProtectSystem=strict
-ReadWritePaths=/var/cache/bolt-qr-backup
+ReadWritePaths=/var/cache/qr-backup
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=true
 RestrictRealtime=true

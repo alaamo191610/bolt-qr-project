@@ -6,19 +6,19 @@ tenant request has transaction-bound `SET LOCAL app.organization_id` context.
 
 ## Required identities
 
-- `boltqr_migrate`: owns the application database, `public` schema, tables, and sequences. It may
+- `qr_migrate`: owns the application database, `public` schema, tables, and sequences. It may
   execute Prisma migrations but is not a superuser and has no `CREATEDB`, `CREATEROLE`,
   `REPLICATION`, or `BYPASSRLS` attribute.
-- `boltqr_runtime`: used only by Node/Prisma. It has database `CONNECT`, schema `USAGE`, application
+- `qr_runtime`: used only by Node/Prisma. It has database `CONNECT`, schema `USAGE`, application
   table `SELECT/INSERT/UPDATE/DELETE`, and sequence `USAGE/SELECT/UPDATE`. It owns no objects and has
   no database/schema `CREATE`, database `TEMP`, inherited role membership, cluster-level power, or access to
   `_prisma_migrations`.
-- Existing `boltqr` owner during an upgrade: after ownership transfer it becomes read-only so the
+- Existing `qr` owner during an upgrade: after ownership transfer it becomes read-only so the
   current pg_dump passfile continues to work. It must not be used by Node or migration commands.
 
-Passwords are generated independently. The runtime URL belongs in `/etc/bolt-qr/bolt-qr.env`
-(`root:boltqr`, `0640`). The migration URL belongs only in
-`/etc/bolt-qr/bolt-qr-migrate.env` (`root:root`, `0600`) and is loaded for deployment commands. The
+Passwords are generated independently. The runtime URL belongs in `/etc/qr/qr.env`
+(`root:qr`, `0640`). The migration URL belongs only in
+`/etc/qr/qr-migrate.env` (`root:root`, `0600`) and is loaded for deployment commands. The
 systemd Node process never reads the migration file.
 
 ## Existing-pilot conversion
@@ -30,8 +30,8 @@ Create the two login roles interactively so passwords do not enter shell history
 arguments:
 
 ```bash
-sudo -u postgres createuser --login --pwprompt --no-superuser --no-createdb --no-createrole --no-replication boltqr_migrate
-sudo -u postgres createuser --login --pwprompt --no-superuser --no-createdb --no-createrole --no-replication boltqr_runtime
+sudo -u postgres createuser --login --pwprompt --no-superuser --no-createdb --no-createrole --no-replication qr_migrate
+sudo -u postgres createuser --login --pwprompt --no-superuser --no-createdb --no-createrole --no-replication qr_runtime
 ```
 
 Run the guarded ownership/grant conversion locally through PostgreSQL peer authentication:
@@ -39,10 +39,10 @@ Run the guarded ownership/grant conversion locally through PostgreSQL peer authe
 ```bash
 sudo -u postgres env \
   APP_DATABASE=restaurant_db \
-  CURRENT_OWNER_ROLE=boltqr \
-  MIGRATION_DB_ROLE=boltqr_migrate \
-  RUNTIME_DB_ROLE=boltqr_runtime \
-  /opt/bolt-qr/current/ops/bin/configure-database-roles.sh
+  CURRENT_OWNER_ROLE=qr \
+  MIGRATION_DB_ROLE=qr_migrate \
+  RUNTIME_DB_ROLE=qr_runtime \
+  /opt/qr/current/ops/bin/configure-database-roles.sh
 ```
 
 The command refuses a wrong database, absent/unsafe/superuser roles, application roles with role
@@ -54,8 +54,8 @@ Install the two protected environment files, then verify without attempting DDL:
 
 ```bash
 set -a
-source /etc/bolt-qr/bolt-qr.env
-source /etc/bolt-qr/bolt-qr-migrate.env
+source /etc/qr/qr.env
+source /etc/qr/qr-migrate.env
 set +a
 npm run verify:database-roles
 unset DATABASE_URL MIGRATION_DATABASE_URL
@@ -66,7 +66,7 @@ before changing the active release symlink.
 
 ## Runtime and deployment behavior
 
-`npm start` and `bolt-qr.service` start only the application. They never run migrations. The
+`npm start` and `qr.service` start only the application. They never run migrations. The
 deployment command requires both distinct URLs; its migration wrapper temporarily maps
 `MIGRATION_DATABASE_URL` to Prisma's `DATABASE_URL`, removes unrelated application/Sentry secrets
 from that child process, and then discards the migration variable. Dependency installation,

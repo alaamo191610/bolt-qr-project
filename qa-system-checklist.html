@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Bolt QR full-system QA checklist split between ALAA and YAZAN.">
-  <title>Bolt QR · Full System QA Checklist</title>
+  <meta name="description" content="QR full-system QA checklist split between ALAA and YAZAN.">
+  <title>QR · Full System QA Checklist</title>
   <style>
     :root {
       --ink: #102a2b;
@@ -114,7 +114,7 @@
   <header class="hero wrap">
     <div class="hero-row">
       <div>
-        <div class="eyebrow">Bolt QR · release verification</div>
+        <div class="eyebrow">QR · release verification</div>
         <h1>Full-system QA checklist</h1>
         <p class="lede">A shared, evidence-driven pass through the customer journey, restaurant workspace, platform controls, data boundaries, and production readiness.</p>
       </div>
@@ -272,7 +272,7 @@
       ]}
     ];
 
-    const STORAGE_KEY = 'bolt-qr-full-qa-checklist-v1';
+    const STORAGE_KEY = 'qr-full-qa-checklist-v1';
     const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     const checklist = document.getElementById('checklist');
     const statusLabel = { 'not-run': 'Not run', pass: 'Pass', fail: 'Fail', blocked: 'Blocked' };
@@ -333,7 +333,7 @@
     document.getElementById('statusFilter').addEventListener('change', render);
     document.getElementById('printBtn').addEventListener('click', () => window.print());
     document.getElementById('resetBtn').addEventListener('click', () => { if (confirm('Reset every saved status and note in this checklist?')) { Object.keys(state).forEach(key => delete state[key]); save(); render(); showToast('Checklist reset.'); } });
-    document.getElementById('exportBtn').addEventListener('click', () => { const output = { exportedAt: new Date().toISOString(), checklist: Object.fromEntries(allItems().map(({ item, owner }) => [item[0], { owner, title: item[1], status: state[item[0]]?.status || 'not-run', note: state[item[0]]?.note || '' }])) }; const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `bolt-qr-qa-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url); showToast('QA results exported.'); });
+    document.getElementById('exportBtn').addEventListener('click', () => { const output = { exportedAt: new Date().toISOString(), checklist: Object.fromEntries(allItems().map(({ item, owner }) => [item[0], { owner, title: item[1], status: state[item[0]]?.status || 'not-run', note: state[item[0]]?.note || '' }])) }; const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `qr-qa-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url); showToast('QA results exported.'); });
     document.querySelectorAll('select').forEach(styleStatus);
     render();
   </script>

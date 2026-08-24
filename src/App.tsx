@@ -109,7 +109,7 @@ const getStoredQrCapabilities = (
 
   try {
     const stored = window.sessionStorage.getItem(
-      `bolt-qr:capabilities:${userId}`,
+      `qr:capabilities:${userId}`,
     );
     if (!stored) return {};
 
@@ -146,7 +146,7 @@ const getStoredAdminTab = (userId?: string) => {
   if (!userId || typeof window === "undefined") return "qr-generator";
 
   try {
-    const storedTab = window.localStorage.getItem(`bolt-qr:last-tab:${userId}`);
+    const storedTab = window.localStorage.getItem(`qr:last-tab:${userId}`);
     return storedTab && ADMIN_TAB_IDS.has(storedTab)
       ? storedTab
       : "qr-generator";
@@ -380,7 +380,7 @@ function App() {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { user, signOut, organizations, switchOrganization } = useAuth();
+  const { user, signOut, organizations, branches, switchOrganization, switchBranch } = useAuth();
   const { t, isLoaded } = useLanguage();
 
   const [activeTab, setActiveTab] = useState(() => getStoredAdminTab(user?.id));
@@ -406,6 +406,7 @@ const AdminDashboard: React.FC = () => {
   const [switchingOrganizationId, setSwitchingOrganizationId] = useState<
     string | null
   >(null);
+  const [switchingBranchId, setSwitchingBranchId] = useState<string | null>(null);
   const subscription = useSubscription(adminProfile);
 
   useEffect(() => {
@@ -413,7 +414,7 @@ const AdminDashboard: React.FC = () => {
 
     try {
       window.sessionStorage.setItem(
-        `bolt-qr:capabilities:${user.id}`,
+        `qr:capabilities:${user.id}`,
         JSON.stringify(qrCapabilities),
       );
     } catch {
@@ -425,7 +426,7 @@ const AdminDashboard: React.FC = () => {
     if (!user?.id) return;
 
     try {
-      window.localStorage.setItem(`bolt-qr:last-tab:${user.id}`, activeTab);
+      window.localStorage.setItem(`qr:last-tab:${user.id}`, activeTab);
     } catch {
       // Tab restoration is optional if browser storage is unavailable.
     }
@@ -459,6 +460,23 @@ const AdminDashboard: React.FC = () => {
       }
     },
     [switchOrganization],
+  );
+
+  const handleSwitchBranch = useCallback(
+    async (branchId: string) => {
+      setSwitchingBranchId(branchId);
+      try {
+        await switchBranch(branchId);
+        // All branch-scoped data and the admin socket are recreated from the
+        // new branch token after reload, preventing the previous branch from
+        // flashing while requests are in flight.
+        window.location.reload();
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Failed to switch branch"));
+        setSwitchingBranchId(null);
+      }
+    },
+    [switchBranch],
   );
 
   // Individual fetch functions
@@ -852,8 +870,11 @@ const AdminDashboard: React.FC = () => {
         }}
         onSignOut={() => user && signOut()}
         organizations={organizations}
+        branches={branches}
         onSwitchOrganization={handleSwitchOrganization}
+        onSwitchBranch={handleSwitchBranch}
         switchingOrganizationId={switchingOrganizationId}
+        switchingBranchId={switchingBranchId}
       >
         {renderContent()}
       </ResponsiveLayout>

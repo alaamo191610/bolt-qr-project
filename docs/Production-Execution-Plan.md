@@ -44,14 +44,14 @@ that the full 12-week release is complete.
 
 The disposable PostgreSQL and tenant characterization point is complete.
 
-- Added a safe disposable test database harness that uses uniquely named `bolt_qr_test_*`
+- Added a safe disposable test database harness that uses uniquely named `qr_test_*`
   databases by default, applies all Prisma migrations, truncates only application tables between
   tests, rejects unsafe names, and drops only databases it created.
 - Added deterministic Alpha/Beta organization fixtures and database-backed HTTP tests covering
   active tenant authentication, cross-tenant organization selection denial, tenant-scoped menu
   and category reads, and cross-tenant write denial with unchanged-database verification.
 - Added `npm run test:integration` plus a PostgreSQL 16 CI service. The local ephemeral database
-  was removed after the passing run and no `bolt_qr_test_*` databases remain.
+  was removed after the passing run and no `qr_test_*` databases remain.
 - Evidence: integration tests 2/2 passed; full validation also passed 12 unit tests, 5 frontend
   tests, lint, typecheck, Prisma validation, and production build.
 
@@ -78,7 +78,7 @@ aggregate-root ownership columns were changed in this point.
 ### Evidence and next point
 
 `npm run test:integration` passed 4 tests. Full validation passed 12 unit tests, 5 frontend
-tests, lint, typecheck, Prisma validation, and build. No `bolt_qr_test_*` databases remain.
+tests, lint, typecheck, Prisma validation, and build. No `qr_test_*` databases remain.
 
 Next: implement the expand-only direct organization ownership migration with nullable indexed
 columns, compatibility reads/writes, verification SQL, and an explicit rollback note. Do not
@@ -104,7 +104,7 @@ isolated test databases; no production database was migrated.
 
 The final local validation sequence passed 12 unit tests, 4 PostgreSQL integration/rehearsal
 tests, 5 frontend tests, ESLint, TypeScript, Prisma validation, and production build. No
-`bolt_qr_test_*` databases remain.
+`qr_test_*` databases remain.
 
 Next: design and implement the bounded backfill for these seven roots with unresolved-row
 detection, measurable before/after counts, and idempotent rerun verification. Enforcement remains
@@ -128,7 +128,7 @@ test databases; no production database was migrated.
 
 `npm run test:integration` passed 5 tests, including direct ownership counts, zero mismatch
 verification, idempotent rerun, and cross-tenant modifier-group rejection. `git diff --check`
-passed and no `bolt_qr_test_*` databases remain.
+passed and no `qr_test_*` databases remain.
 
 Next: execute the verify phase across all seven roots, including branch agreement and
 cross-tenant link/delete negatives, before proposing non-null or composite enforcement.
@@ -934,9 +934,9 @@ recent-MFA middleware, PRO entitlements are finite and server-derived, and mater
 are already cursor-paginated. Regression assertions will make those properties explicit.
 
 The open implementation is PostgreSQL identity separation for the single-VPS pilot. The runtime
-service will receive only a `boltqr_runtime` URL with DML/sequence usage and no object ownership,
+service will receive only a `qr_runtime` URL with DML/sequence usage and no object ownership,
 DDL, `BYPASSRLS`, or `_prisma_migrations` access. Deployment will load a separately protected
-`boltqr_migrate` URL only for `prisma migrate deploy`; systemd startup will never migrate. A guarded
+`qr_migrate` URL only for `prisma migrate deploy`; systemd startup will never migrate. A guarded
 ownership/grant bootstrap, read-only verification command, environment templates, runbook,
 rollback behavior, and disposable-PostgreSQL proof are in progress. This entry records work
 started, not completion or production evidence.

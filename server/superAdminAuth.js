@@ -218,8 +218,8 @@ export const createSuperAdminAuthService = ({ db, tokenSecret, encryptionKey, cl
           mfa_locked_until: null,
         },
       });
-      const label = encodeURIComponent(`Bolt QR:${pending.email}`);
-      const issuer = encodeURIComponent('Bolt QR');
+      const label = encodeURIComponent(`QR:${pending.email}`);
+      const issuer = encodeURIComponent('QR');
       return {
         mfaRequired: true,
         enrollmentRequired: true,

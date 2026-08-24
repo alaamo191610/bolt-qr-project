@@ -131,7 +131,7 @@ export const initializeClientTelemetry = (env: Record<string, unknown> = import.
     beforeBreadcrumb: breadcrumb => (
       breadcrumb.category === 'console' ? null : scrubValue(breadcrumb) as typeof breadcrumb
     ),
-    initialScope: { tags: { service: 'bolt-qr-web' } },
+    initialScope: { tags: { service: 'qr-web' } },
   });
   return config;
 };
