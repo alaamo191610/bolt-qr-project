@@ -7,7 +7,10 @@ import { useAdminMonetary } from "../../hooks/useAdminMonetary";
 import LanguageToggle from "./LanguageToggle";
 import { Menu as DropdownMenu, Transition } from "@headlessui/react";
 import { Fragment } from "react";
-import type { BranchMembership, OrganizationMembership } from "../../providers/AuthProvider";
+import type {
+  BranchMembership,
+  OrganizationMembership,
+} from "../../providers/AuthProvider";
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -59,7 +62,8 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 
   const adminId = userInfo?.id;
   const { restaurantName, logoUrl } = useAdminMonetary(adminId);
-  const resolvedRestaurantName = restaurantName || userInfo?.name || "RestaurantQR";
+  const resolvedRestaurantName =
+    restaurantName || userInfo?.name || "RestaurantQR";
 
   // Prevent component unmounting on tab switch
   useEffect(() => {
@@ -126,13 +130,15 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
       {/* Sidebar (mobile only) */}
       <aside
         aria-label={t("common.openMenu")}
-        className={`fixed inset-y-0 ${isRTL ? "right-0" : "left-0"
-          } z-50 w-64 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 dark:border-slate-700
-          ${sidebarOpen
-            ? "translate-x-0"
-            : isRTL
-              ? "translate-x-full"
-              : "-translate-x-full"
+        className={`fixed inset-y-0 ${
+          isRTL ? "right-0" : "left-0"
+        } z-50 w-64 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 dark:border-slate-700
+          ${
+            sidebarOpen
+              ? "translate-x-0"
+              : isRTL
+                ? "translate-x-full"
+                : "-translate-x-full"
           } lg:hidden`}
       >
         <div className="flex items-center justify-between h-20 px-6 border-b border-slate-200/50 dark:border-slate-700/50">
@@ -151,7 +157,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                   background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
                 }}
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-6 h-6"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
                 </svg>
               </div>
@@ -184,20 +194,24 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                 onClick={() => {
                   handleTabChange(item.id);
                 }}
-                className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${isRTL ? "text-right" : "text-left"
-                  } px-4 py-3.5 rounded-xl transition-all duration-300 group font-medium ${isActive
+                className={`w-full flex items-center space-x-3 rtl:space-x-reverse ${
+                  isRTL ? "text-right" : "text-left"
+                } px-4 py-3.5 rounded-xl transition-all duration-300 group font-medium ${
+                  isActive
                     ? "text-white shadow-lg shadow-emerald-500/20 translate-x-1"
                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white"
-                  }`}
+                }`}
                 style={
                   isActive
                     ? {
-                      background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                    }
+                        background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                      }
                     : {}
                 }
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'animate-pulse' : ''}`} />
+                <Icon
+                  className={`w-5 h-5 ${isActive ? "animate-pulse" : ""}`}
+                />
                 <span>{item.name}</span>
               </button>
             );
@@ -209,7 +223,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
           <div className="p-6 border-t border-slate-200/50 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
             <div className="flex items-center space-x-3 rtl:space-x-reverse p-3 rounded-xl bg-white dark:bg-slate-700 shadow-sm border border-slate-100 dark:border-slate-600">
               <div className="w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg flex items-center justify-center shadow-md">
-                <span className="text-white font-bold">{userInfo.name.charAt(0).toUpperCase()}</span>
+                <span className="text-white font-bold">
+                  {userInfo.name.charAt(0).toUpperCase()}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
@@ -219,8 +235,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                   {userInfo.email}
                 </p>
                 {userInfo.subscription && (
-                  <p className={`text-[10px] font-bold uppercase tracking-wider ${userInfo.subscription.hasAccess ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {userInfo.subscription.planName} · {userInfo.subscription.status}
+                  <p
+                    className={`text-[10px] font-bold uppercase tracking-wider ${userInfo.subscription.hasAccess ? "text-emerald-600" : "text-rose-600"}`}
+                  >
+                    {userInfo.subscription.planName} ·{" "}
+                    {userInfo.subscription.status}
                   </p>
                 )}
               </div>
@@ -228,8 +247,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             {onSignOut && (
               <button
                 onClick={onSignOut}
-                className={`w-full mt-4 px-4 py-2.5 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors duration-200 shadow-lg ${isRTL ? "text-right" : "text-center"
-                  }`}
+                className={`w-full mt-4 px-4 py-2.5 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors duration-200 shadow-lg ${
+                  isRTL ? "text-right" : "text-center"
+                }`}
               >
                 {t("auth.signOut")}
               </button>
@@ -254,7 +274,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
               </button>
 
               {/* Branding */}
-              <div className="hidden lg:flex items-center space-x-3 rtl:space-x-reverse min-w-0 max-w-[220px] shrink-0">
+              <div className="hidden lg:flex items-center space-x-3 rtl:space-x-reverse min-w-0 max-w-[240px] shrink-0">
                 {logoUrl ? (
                   <img
                     src={logoUrl}
@@ -286,15 +306,16 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                       onClick={() => {
                         handleTabChange(item.id);
                       }}
-                      className={`flex items-center space-x-2 rtl:space-x-reverse px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 ${isActive
-                        ? "text-white shadow-lg shadow-emerald-500/20 scale-105"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800"
-                        }`}
+                      className={`flex items-center space-x-2 rtl:space-x-reverse px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 ${
+                        isActive
+                          ? "text-white shadow-lg shadow-emerald-500/20 scale-105"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800"
+                      }`}
                       style={
                         isActive
                           ? {
-                            background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
-                          }
+                              background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                            }
                           : {}
                       }
                     >
@@ -317,9 +338,7 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
             </div>
 
             {/* Right side: language, bell, user info */}
-            <div
-              className="flex relative float-right items-center space-x-3 rtl:space-x-reverse ml-4"
-            >
+            <div className="flex relative float-right items-center space-x-3 rtl:space-x-reverse ml-4">
               {/* User info (visible on desktop) */}
               {userInfo && (
                 <DropdownMenu as="div" className="relative">
@@ -349,8 +368,11 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                     leaveTo="transform opacity-0 scale-95 translate-y-2"
                   >
                     <DropdownMenu.Items
-                      className={`absolute z-50 mt-4 w-72 rounded-2xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl ring-1 ring-black/5 focus:outline-none divide-y divide-slate-100 dark:divide-slate-700 ${isRTL ? "left-0 origin-top-left" : "right-0 origin-top-right"
-                        }`}
+                      className={`absolute z-50 mt-4 w-72 rounded-2xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl shadow-2xl ring-1 ring-black/5 focus:outline-none divide-y divide-slate-100 dark:divide-slate-700 ${
+                        isRTL
+                          ? "left-0 origin-top-left"
+                          : "right-0 origin-top-right"
+                      }`}
                     >
                       <div className="px-6 py-5">
                         <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
@@ -363,15 +385,23 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                           {userInfo.email}
                         </p>
                         {userInfo.subscription && (
-                          <div className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${userInfo.subscription.hasAccess
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'}`}>
-                            <div>{userInfo.subscription.planName} plan · {userInfo.subscription.status}</div>
-                            {userInfo.subscription.daysUntilExpiration !== null && (
+                          <div
+                            className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${
+                              userInfo.subscription.hasAccess
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+                                : "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+                            }`}
+                          >
+                            <div>
+                              {userInfo.subscription.planName} plan ·{" "}
+                              {userInfo.subscription.status}
+                            </div>
+                            {userInfo.subscription.daysUntilExpiration !==
+                              null && (
                               <div className="mt-1 font-normal">
                                 {userInfo.subscription.daysUntilExpiration >= 0
                                   ? `${userInfo.subscription.daysUntilExpiration} days remaining`
-                                  : 'Access expired'}
+                                  : "Access expired"}
                               </div>
                             )}
                           </div>
@@ -384,18 +414,26 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                             {t("auth.organizations") || "Organizations"}
                           </p>
                           {organizations.map((org) => {
-                            const isSwitching = switchingOrganizationId === org.id;
+                            const isSwitching =
+                              switchingOrganizationId === org.id;
                             return (
-                              <DropdownMenu.Item key={org.id} disabled={org.current || isSwitching}>
+                              <DropdownMenu.Item
+                                key={org.id}
+                                disabled={org.current || isSwitching}
+                              >
                                 {({ active }) => (
                                   <button
                                     type="button"
-                                    onClick={() => !org.current && onSwitchOrganization?.(org.id)}
+                                    onClick={() =>
+                                      !org.current &&
+                                      onSwitchOrganization?.(org.id)
+                                    }
                                     disabled={org.current || isSwitching}
-                                    className={`${active && !org.current
-                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                                      : "text-slate-600 dark:text-slate-400"
-                                      } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 disabled:cursor-default`}
+                                    className={`${
+                                      active && !org.current
+                                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                        : "text-slate-600 dark:text-slate-400"
+                                    } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 disabled:cursor-default`}
                                   >
                                     <Building2 className="w-4 h-4 shrink-0" />
                                     <span className="flex-1 min-w-0 text-left rtl:text-right truncate">
@@ -404,7 +442,9 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                                         {org.role}
                                       </span>
                                     </span>
-                                    {org.current && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                                    {org.current && (
+                                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    )}
                                     {isSwitching && (
                                       <span className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-slate-300 border-t-emerald-600 animate-spin" />
                                     )}
@@ -424,16 +464,23 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                           {branches.map((branch) => {
                             const isSwitching = switchingBranchId === branch.id;
                             return (
-                              <DropdownMenu.Item key={branch.id} disabled={branch.current || isSwitching}>
+                              <DropdownMenu.Item
+                                key={branch.id}
+                                disabled={branch.current || isSwitching}
+                              >
                                 {({ active }) => (
                                   <button
                                     type="button"
-                                    onClick={() => !branch.current && onSwitchBranch?.(branch.id)}
+                                    onClick={() =>
+                                      !branch.current &&
+                                      onSwitchBranch?.(branch.id)
+                                    }
                                     disabled={branch.current || isSwitching}
-                                    className={`${active && !branch.current
-                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                                      : "text-slate-600 dark:text-slate-400"
-                                      } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 disabled:cursor-default`}
+                                    className={`${
+                                      active && !branch.current
+                                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                        : "text-slate-600 dark:text-slate-400"
+                                    } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200 disabled:cursor-default`}
                                   >
                                     <Building2 className="w-4 h-4 shrink-0" />
                                     <span className="flex-1 min-w-0 text-left rtl:text-right truncate">
@@ -442,8 +489,12 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                                         {branch.code}
                                       </span>
                                     </span>
-                                    {branch.current && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
-                                    {isSwitching && <span className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-slate-300 border-t-emerald-600 animate-spin" />}
+                                    {branch.current && (
+                                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    )}
+                                    {isSwitching && (
+                                      <span className="w-3.5 h-3.5 shrink-0 rounded-full border-2 border-slate-300 border-t-emerald-600 animate-spin" />
+                                    )}
                                   </button>
                                 )}
                               </DropdownMenu.Item>
@@ -465,13 +516,14 @@ const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
                             {({ active }) => (
                               <button
                                 onClick={onSignOut}
-                                className={`${active
-                                  ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-                                  : "text-slate-600 dark:text-slate-400"
-                                  } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200`}
+                                className={`${
+                                  active
+                                    ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                                    : "text-slate-600 dark:text-slate-400"
+                                } group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-200`}
                               >
                                 <LogOut
-                                  className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isRTL ? 'scale-x-[-1] group-hover:-translate-x-0.5' : ''}`}
+                                  className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isRTL ? "scale-x-[-1] group-hover:-translate-x-0.5" : ""}`}
                                 />
                                 {t("auth.signOut")}
                               </button>
