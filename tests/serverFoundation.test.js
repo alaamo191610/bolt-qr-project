@@ -9,6 +9,10 @@ let httpServer;
 let baseUrl;
 
 before(async () => {
+  // The health payload reports RELEASE_VERSION, which every real deployment
+  // sets. Pin it before the server module reads its runtime config so the
+  // assertion below covers the response contract, not the ambient environment.
+  delete process.env.RELEASE_VERSION;
   ({ app } = await import('../server/index.js'));
   httpServer = createServer(app);
   await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));

@@ -69,11 +69,34 @@ import { createRestaurantInvitationService } from './restaurantInvitations.js';
 import { hasRestaurantAccess, validateSubscriptionInput } from './subscriptionPolicy.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? null : 'development-only-change-me');
+
+// The insecure fallback below must be opted into, never defaulted into. Keying
+// that on `NODE_ENV !== 'production'` meant a deploy that simply forgot to set
+// NODE_ENV would silently sign every session with a secret published in this
+// repository, so require an explicit development or test environment instead.
+const DEV_ONLY_JWT_SECRET = 'development-only-change-me';
+const isExplicitLocalEnv = ['development', 'test'].includes(process.env.NODE_ENV);
+const configuredJwtSecret = String(process.env.JWT_SECRET || '').trim();
+
+if (!configuredJwtSecret && !isExplicitLocalEnv) {
+  throw new Error(
+    'JWT_SECRET is required. Set it, or set NODE_ENV=development for local work. '
+    + `NODE_ENV is currently ${process.env.NODE_ENV ? `"${process.env.NODE_ENV}"` : 'unset'}.`,
+  );
+}
+if (configuredJwtSecret === DEV_ONLY_JWT_SECRET && !isExplicitLocalEnv) {
+  throw new Error('JWT_SECRET is still the development placeholder. Set a real secret.');
+}
+
+const JWT_SECRET = configuredJwtSecret || DEV_ONLY_JWT_SECRET;
 const runtimeConfig = resolveRuntimeConfig();
 
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET is required in production');
+if (!configuredJwtSecret) {
+  console.warn(JSON.stringify({
+    event: 'insecure_jwt_secret',
+    message: 'Signing tokens with the shared development secret. Never use this outside local work.',
+    nodeEnv: process.env.NODE_ENV,
+  }));
 }
 
 mkdirSync(runtimeConfig.uploadDirectory, { recursive: true, mode: 0o750 });
@@ -88,8 +111,13 @@ if (process.env.RENDER_EXTERNAL_URL) {
   allowedOrigins.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
 }
 
+// Same reasoning as the JWT secret above: the permissive branch is opted into
+// by an explicit development or test environment, so a deploy that forgets
+// NODE_ENV does not quietly accept every origin.
+const allowAnyOrigin = isExplicitLocalEnv && allowedOrigins.size === 0;
+
 const isAllowedOrigin = (origin, requestHost) => {
-  if (!origin || !isProduction || allowedOrigins.has(origin.replace(/\/$/, ''))) {
+  if (!origin || allowAnyOrigin || allowedOrigins.has(origin.replace(/\/$/, ''))) {
     return true;
   }
 

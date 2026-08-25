@@ -10,6 +10,11 @@ import {
 
 const secret = 'test-only-token-secret';
 
+// The issuer is configurable through TOKEN_ISSUER, and any real deployment sets
+// it. Pin it here so the assertion below tests the token contract rather than
+// whatever happens to be exported in the shell running the suite.
+delete process.env.TOKEN_ISSUER;
+
 test('token classes carry explicit issuer, audience, purpose, and expiry', () => {
   const token = issueToken(TOKEN_TYPES.RESTAURANT_SESSION, { id: 'restaurant-1' }, secret, {
     subject: 'identity-1',
