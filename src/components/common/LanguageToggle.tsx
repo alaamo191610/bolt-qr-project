@@ -35,8 +35,8 @@ const LanguageToggle: React.FC<LanguageToggleProps> = ({
     return (
       <button
         onClick={() => setLanguage(language === "en" ? "ar" : "en")}
-        className={`flex items-center space-x-2 rtl:space-x-reverse w-full px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 ${className}`}
-        title={`${t("language.switchTo")} ${language === "en" ? "العربية" : "English"
+        className={`flex items-center space-x-2 rtl:space-x-reverse w-auto shrink-0 whitespace-nowrap px-2 sm:px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors duration-200 ${className}`}
+        aria-label={`${t("language.switchTo")} ${language === "en" ? "العربية" : "English"
           }`}
       >
         <Globe className="w-4 h-4" />

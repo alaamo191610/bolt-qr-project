@@ -91,6 +91,36 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Form controls stay light in every app theme. The admin forms are
+     intentionally light, and this also prevents the browser's dark system
+     color-scheme from overriding their backgrounds and text colors. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    color-scheme: light !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    caret-color: #0f172a;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"] {
+    color-scheme: light !important;
+    accent-color: var(--color-primary);
+  }
+
+  select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
   /* Direction helpers (works with your isRTL toggle) */
   html[dir="rtl"] .rtl-only {
     display: initial;

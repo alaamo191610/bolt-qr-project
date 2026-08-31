@@ -1026,6 +1026,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div
+      dir={isRTL ? "rtl" : "ltr"}
       className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 ${isRTL ? "rtl" : "ltr"
         }`}
     >
@@ -1039,7 +1040,7 @@ const CustomerMenu: React.FC = () => {
         className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40"
       >
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
             {/* left: logo + title & meta */}
             <div className="animate-fade-in min-w-0 flex-1">
               <div className="flex items-center gap-3 mb-1 min-w-0">
@@ -1048,10 +1049,10 @@ const CustomerMenu: React.FC = () => {
                   <img
                     src={logoUrl}
                     alt={restaurantName || "Restaurant"}
-                    className="h-12 w-12 object-cover rounded-lg shadow-md shrink-0"
+                    className="h-10 w-10 sm:h-12 sm:w-12 object-cover rounded-lg shadow-md shrink-0"
                   />
                 ) : (
-                  <div className="h-12 w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md shrink-0">
+                  <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-md shrink-0">
                     <span className="text-2xl font-bold text-white">
                       {restaurantName?.charAt(0)?.toUpperCase() || "Q"}
                     </span>
@@ -1059,7 +1060,7 @@ const CustomerMenu: React.FC = () => {
                 )}
 
                 {/* Restaurant Name */}
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate min-w-0">
                   {restaurantName || t("restaurant.name")}
                 </h1>
               </div>
@@ -1077,7 +1078,7 @@ const CustomerMenu: React.FC = () => {
               </div>
             </div>
             {/* right: language toggle + cart — cart last, even in Arabic */}
-            <div className="flex items-center gap-3 shrink-0" dir="ltr">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0" dir="ltr">
               <LanguageToggle variant="button" />
               <button
                 ref={triggerRef}
@@ -1115,8 +1116,8 @@ const CustomerMenu: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft border border-slate-200 dark:border-slate-700 p-4 mb-6 animate-slide-up">
           <div className="flex flex-col gap-4">
             {/* Search */}
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+            <div className="relative group" dir={isRTL ? "rtl" : "ltr"}>
+              <div className={`absolute inset-y-0 ${isRTL ? "right-0 pr-4" : "left-0 pl-4"} flex items-center pointer-events-none z-10`}>
                 <Search className="w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
               </div>
               <input
@@ -1124,12 +1125,14 @@ const CustomerMenu: React.FC = () => {
                 placeholder={t("menu.searchPlaceholder") || "What are you craving?"}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full py-4 pl-12 pr-12 bg-white dark:bg-slate-800 rounded-2xl border-none shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)] text-lg placeholder:text-slate-400 focus:ring-0 text-slate-900 dark:text-white transition-shadow`}
+                dir={isRTL ? "rtl" : "ltr"}
+                className="w-full py-4 pl-12 pr-12 bg-white dark:bg-slate-800 rounded-2xl border-none shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)] text-lg placeholder:text-slate-400 focus:ring-0 text-slate-900 dark:text-white transition-shadow"
                 style={{
-                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+                  textAlign: isRTL ? "right" : "left",
                 }}
               />
-              <div className="absolute inset-y-0 right-0 pr-4 flex items-center cursor-pointer hover:scale-105 transition-transform">
+              <div className={`absolute inset-y-0 ${isRTL ? "left-0 pl-4" : "right-0 pr-4"} flex items-center cursor-pointer hover:scale-105 transition-transform`}>
                 <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded-xl">
                   <SlidersHorizontal className="w-5 h-5 text-slate-600 dark:text-slate-300" />
                 </div>
@@ -1137,7 +1140,7 @@ const CustomerMenu: React.FC = () => {
             </div>
 
             {/* Category Filter (sticky under header while scrolling) */}
-            <div className="sticky top-[76px] z-30 -mx-4 px-4 py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border-b border-slate-200/60 dark:border-slate-700/60">
+            <div className="sticky top-[105px] md:top-[76px] z-30 -mx-4 px-4 py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border-b border-slate-200/60 dark:border-slate-700/60">
               <CategoryFilter
                 categories={categories}
                 selectedCategory={selectedCategory}

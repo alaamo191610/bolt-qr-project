@@ -64,7 +64,10 @@ const CategoryFilter: React.FC<Props> = ({
 
       {/* Optional scroll fade */}
       <div
-        className="pointer-events-none absolute top-0 bottom-0 w-8 z-10 bg-gradient-to-r from-transparent to-white dark:to-slate-800"
+        className={`pointer-events-none absolute top-0 bottom-0 w-8 z-10 ${isRTL
+          ? "bg-gradient-to-l from-transparent to-white dark:to-slate-800"
+          : "bg-gradient-to-r from-transparent to-white dark:to-slate-800"
+          }`}
         style={{ [isRTL ? 'left' : 'right']: 0 }}
       />
     </div>

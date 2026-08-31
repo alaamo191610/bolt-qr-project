@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Minus } from "lucide-react";
 import {
   menuService,
@@ -8,6 +8,7 @@ import {
   type MenuConfigComboGroup as ComboGroupRow,
 } from "../../services/menuService";
 import { getErrorMessage } from "../../utils/errors";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 /**
  * MenuItemCustomizer
@@ -45,7 +46,7 @@ export type CartLine = {
 };
 
 // -------- Hook: load config for a menu --------
-function useMenuConfig(menuId: string) {
+function useMenuConfig(menuId: string, isRTL: boolean) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,7 +93,9 @@ function useMenuConfig(menuId: string) {
       }
     >();
     for (const row of mi) {
-      const name = row.ingredient?.name_en || "ingredient";
+      const name = (isRTL ? row.ingredient?.name_ar : row.ingredient?.name_en)
+        || row.ingredient?.name_en
+        || "ingredient";
       const eff = (row.extra_price_override ??
         row.ingredient?.extra_price ??
         0) as number;
@@ -105,7 +108,7 @@ function useMenuConfig(menuId: string) {
       });
     }
     return byId;
-  }, [mi]);
+  }, [isRTL, mi]);
 
   const groups = useMemo(
     () => (mmg || []).map((x) => x.modifier_group),
@@ -137,6 +140,7 @@ function TriState({
   disabledExtra?: boolean;
   maxExtra?: number;
 }) {
+  const { t } = useLanguage();
   const [qty, setQty] = useState(1);
   const setExtraQty = (nextQty: number) => {
     const cap = Number(maxExtra ?? 0);
@@ -154,9 +158,9 @@ function TriState({
           }`}
         onClick={() => onChange(value === "remove" ? "default" : "remove")}
         disabled={disabledRemove}
-        title={disabledRemove ? "Not removable" : "Remove"}
+        title={disabledRemove ? t("menu.customizer.notRemovable") : t("menu.customizer.no")}
       >
-        no
+        {t("menu.customizer.no")}
       </button>
       <button
         className={`px-2 py-1 rounded-xl border ${value === "extra"
@@ -165,9 +169,9 @@ function TriState({
           }`}
         onClick={() => onChange(value === "extra" ? "default" : "extra", qty)}
         disabled={disabledExtra}
-        title={disabledExtra ? "No extra allowed" : "Extra"}
+        title={disabledExtra ? t("menu.customizer.noExtraAllowed") : t("menu.customizer.extra")}
       >
-        extra
+        {t("menu.customizer.extra")}
       </button>
       <div
         className={`flex items-center gap-1 ${value === "extra" ? "opacity-100" : "opacity-50"
@@ -177,7 +181,7 @@ function TriState({
           className="p-1 rounded border"
           onClick={() => setExtraQty(qty - 1)}
           disabled={value !== "extra" || qty <= 1}
-          aria-label="Decrease extra quantity"
+          aria-label={t("menu.customizer.decreaseExtraQuantity")}
         >
           <Minus size={14} />
         </button>
@@ -186,7 +190,7 @@ function TriState({
           className="p-1 rounded border"
           onClick={() => setExtraQty(qty + 1)}
           disabled={value !== "extra" || (Number(maxExtra ?? 0) > 0 && qty >= Number(maxExtra))}
-          aria-label="Increase extra quantity"
+          aria-label={t("menu.customizer.increaseExtraQuantity")}
         >
           <Plus size={14} />
         </button>
@@ -211,8 +215,15 @@ export default function MenuItemCustomizer({
   onAdd: (line: CartLine) => void;
   onCancel?: () => void;
 }) {
+  const { t, isRTL } = useLanguage();
   const { loading, error, menu, ingredients, ingredientConfig, groups, combo } =
-    useMenuConfig(menuId);
+    useMenuConfig(menuId, isRTL);
+
+  const displayName = useCallback(
+    (nameEn?: string | null, nameAr?: string | null) =>
+      (isRTL ? nameAr || nameEn : nameEn || nameAr) || "",
+    [isRTL]
+  );
 
   // picks state
   const [qty, setQty] = useState(defaultQuantity);
@@ -287,36 +298,49 @@ export default function MenuItemCustomizer({
       const max = g.max_select ?? (g.selection_type === "single" ? 1 : 99);
       const required = !!g.required;
       if (required && selectedCount === 0)
-        errs.push(`${g.name_en || "Group"} is required`);
+        errs.push(t("menu.customizer.groupRequired", {
+          name: displayName(g.name_en, g.name_ar) || t("menu.customizer.options"),
+        }));
       if (selectedCount < min)
-        errs.push(`${g.name_en || "Group"}: select at least ${min}`);
+        errs.push(t("menu.customizer.selectAtLeast", {
+          name: displayName(g.name_en, g.name_ar) || t("menu.customizer.options"),
+          min: String(min),
+        }));
       if (selectedCount > max)
-        errs.push(`${g.name_en || "Group"}: select at most ${max}`);
+        errs.push(t("menu.customizer.selectAtMost", {
+          name: displayName(g.name_en, g.name_ar) || t("menu.customizer.options"),
+          max: String(max),
+        }));
       if (g.selection_type === "single") {
         // force qty 1 in single groups
         optsInGroup.forEach((o) => {
           if ((optState[o.id] ?? 0) > 1)
-            errs.push(`${g.name_en || "Group"}: only 1 allowed`);
+            errs.push(t("menu.customizer.onlyOneAllowed", {
+              name: displayName(g.name_en, g.name_ar) || t("menu.customizer.options"),
+            }));
         });
       }
       optsInGroup.forEach((o) => {
         const q = optState[o.id] ?? 0;
         if (q > 0 && o.max_qty && q > o.max_qty)
-          errs.push(`${o.name_en || "Option"}: max ${o.max_qty}`);
+          errs.push(t("menu.customizer.optionMax", {
+            name: displayName(o.name_en, o.name_ar) || t("menu.customizer.options"),
+            max: String(o.max_qty),
+          }));
       });
     }
     return errs;
-  }, [groups, optState]);
+  }, [displayName, groups, optState, t]);
 
   const comboErrors = useMemo(() => {
     const errors: string[] = [];
     for (const group of combo) {
       const selectedCount = childrenState[group.id]?.length ?? 0;
-      if (selectedCount < Number(group.min_select ?? 0)) errors.push("Select a combo item");
-      if (selectedCount > Number(group.max_select ?? 1)) errors.push("Too many combo items selected");
+      if (selectedCount < Number(group.min_select ?? 0)) errors.push(t("menu.customizer.selectComboItem"));
+      if (selectedCount > Number(group.max_select ?? 1)) errors.push(t("menu.customizer.tooManyComboItems"));
     }
     return errors;
-  }, [combo, childrenState]);
+  }, [combo, childrenState, t]);
 
   const pricing = useMemo(() => {
     const base = Number(menu?.price ?? 0);
@@ -366,10 +390,10 @@ export default function MenuItemCustomizer({
     for (const [ingId, st] of Object.entries(ingState)) {
       const cfg = ingredientConfig.get(ingId);
       if (!cfg) continue;
-      if (st.mode === "remove") lines.push(`no ${cfg.name}`);
+      if (st.mode === "remove") lines.push(`${t("menu.customizer.no")} ${cfg.name}`);
       if (st.mode === "extra")
         lines.push(
-          `extra ${cfg.name}${st.qty && st.qty > 1 ? ` x${st.qty}` : ""}`
+          `${t("menu.customizer.extra")} ${cfg.name}${st.qty && st.qty > 1 ? ` x${st.qty}` : ""}`
         );
     }
     // options snapshot
@@ -377,7 +401,7 @@ export default function MenuItemCustomizer({
       for (const o of g.modifier_options || []) {
         const q = optState[o.id] ?? 0;
         if (q > 0)
-          lines.push(`${o.name_en || "option"}${q > 1 ? ` x${q}` : ""}`);
+          lines.push(`${displayName(o.name_en, o.name_ar) || t("menu.customizer.options")}${q > 1 ? ` x${q}` : ""}`);
       }
     }
     // children snapshot
@@ -390,7 +414,7 @@ export default function MenuItemCustomizer({
       }
     }
     return lines;
-  }, [ingState, ingredientConfig, groups, optState, combo, childrenState]);
+  }, [displayName, groups, ingState, ingredientConfig, optState, combo, childrenState, t]);
 
   const canAdd = useMemo(
     () => optionErrors.length === 0 && comboErrors.length === 0 && qty > 0,
@@ -439,7 +463,7 @@ export default function MenuItemCustomizer({
     <div className="flex items-center justify-center p-12">
       <div className="text-center">
         <div className="inline-block w-12 h-12 border-4 border-slate-200 dark:border-slate-700 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-600 dark:text-slate-400 text-sm">Loading menu details…</p>
+        <p className="text-slate-600 dark:text-slate-400 text-sm">{t("menu.customizer.loading")}</p>
       </div>
     </div>
   );
@@ -453,7 +477,7 @@ export default function MenuItemCustomizer({
             </svg>
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">Error Loading Item</h3>
+            <h3 className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">{t("menu.customizer.errorLoadingItem")}</h3>
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         </div>
@@ -463,7 +487,7 @@ export default function MenuItemCustomizer({
   if (!menu) return (
     <div className="p-6">
       <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center">
-        <p className="text-slate-600 dark:text-slate-400">Item not found.</p>
+        <p className="text-slate-600 dark:text-slate-400">{t("menu.customizer.itemNotFound")}</p>
       </div>
     </div>
   );
@@ -481,7 +505,7 @@ export default function MenuItemCustomizer({
         <button
           onClick={onCancel}
           className="ml-auto p-2 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-          aria-label="Close"
+          aria-label={t("menu.customizer.close")}
         >
           <X size={20} className="text-slate-600 dark:text-slate-300" />
         </button>
@@ -492,7 +516,7 @@ export default function MenuItemCustomizer({
         <div className="relative h-48 w-full shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 sm:h-60">
           <img
             src={menu.image_url}
-            alt={menu.name_en || 'Menu Item'}
+              alt={displayName(menu.name_en, menu.name_ar) || t("menu.customizer.itemNotFound")}
             className="h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
@@ -509,11 +533,11 @@ export default function MenuItemCustomizer({
           {/* Header Info */}
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2 leading-tight">
-              {menu.name_en}
+              {displayName(menu.name_en, menu.name_ar)}
             </h1>
             <div className="flex items-center gap-2 text-lg font-medium text-emerald-600 dark:text-emerald-400">
               <Money value={Number(menu.price || 0)} />
-              <span className="text-sm font-normal text-slate-500 dark:text-slate-400">base price</span>
+              <span className="text-sm font-normal text-slate-500 dark:text-slate-400">{t("menu.customizer.basePrice")}</span>
             </div>
             {/* If we had a description, it would go here */}
           </div>
@@ -524,7 +548,7 @@ export default function MenuItemCustomizer({
           {/* Ingredients (remove / extra) */}
           {ingredients.length > 0 && (
             <section className="mb-8">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Ingredients</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">{t("menu.customizer.ingredients")}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {ingredients.map((row) => {
                   const cfg = ingredientConfig.get(row.ingredient_id);
@@ -535,7 +559,7 @@ export default function MenuItemCustomizer({
                       className="flex flex-col p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50"
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{cfg?.name || "Ingredient"}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{cfg?.name || t("menu.customizer.ingredient")}</span>
                         {cfg?.extra && <span className="text-xs font-semibold text-emerald-600">+<Money value={cfg.effPrice} /></span>}
                       </div>
 
@@ -567,14 +591,16 @@ export default function MenuItemCustomizer({
                     <div key={g.id} ref={(el) => { groupRefs.current[g.id] = el; }}>
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{g.name_en || "Options"}</h3>
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{displayName(g.name_en, g.name_ar) || t("menu.customizer.options")}</h3>
                           <p className="text-sm text-slate-500 dark:text-slate-400">
-                            {g.selection_type === "single" ? "Select 1" : `Select up to ${g.max_select}`}
+                            {g.selection_type === "single"
+                              ? t("menu.customizer.selectOne")
+                              : t("menu.customizer.selectUpTo", { max: String(g.max_select) })}
                           </p>
                         </div>
                         {g.required && (
                           <span className={`text-xs font-bold px-2 py-1 rounded-full ${isSatisfied ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                            {isSatisfied ? 'Completed' : 'Required'}
+                            {isSatisfied ? t("menu.customizer.completed") : t("menu.customizer.required")}
                           </span>
                         )}
                       </div>
@@ -682,14 +708,16 @@ export default function MenuItemCustomizer({
           {/* Combo groups (choose child items) */}
           {combo.length > 0 && (
             <section className="mb-8">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Make it a meal</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">{t("menu.customizer.makeItAMeal")}</h3>
               <div className="space-y-3">
                 {combo.map((cg) => (
                   <div key={cg.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-800/50">
                     <div className="mb-3">
-                      <span className="font-medium text-slate-900 dark:text-white">Choose item</span>
+                      <span className="font-medium text-slate-900 dark:text-white">{t("menu.customizer.chooseItem")}</span>
                             <span className="text-sm text-slate-500 ml-2">
-                              {Number(cg.min_select ?? 0) > 0 ? "(Required)" : "(Optional)"}
+                              {Number(cg.min_select ?? 0) > 0
+                                ? `(${t("menu.customizer.requiredShort")})`
+                                : `(${t("menu.customizer.optional")})`}
                             </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -718,7 +746,7 @@ export default function MenuItemCustomizer({
                           >
                             <div>
                               <div className={`font-medium ${selected ? 'text-purple-900 dark:text-purple-200' : 'text-slate-700 dark:text-slate-300'}`}>
-                                {ci.menus?.name_en || "Item"}
+                                {ci.menus?.name_en || t("menu.customizer.ingredient")}
                               </div>
                               <div className="text-xs text-slate-500">
                                 +<Money value={Number(ci.upgrade_price_delta || 0)} />
@@ -741,11 +769,11 @@ export default function MenuItemCustomizer({
 
           {/* Notes */}
           <section className="mb-8">
-            <label className="text-lg font-bold text-slate-900 dark:text-white block mb-3">Special Instructions</label>
+            <label className="text-lg font-bold text-slate-900 dark:text-white block mb-3">{t("menu.customizer.specialInstructions")}</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Add a note for the kitchen (e.g. no onions, extra sauce)..."
+              placeholder={t("menu.customizer.notePlaceholder")}
               className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
               rows={3}
             />
@@ -754,7 +782,7 @@ export default function MenuItemCustomizer({
           {/* Receipt / Summary */}
           <section className="mb-8 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 border-dashed">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-medium text-slate-500 dark:text-slate-400">Subtotal</span>
+              <span className="font-medium text-slate-500 dark:text-slate-400">{t("menu.customizer.subtotal")}</span>
               <span className="font-medium text-slate-900 dark:text-white"><Money value={pricing.total} /></span>
             </div>
             {snapshot.length > 0 && (
@@ -781,7 +809,7 @@ export default function MenuItemCustomizer({
             className="mb-3 flex w-full items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-left text-sm font-medium text-amber-700 dark:text-amber-300"
           >
             <span>⚠️ {optionErrors[0]}</span>
-            <span className="ml-auto shrink-0 underline">Jump to it</span>
+            <span className="ml-auto shrink-0 underline">{t("menu.customizer.jumpToIt")}</span>
           </button>
         )}
         <div className="flex items-center gap-4 max-w-lg mx-auto w-full">
@@ -823,7 +851,7 @@ export default function MenuItemCustomizer({
               : "bg-slate-400 cursor-not-allowed"
               }`}
           >
-            <span>Add to Order</span>
+            <span>{t("menu.customizer.addToOrder")}</span>
             <span><Money value={pricing.total} /></span>
           </button>
         </div>

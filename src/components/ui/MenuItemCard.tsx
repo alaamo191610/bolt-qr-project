@@ -252,6 +252,15 @@ const MenuItemCard: React.FC<Props> = ({
   const addedOnceRef = React.useRef<Set<string>>(new Set());
   const FALLBACK_400 =
     "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400";
+  const [imageSrc, setImageSrc] = useState(item.image_url || FALLBACK_400);
+
+  useEffect(() => {
+    setImageSrc(item.image_url || FALLBACK_400);
+  }, [item.image_url]);
+
+  const handleImageError = () => {
+    setImageSrc((current) => current === FALLBACK_400 ? current : FALLBACK_400);
+  };
 
   // reduced-motion
   const prefersReducedMotion =
@@ -578,7 +587,8 @@ const MenuItemCard: React.FC<Props> = ({
             className="shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-700 relative shadow-inner appearance-none border-0 p-0 disabled:cursor-not-allowed"
           >
             <img
-              src={item.image_url || FALLBACK_400}
+              src={imageSrc}
+              onError={handleImageError}
               alt=""
               loading="lazy"
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
@@ -758,10 +768,8 @@ const MenuItemCard: React.FC<Props> = ({
               {/* Hero */}
               <div className="row-start-2 row-end-3 px-4 pt-4">
                 <img
-                  src={
-                    item.image_url ||
-                    "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=800"
-                  }
+                  src={imageSrc}
+                  onError={handleImageError}
                   alt={displayName}
                   className="w-full h-48 sm:h-56 object-cover rounded-xl"
                 />

@@ -8,6 +8,7 @@ import { DEFAULT_FLOW } from "../../order-admin/defaults";
 import { adminService } from "../../services/adminService";
 import { toast } from "react-hot-toast";
 import { getErrorMessage } from "../../utils/errors";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 function Chip({
   children,
@@ -40,6 +41,7 @@ function Row({
 }
 
 export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
+  const { t, isRTL } = useLanguage();
   const [flow, setFlow] = useState<OrderFlowRules>(DEFAULT_FLOW);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
         // Do not silently fall back to DEFAULT_FLOW here - if the admin
         // saves while this failure is masked, it would overwrite their
         // real order-workflow rules with defaults.
-        if (mounted) setLoadError(getErrorMessage(e, "Failed to load order rules"));
+        if (mounted) setLoadError(getErrorMessage(e, t("orderWorkflow.loadError")));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -124,9 +126,9 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
     try {
       await adminService.saveOrderRules(adminId, flow);
       setDirty(false);
-      toast.success("Order workflow rules saved");
+      toast.success(t("orderWorkflow.saveSuccess"));
     } catch (error) {
-      toast.error("Failed to save: " + getErrorMessage(error));
+      toast.error(`${t("orderWorkflow.saveError")}: ${getErrorMessage(error)}`);
     } finally {
       setSaving(false);
     }
@@ -134,7 +136,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
 
   if (loading)
     return (
-      <div className="p-6 rounded-xl border bg-white">Loading order rules…</div>
+      <div className="p-6 rounded-xl border bg-white">{t("orderWorkflow.loading")}</div>
     );
 
   if (loadError)
@@ -145,28 +147,27 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
           onClick={load}
           className="px-4 py-2 rounded-lg text-sm font-medium border shadow-sm bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
         >
-          Try again
+          {t("orderWorkflow.tryAgain")}
         </button>
       </div>
     );
 
   return (
-    <section className="bg-white rounded-xl border shadow-sm p-6 space-y-6">
+    <section dir={isRTL ? "rtl" : "ltr"} className="bg-white rounded-xl border shadow-sm p-6 space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">
-            Order Workflow Rules
+            {t("orderWorkflow.title")}
           </h3>
           <p className="text-slate-600 text-sm">
-            Define statuses, transitions, and SLAs. These apply across Menu,
-            KDS, and Receipts.
+            {t("orderWorkflow.description")}
           </p>
         </div>
       </header>
 
       {/* Status list */}
       <div className="space-y-3">
-        <h4 className="font-medium text-slate-800">Statuses</h4>
+        <h4 className="font-medium text-slate-800">{t("orderWorkflow.statuses")}</h4>
         <div className="divide-y border rounded-xl">
           {flow.statuses.map((s, i) => (
             <div
@@ -180,7 +181,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                     className="w-8 h-8 flex items-center justify-center rounded-md border bg-white disabled:opacity-40 hover:bg-slate-50"
                     onClick={() => reorder(i, Math.max(0, i - 1))}
                     disabled={i === 0}
-                    aria-label="Move up"
+                    aria-label={t("orderWorkflow.moveUp")}
                   >
                     ↑
                   </button>
@@ -190,7 +191,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                       reorder(i, Math.min(flow.statuses.length - 1, i + 1))
                     }
                     disabled={i === flow.statuses.length - 1}
-                    aria-label="Move down"
+                    aria-label={t("orderWorkflow.moveDown")}
                   >
                     ↓
                   </button>
@@ -206,30 +207,30 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
               <div className="md:col-span-4 grid grid-cols-2 gap-2 w-full">
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider md:hidden">
-                    English Label
+                    {t("orderWorkflow.labelEn")}
                   </span>
                   <input
-                    aria-label={`English label for ${s.key}`}
+                    aria-label={`${t("orderWorkflow.labelEn")} ${s.key}`}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                     value={s.label_en}
                     onChange={(e) =>
                       updateStatus(s.key, { label_en: e.target.value })
                     }
-                    placeholder="Label (EN)"
+                    placeholder={t("orderWorkflow.labelEn")}
                   />
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider md:hidden">
-                    Arabic Label
+                    {t("orderWorkflow.labelAr")}
                   </span>
                   <input
-                    aria-label={`Arabic label for ${s.key}`}
+                    aria-label={`${t("orderWorkflow.labelAr")} ${s.key}`}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-right bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                     value={s.label_ar}
                     onChange={(e) =>
                       updateStatus(s.key, { label_ar: e.target.value })
                     }
-                    placeholder="Label (AR)"
+                    placeholder={t("orderWorkflow.labelAr")}
                     dir="rtl"
                   />
                 </div>
@@ -246,7 +247,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                       updateStatus(s.key, { customerVisible: e.target.checked })
                     }
                   />
-                  <span>Visible</span>
+                  <span>{t("orderWorkflow.customerVisible")}</span>
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
                   <input
@@ -257,19 +258,19 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                       updateStatus(s.key, { notify: e.target.checked })
                     }
                   />
-                  <span>Notify</span>
+                  <span>{t("orderWorkflow.notify")}</span>
                 </label>
               </div>
 
               {/* SLA */}
               <div className="md:col-span-3 flex items-center justify-between md:justify-end gap-2 w-full">
                 <span className="text-sm text-slate-500 md:text-slate-600">
-                  SLA (min)
+                  {t("orderWorkflow.slaMin")}
                 </span>
                 <input
                   type="number"
                   min={0}
-                  aria-label={`SLA in minutes for ${s.key}`}
+                  aria-label={`${t("orderWorkflow.slaMin")} ${s.key}`}
                   className="w-20 md:w-24 border border-slate-200 rounded-lg px-3 py-2 text-right text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                   value={s.slaMin ?? 0}
                   onChange={(e) =>
@@ -286,12 +287,12 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
 
       {/* Transitions matrix */}
       <div className="space-y-3">
-        <h4 className="font-medium text-slate-800">Allowed Transitions</h4>
+        <h4 className="font-medium text-slate-800">{t("orderWorkflow.transitions")}</h4>
         <div className="overflow-auto border rounded-xl">
           <table className="min-w-[640px] w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-700">
-                <th className="p-2 text-left">From ↓ / To →</th>
+                <th className="p-2 text-start">{t("orderWorkflow.fromTo")}</th>
                 {statusKeys.map((k) => (
                   <th key={k} className="p-2">
                     {k}
@@ -312,7 +313,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
                       ) : (
                         <input
                           type="checkbox"
-                          aria-label={`Allow transition from ${from} to ${to}`}
+                          aria-label={t("orderWorkflow.allowTransition", { from, to })}
                           checked={
                             flow.transitions[from]?.includes(
                               to as OrderStatusKey
@@ -337,11 +338,11 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
 
       {/* Global rules */}
       <div className="space-y-2">
-        <Row label="Auto-cancel PENDING after (min)">
+        <Row label={t("orderWorkflow.autoCancelPending")}>
           <input
             type="number"
             min={0}
-            aria-label="Auto-cancel PENDING after (min)"
+            aria-label={t("orderWorkflow.autoCancelPending")}
             className="w-28 border rounded-md px-2 py-1 text-right bg-white text-slate-900"
             value={flow.autoCancelAfterMin ?? 0}
             onChange={(e) => {
@@ -362,7 +363,7 @@ export default function OrderWorkflowRules({ adminId }: { adminId: string }) {
             : "bg-slate-100 text-slate-500 border-slate-200"
             }`}
         >
-          {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+          {saving ? t("common.saving") : dirty ? t("orderWorkflow.saveChanges") : t("orderWorkflow.saved")}
         </button>
       </footer>
     </section>
